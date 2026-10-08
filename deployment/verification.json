@@ -1,0 +1,206 @@
+{
+  "observedAtUtc": "2026-10-08T21:39:12.894475+00:00",
+  "url": "https://video.heymrmom.com",
+  "repository": "https://github.com/heymrmom/LicketySplit",
+  "branch": "codex/openreel-baseline",
+  "appCommit": "6f79d512d1bdefb815ff0e1da68581ce3ba89ff7",
+  "upstreamCommit": "c9340465e5d37e684cc25bdbe746c4ccd45e165c",
+  "railway": {
+    "projectId": "4330ccb5-942d-48e7-927a-106bcb6ccdc7",
+    "serviceId": "3ddbecfc-1750-4117-bdeb-09c84cd742e3",
+    "environmentId": "f9ecf148-15e5-4816-99bc-42a85ae8f67a",
+    "deploymentId": "54f0c676-bbea-4d79-8dec-eec2d7850c1d",
+    "status": "SUCCESS",
+    "imageDigest": "sha256:ab16eec6d8255c3162b856c39b2f45f77b982cab2240c069e4fb40ed894cb77a",
+    "manifest": {
+      "build": {
+        "buildCommand": null,
+        "buildEnvironment": "V3",
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "Dockerfile",
+        "nixpacksConfigPath": null,
+        "nixpacksPlan": null,
+        "watchPatterns": [
+          "/apps/web/**",
+          "/packages/**",
+          "/hosting/**",
+          "/Dockerfile",
+          "/.dockerignore",
+          "/LICENSE",
+          "/package.json",
+          "/pnpm*.yaml",
+          "/patches/**"
+        ]
+      },
+      "deploy": {
+        "cronSchedule": null,
+        "drainingSeconds": null,
+        "healthcheckPath": "/healthz",
+        "healthcheckTimeout": 120,
+        "ipv6EgressEnabled": false,
+        "limitOverride": {
+          "containers": {
+            "cpu": 0.25,
+            "memoryBytes": 250000000
+          }
+        },
+        "multiRegionConfig": {
+          "sfo": {
+            "numReplicas": 1
+          }
+        },
+        "numReplicas": 1,
+        "overlapSeconds": null,
+        "preDeployCommand": null,
+        "preDeployTimeoutSeconds": null,
+        "region": null,
+        "registryCredentials": null,
+        "requiredMountPath": null,
+        "restartPolicyMaxRetries": 3,
+        "restartPolicyType": "ON_FAILURE",
+        "runtime": "V2",
+        "sleepApplication": false,
+        "startCommand": null,
+        "useLegacyStacker": false
+      }
+    }
+  },
+  "domain": {
+    "id": "b1104d46-81f1-4f5e-b1e5-a1c838c84347",
+    "domain": "video.heymrmom.com",
+    "type": "custom",
+    "targetPort": 8080,
+    "syncStatus": "ACTIVE",
+    "createdAt": "2026-10-08T21:18:46.039+00:00",
+    "updatedAt": "2026-10-08T21:18:46.629+00:00",
+    "dnsRecords": [
+      {
+        "recordType": "DNS_RECORD_TYPE_CNAME",
+        "name": "video",
+        "fqdn": "video.heymrmom.com",
+        "requiredValue": "e3d65x2f.up.railway.app",
+        "currentValue": "e3d65x2f.up.railway.app",
+        "status": "DNS_RECORD_STATUS_PROPAGATED",
+        "zone": "heymrmom.com",
+        "purpose": "DNS_RECORD_PURPOSE_TRAFFIC_ROUTE"
+      }
+    ],
+    "verification": {
+      "verified": true,
+      "dnsHost": "_railway-verify.video",
+      "token": "railway-verify=9e1e4b00534dee698f7c1df66e74519f5f5ee2077b62c5a846027666605505ae"
+    },
+    "certificate": {
+      "status": "CERTIFICATE_STATUS_TYPE_VALID",
+      "detailedStatus": "CERTIFICATE_STATUS_TYPE_DETAILED_COMPLETE"
+    },
+    "certificates": [
+      {
+        "issuedAt": "2026-10-08T20:23:01+00:00",
+        "expiresAt": "2027-01-06T20:23:00+00:00",
+        "domainNames": [
+          "video.heymrmom.com"
+        ],
+        "fingerprintSha256": "da66db727777dbe2b5a2817ab3141d3e795a0c80c80721bb69f4f2faa5829ecb",
+        "keyType": "KEY_TYPE_RSA_2048"
+      }
+    ]
+  },
+  "dns": {
+    "existingCount": 21,
+    "currentCount": 23,
+    "allExistingRecordsUnchanged": true,
+    "created": [
+      {
+        "id": "d6a37612041663e9cf0afb4292735099",
+        "type": "CNAME",
+        "name": "video.heymrmom.com",
+        "content": "e3d65x2f.up.railway.app",
+        "ttl": 1,
+        "proxied": false
+      },
+      {
+        "id": "03172349c0d731894bc75306a0e56013",
+        "type": "TXT",
+        "name": "_railway-verify.video.heymrmom.com",
+        "content": "railway-verify=9e1e4b00534dee698f7c1df66e74519f5f5ee2077b62c5a846027666605505ae",
+        "ttl": 1,
+        "proxied": false
+      }
+    ]
+  },
+  "checks": {
+    "build": "pass",
+    "typecheck": "pass",
+    "testsPassed": 3258,
+    "testFilesPassed": 458,
+    "testsSkipped": 70,
+    "lint": "2 inherited errors, 109 warnings",
+    "hostingTests": 5,
+    "nativeProjectFilePicker": "unverified; headless save did not yield file"
+  },
+  "browserSmoke": {
+    "health": {
+      "status": "ok",
+      "app": "LicketySplit",
+      "revision": "6f79d512d1bdefb815ff0e1da68581ce3ba89ff7"
+    },
+    "filename": "LicketySplit baseline smoke 2026-10-08.mp4",
+    "failure": null,
+    "bytes": 483491,
+    "clips": 1,
+    "text": "LicketySplit baseline smoke 2026-10-08\nSaved!\nMedia\nText\nGraphics\nEffects\nTransitions\nAI Generate\nRecipes\nProject Templates\nMedia\nImport\nRecord\nProject Media\n1\n00:04\nlicketysplit-smoke.mp4\nAdd media\nPlayer\n00:00:65/00:02:00\n16:9\nAuto\n100%\nMulti-Camera Editing\nNo selection\nSelect a clip to view its properties\nAdd track\n00:00\n00:05\n00:10\n00:15\n00:20\n00:25\nVideo 1\nS\nlicketysplit-smoke.mp4",
+    "errors": [],
+    "failed": []
+  },
+  "finalExport": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 320,
+        "height": 180,
+        "r_frame_rate": "30/1",
+        "duration": "2.000000"
+      },
+      {
+        "codec_name": "aac",
+        "codec_type": "audio",
+        "sample_rate": "48000",
+        "channels": 2,
+        "r_frame_rate": "0/0",
+        "duration": "2.069333"
+      }
+    ],
+    "format": {
+      "duration": "2.069333",
+      "size": "483491"
+    }
+  },
+  "finalExportSha256": "5f4a120cdd29eb5168b1695be97ed0594b026eceacd3fcc717df1da615cf2150",
+  "footprint": {
+    "cpu": {
+      "average": 0.00023808777777777776,
+      "current": 0.00010616666666666668,
+      "limit": 0.25,
+      "max": 0.007224466666666666,
+      "unit": "vCPU",
+      "utilization_pct": 0.0
+    },
+    "environment": "production",
+    "memory": {
+      "average_mb": 6.007746286933334,
+      "current_mb": 28.571598848,
+      "limit_mb": 255.99934464,
+      "max_mb": 37.346082816,
+      "utilization_pct": 11.2
+    },
+    "service": "LicketySplit",
+    "window": {
+      "since": "2026-10-08T20:32:30.463291+00:00",
+      "until": "2026-10-08T21:32:31.704008+00:00"
+    }
+  }
+}
