@@ -1,3 +1,4 @@
+import type {ResourceProfile,RegisteredAsset,ProxyReceipt} from "@openreel/core/lickety/types";
 export {};
 
 export interface OpenReelHardwareInfo {
@@ -174,6 +175,15 @@ declare global {
   interface Window {
     openreel?: {
       platform: "desktop";
+      lickety?: {
+        resourceProfile():Promise<ResourceProfile>;
+        registerFile(mediaId:string,file:Blob):Promise<RegisteredAsset>;
+        registerPath(mediaId:string,path:string):Promise<RegisteredAsset>;
+        findAsset(mediaId:string):Promise<RegisteredAsset|undefined>;
+        resolve(assetId:string,purpose:"original"|"proxy"):Promise<string>;
+        ensureProxy(assetId:string):Promise<ProxyReceipt>;
+        cancelMedia(assetId:string):Promise<void>;
+      };
       publicOrigin: string;
       probeHardware(): Promise<OpenReelHardwareInfo>;
       onMenuAction(cb: (id: string) => void): () => void;

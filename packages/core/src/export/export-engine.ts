@@ -1,3 +1,4 @@
+import {getManagedBridge,prepareNativeOriginal} from "../media/native-media-bridge";
 import type { Project } from "../types/project";
 import type {
   VideoExportSettings,
@@ -160,6 +161,10 @@ export class ExportEngine {
       return { success: false, error: this.createError("UNSUPPORTED_CODEC", "ProRes export requires the desktop encoder. Choose H.264 / MP4 for browser export.", "preparing") };
     }
 
+    if(getManagedBridge()) {
+      try {const items=[];for(const item of project.mediaLibrary.items)items.push(item.type==="image"?item:await prepareNativeOriginal(item));project={...project,mediaLibrary:{items}};}
+      catch(error){return {success:false,error:this.createError("INVALID_SETTINGS",error instanceof Error?error.message:"Relink original media","preparing")};}
+    }
     const { timeline } = project;
     const timelineDuration = this.calculateTimelineDuration(timeline);
     const missingMedia = getMissingExportMedia(project);

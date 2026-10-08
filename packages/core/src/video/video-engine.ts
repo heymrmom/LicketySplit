@@ -1,3 +1,4 @@
+import {nativeVideoUrl} from "../media/native-media-bridge";
 import type {
   Timeline,
   Track,
@@ -475,7 +476,7 @@ export class VideoEngine {
     let cached = this.videoElementCache.get(mediaId);
 
     if (!cached) {
-      const url = URL.createObjectURL(blob);
+      const url = await nativeVideoUrl(blob, this.exportMode ? "export" : "preview");
       const video = document.createElement("video");
       video.src = url;
       video.muted = true;

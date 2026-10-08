@@ -6,6 +6,7 @@ const SCHEME = "app";
 
 export function registerAppSchemePrivileges(): void {
   protocol.registerSchemesAsPrivileged([
+    {scheme:"licketysplit-media", privileges:{standard:true,secure:true,supportFetchAPI:true,corsEnabled:true,stream:true}},
     {
       scheme: SCHEME,
       privileges: {

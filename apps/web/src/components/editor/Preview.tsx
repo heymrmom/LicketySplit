@@ -1,3 +1,4 @@
+import {getNativeMediaSource,nativeVideoUrl} from "@openreel/core";
 import React, {
   useRef,
   useEffect,
@@ -2434,7 +2435,7 @@ export const Preview: React.FC = () => {
             let cached = videoElementCacheRef.current.get(cacheKey);
 
             if (!cached) {
-              const url = URL.createObjectURL(mediaBlob);
+              const url = await nativeVideoUrl(mediaBlob);
               const video = document.createElement("video");
               video.src = url;
               video.muted = true;
@@ -3608,7 +3609,7 @@ export const Preview: React.FC = () => {
       const videoCache = nativeVideoCacheRef.current;
       const loadingVideos = new Map<string, Promise<void>>();
 
-      const loadVideoForClip = (
+      const loadVideoForClip = async (
         clip: (typeof timelineTracks)[0]["clips"][0],
         mediaItem: NonNullable<ReturnType<typeof getMediaItem>>,
       ): Promise<void> => {
@@ -3639,7 +3640,7 @@ export const Preview: React.FC = () => {
           ? vidstabEng.getStabilizedBlob(clip.id)
           : mediaItem.blob)!;
         const cacheId = isStabilized ? `stabilized:${clip.id}` : clip.mediaId;
-        const url = URL.createObjectURL(playBlob);
+        const url = await nativeVideoUrl(playBlob);
         const video = document.createElement("video");
         video.src = url;
         video.muted = true;
@@ -4553,10 +4554,10 @@ export const Preview: React.FC = () => {
 
         try {
           const mediabunny = await import("mediabunny");
-          const { Input, ALL_FORMATS, BlobSource, CanvasSink } = mediabunny;
+          const { Input, ALL_FORMATS, BlobSource, UrlSource, CanvasSink } = mediabunny;
 
           const input = new Input({
-            source: new BlobSource(mediaItem.blob),
+            source: (await getNativeMediaSource(mediaItem.blob)) ? new UrlSource((await getNativeMediaSource(mediaItem.blob))!) : new BlobSource(mediaItem.blob),
             formats: ALL_FORMATS,
           });
 
@@ -4922,10 +4923,10 @@ export const Preview: React.FC = () => {
 
       try {
         const mediabunny = await import("mediabunny");
-        const { Input, ALL_FORMATS, BlobSource, CanvasSink } = mediabunny;
+        const { Input, ALL_FORMATS, BlobSource, UrlSource, CanvasSink } = mediabunny;
 
         const input = new Input({
-          source: new BlobSource(mediaItem.blob),
+          source: (await getNativeMediaSource(mediaItem.blob)) ? new UrlSource((await getNativeMediaSource(mediaItem.blob))!) : new BlobSource(mediaItem.blob),
           formats: ALL_FORMATS,
         });
 

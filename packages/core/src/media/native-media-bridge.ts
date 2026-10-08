@@ -62,9 +62,7 @@ export async function materializeToTemp(bridge: NativeMediaBridge, file: File | 
       const { done, value } = await reader.read();
       if (done) break;
       const view = value as Uint8Array;
-      const buf = view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
-      await bridge.fs.writeChunk(handleId, buf, position);
-      position += view.byteLength;
+      for(let offset=0;offset<view.byteLength;offset+=16*1024**2){const piece=view.subarray(offset,offset+16*1024**2);const buf=piece.buffer.slice(piece.byteOffset,piece.byteOffset+piece.byteLength) as ArrayBuffer;await bridge.fs.writeChunk(handleId,buf,position);position+=piece.byteLength;}
     }
     await bridge.fs.closeWrite(handleId);
   } catch (err) {
@@ -124,4 +122,30 @@ export async function probeAudioStreamCountViaNative(file: File | Blob): Promise
   const srcPath = await materializeToTemp(bridge, file);
   const { streams } = await bridge.media.probeAudioStreams({ srcPath });
   return streams.length;
+}
+
+// Disk URLs are local runtime bindings, never portable media replacements.
+const nativeSources = new WeakMap<Blob, {original:Promise<string>;preview:Promise<string>}>();
+export function bindNativeMediaSources(blob:Blob,original:Promise<string>,preview:Promise<string>):void {
+ original.catch(()=>{});preview.catch(()=>{});nativeSources.set(blob,{original,preview});
+}
+export function getNativeMediaSource(blob:Blob,purpose:'preview'|'export'='preview'):Promise<string|undefined> {
+ const binding=nativeSources.get(blob);return binding ? (purpose==='export'?binding.original:binding.preview) : Promise.resolve(undefined);
+}
+export async function nativeVideoUrl(blob:Blob,purpose:'preview'|'export'='preview'):Promise<string>{return (await getNativeMediaSource(blob,purpose))??URL.createObjectURL(blob);}
+export interface ManagedRendererBridge {
+ registerFile(mediaId:string,file:Blob):Promise<import('../lickety/types').RegisteredAsset>;
+ registerPath(mediaId:string,path:string):Promise<import('../lickety/types').RegisteredAsset>;
+ findAsset(mediaId:string):Promise<import('../lickety/types').RegisteredAsset|undefined>;
+ resolve(assetId:string,purpose:'original'|'proxy'):Promise<string>;
+}
+export function getManagedBridge():ManagedRendererBridge|undefined {return (globalThis as unknown as {openreel?:{platform?:string;lickety?:ManagedRendererBridge}}).openreel?.lickety;}
+export async function prepareNativeOriginal(item:import('../types/project').MediaItem):Promise<import('../types/project').MediaItem>{
+ const managed=getManagedBridge();if(!managed)return item;
+ let asset=item.nativeSource??await managed.findAsset(item.id);
+ const blob=item.blob??await item.fileHandle?.getFile();
+ if(!asset){if(!blob)throw new Error(`Relink original ${item.name} before exporting`);try{asset=await managed.registerFile(item.id,blob);}catch(e){const bridge=getBridge();if(!bridge)throw e;asset=await managed.registerPath(item.id,await materializeToTemp(bridge,blob));}}
+ const uri=await managed.resolve(asset.identity.assetId,'original');const runtimeBlob=blob??new Blob([]);
+ if(!nativeSources.has(runtimeBlob))bindNativeMediaSources(runtimeBlob,Promise.resolve(uri),Promise.resolve(uri));
+ return {...item,blob:runtimeBlob,nativeSource:asset,isPlaceholder:false};
 }

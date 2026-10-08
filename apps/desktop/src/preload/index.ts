@@ -1,9 +1,18 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { CHANNELS } from "../shared/channels";
 import type { McpBridgeRequest } from "../shared/mcp";
 
 contextBridge.exposeInMainWorld("openreel", {
   platform: "desktop",
+  lickety: {
+    resourceProfile: () => ipcRenderer.invoke(CHANNELS.licketyResourceProfile),
+    registerFile: (mediaId: string, file: File) => ipcRenderer.invoke(CHANNELS.licketyRegisterAsset, {mediaId, path:webUtils.getPathForFile(file)}),
+    registerPath: (mediaId: string, path: string) => ipcRenderer.invoke(CHANNELS.licketyRegisterAsset, {mediaId,path,managed:true}),
+    findAsset: (mediaId: string) => ipcRenderer.invoke(CHANNELS.licketyFindAsset, {mediaId}),
+    resolve: (assetId: string, purpose: string) => ipcRenderer.invoke(CHANNELS.licketyResolve, {assetId,purpose}),
+    ensureProxy: (assetId: string) => ipcRenderer.invoke(CHANNELS.licketyEnsureProxy, {assetId}),
+    cancelMedia: (assetId: string) => ipcRenderer.invoke(CHANNELS.licketyCancelMedia, {assetId}),
+  },
   publicOrigin: "https://app.openreel.video",
   probeHardware: () => ipcRenderer.invoke(CHANNELS.probeHardware, undefined),
   onMenuAction: (cb: (id: string) => void) => {

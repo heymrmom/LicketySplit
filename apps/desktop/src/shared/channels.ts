@@ -1,4 +1,10 @@
 export const CHANNELS = {
+  licketyResourceProfile: "openreel:lickety:resourceProfile",
+  licketyRegisterAsset: "openreel:lickety:registerAsset",
+  licketyFindAsset: "openreel:lickety:findAsset",
+  licketyResolve: "openreel:lickety:resolve",
+  licketyEnsureProxy: "openreel:lickety:ensureProxy",
+  licketyCancelMedia: "openreel:lickety:cancelMedia",
   probeHardware: "openreel:probeHardware",
   fsShowSaveDialog: "openreel:fs:showSaveDialog",
   fsShowOpenDialog: "openreel:fs:showOpenDialog",

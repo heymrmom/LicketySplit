@@ -1,3 +1,4 @@
+import { installLicketyIpc } from "./ipc/lickety";
 import { getDesktopProfilePath } from "./lickety/resource-policy";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
@@ -144,6 +145,7 @@ function createWindow(): void {
 app.whenReady().then(() => {
   if (!hasSingleInstanceLock) return;
   handleAppScheme(rendererRoot());
+  installLicketyIpc();
   handle(CHANNELS.probeHardware, z.undefined(), () => collectHardwareInfo());
   handle(CHANNELS.fsShowSaveDialog, saveDialogArgsSchema, showSaveDialog);
   handle(CHANNELS.fsShowOpenDialog, openDialogArgsSchema, showOpenDialog);

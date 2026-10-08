@@ -1,3 +1,4 @@
+import {getNativeMediaSource} from "./native-media-bridge";
 import type {
   MediaTrackInfo,
   ThumbnailResult,
@@ -91,10 +92,10 @@ export class ExportFrameDecoder {
   async initialize(): Promise<boolean> {
     if (this.initialized) return true;
 
-    const { Input, ALL_FORMATS, BlobSource, CanvasSink } = this.mediabunny;
+    const { Input, ALL_FORMATS, BlobSource, UrlSource, CanvasSink } = this.mediabunny;
 
     this.input = new Input({
-      source: new BlobSource(this.file),
+      source: (await getNativeMediaSource(this.file,"export")) ? new UrlSource((await getNativeMediaSource(this.file,"export"))!) : new BlobSource(this.file),
       formats: ALL_FORMATS,
     }) as unknown as MediaBunnyInput;
 
@@ -295,12 +296,12 @@ export class MediaBunnyEngine {
     }
   }
 
-  async createInput(file: File | Blob): Promise<MediaBunnyInput> {
+  async createInput(file: File | Blob, purpose: "preview" | "export" = "export"): Promise<MediaBunnyInput> {
     this.ensureInitialized();
-    const { Input, ALL_FORMATS, BlobSource } = this.mediabunny!;
+    const { Input, ALL_FORMATS, BlobSource, UrlSource } = this.mediabunny!;
 
     return new Input({
-      source: new BlobSource(file),
+      source: (await getNativeMediaSource(file,purpose)) ? new UrlSource((await getNativeMediaSource(file,purpose))!) : new BlobSource(file),
       formats: ALL_FORMATS,
     });
   }
@@ -648,7 +649,7 @@ export class MediaBunnyEngine {
       };
     }
 
-    const input = await this.createInput(file);
+    const input = await this.createInput(file,"preview");
 
     try {
       const videoTrack = await input.getPrimaryVideoTrack();
