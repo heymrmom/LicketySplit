@@ -1,0 +1,23 @@
+# Apply to the existing LicketySplit service with railway api --file and --variables.
+# The runtime settings API is used because Railway has retired railway.toml.
+mutation LicketySplitHosting($serviceId: String!, $environmentId: String!) {
+  settings: serviceInstanceUpdate(
+    serviceId: $serviceId
+    environmentId: $environmentId
+    input: {
+      dockerfilePath: "Dockerfile"
+      healthcheckPath: "/healthz"
+      healthcheckTimeout: 120
+      numReplicas: 1
+      restartPolicyType: ON_FAILURE
+      restartPolicyMaxRetries: 3
+      watchPatterns: ["/apps/web/**", "/packages/**", "/hosting/**", "/Dockerfile", "/package.json", "/pnpm*.yaml", "/patches/**"]
+    }
+  )
+  limits: serviceInstanceLimitsUpdate(input: {
+    serviceId: $serviceId
+    environmentId: $environmentId
+    memoryGB: 0.25
+    vCPUs: 0.25
+  })
+}
