@@ -1,0 +1,19 @@
+name: Railway baseline
+on:
+  push:
+    branches: [codex/openreel-baseline]
+  pull_request:
+    branches: [codex/openreel-baseline]
+jobs:
+  hosting-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @openreel/web...
+      - run: node --experimental-strip-types --test hosting/railway/server.test.mjs
+      - run: pnpm build

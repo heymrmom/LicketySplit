@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/dist
+**/build
+.env*
+**/.env*
+.wrangler
+**/.wrangler
+.playwright-mcp
+deployment/evidence
+*.log
