@@ -84,7 +84,7 @@ export interface ProjectFile {
   readonly project: Project;
 }
 
-export const SCHEMA_VERSION = "1.2.0";
+export const SCHEMA_VERSION = "1.3.0";
 
 function compareVersions(left: string, right: string): number {
   const parse = (value: string): number[] =>
@@ -105,9 +105,9 @@ function getProjectFileCompatibility(project: Project): Pick<
   ProjectFile,
   "minimumReaderVersion" | "capabilities"
 > {
-  const capabilities = project.capabilities ?? [];
+  const capabilities = [...new Set([...(project.capabilities ?? []), ...(project.lickety ? ["licketysplit-workflows-v1"] : [])])];
   return {
-    minimumReaderVersion: projectUsesUniversalTracks(project)
+    minimumReaderVersion: project.lickety ? "1.3.0" : projectUsesUniversalTracks(project)
       ? UNIVERSAL_TRACKS_MIN_READER_VERSION
       : project.minimumReaderVersion,
     capabilities: capabilities.length > 0 ? capabilities : undefined,
@@ -115,7 +115,7 @@ function getProjectFileCompatibility(project: Project): Pick<
 }
 
 function assertReaderCompatibility(projectFile: ProjectFile): void {
-  const minimumReaderVersion = projectFile.minimumReaderVersion;
+  const minimumReaderVersion = projectFile.minimumReaderVersion ?? projectFile.project?.minimumReaderVersion;
   if (
     minimumReaderVersion &&
     compareVersions(minimumReaderVersion, SCHEMA_VERSION) > 0
@@ -462,6 +462,7 @@ export class ProjectSerializer {
         blob: null,
         fileHandle: null,
         waveformData: null,
+        nativeSource: undefined,
       }),
     );
 

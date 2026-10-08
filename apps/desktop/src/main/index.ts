@@ -1,3 +1,4 @@
+import { getDesktopProfilePath } from "./lickety/resource-policy";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
 import { z } from "zod";
@@ -85,6 +86,9 @@ import type {
   AuroraSequenceSessionStartArgs,
 } from "../shared/ipc-contract";
 
+// Isolate before any credentials, caches, single-instance locks or projects are read.
+app.setName("LicketySplit");
+app.setPath("userData", getDesktopProfilePath(app.getPath("appData"), process.env.LICKETYSPLIT_DATA_DIR, !app.isPackaged));
 registerAppSchemePrivileges();
 
 // Register crash/error reporting as early as possible so main-process faults and

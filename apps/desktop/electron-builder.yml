@@ -1,5 +1,5 @@
-appId: video.openreel.desktop
-productName: OpenReel
+appId: com.heymrmom.licketysplit.desktop
+productName: LicketySplit
 # Predictable, space-free, arch-suffixed names → clean R2 URLs + a simple
 # manifest (e.g. OpenReel-1.2.3-arm64.dmg, OpenReel-1.2.3-x64.exe).
 artifactName: ${productName}-${version}-${arch}.${ext}

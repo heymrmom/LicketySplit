@@ -82,3 +82,6 @@ export {
   compressionPlanToExportSettings,
   COMPRESSION_SIZE_PRESETS,
 } from "./export/compression";
+
+export type { JobState, ResourceProfile, AssetIdentity, RegisteredAsset, ProxyReceipt, DialogueSpan, AnalysisSnapshot, PreparedAudio, TranscriptWord as LicketyTranscriptWord, TranscriptDocument, TimelineWord, NarrativeExcerpt, NarrativeProposal, TimelineRange, NarrativeResult, GapEvidence, PauseCut, Cue, PublishingPackage, SemanticShort, LicketyProjectState } from "./lickety/types";
+export { cloneProjectForWorkflow } from "./lickety/clone-project";
