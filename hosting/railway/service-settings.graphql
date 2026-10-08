@@ -11,7 +11,7 @@ mutation LicketySplitHosting($serviceId: String!, $environmentId: String!) {
       numReplicas: 1
       restartPolicyType: ON_FAILURE
       restartPolicyMaxRetries: 3
-      watchPatterns: ["/apps/web/**", "/packages/**", "/hosting/**", "/Dockerfile", "/package.json", "/pnpm*.yaml", "/patches/**"]
+      watchPatterns: ["/apps/web/**", "/packages/**", "/hosting/**", "/Dockerfile", "/.dockerignore", "/LICENSE", "/package.json", "/pnpm*.yaml", "/patches/**"]
     }
   )
   limits: serviceInstanceLimitsUpdate(input: {
