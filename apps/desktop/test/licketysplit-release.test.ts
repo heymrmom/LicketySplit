@@ -1,0 +1,5 @@
+import {it,expect} from 'vitest';import {mkdtemp,mkdir,writeFile} from 'node:fs/promises';import path from 'node:path';import os from 'node:os';
+// @ts-expect-error Native release script is intentionally executable standalone JavaScript.
+import {assertArm64Architectures,verifyLicketySplitPackage,canPromote} from '../scripts/verify-licketysplit-package.mjs';
+it('rejects Intel binaries and missing required native resources',async()=>{expect(()=>assertArm64Architectures(['x86_64'])).toThrow(/architecture/);expect(assertArm64Architectures(['arm64'])).toBe('arm64');const app=await mkdtemp(path.join(os.tmpdir(),'lickety-package-'));await mkdir(path.join(app,'Contents'),{recursive:true});await writeFile(path.join(app,'Contents','Info.plist'),'');await expect(verifyLicketySplitPackage(app,'0.1.0-alpha.1')).rejects.toThrow();});
+it('requires real device, signing and notarization evidence',()=>{expect(canPromote({signed:false,notarized:false,deviceAccepted:true})).toBe(false);expect(canPromote({signed:true,notarized:true,deviceAccepted:false})).toBe(false);expect(canPromote({signed:true,notarized:true,deviceAccepted:true})).toBe(true);});

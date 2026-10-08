@@ -89,7 +89,7 @@ import type {
 
 // Isolate before any credentials, caches, single-instance locks or projects are read.
 app.setName("LicketySplit");
-app.setPath("userData", getDesktopProfilePath(app.getPath("appData"), process.env.LICKETYSPLIT_DATA_DIR, !app.isPackaged));
+app.setPath("userData", getDesktopProfilePath(app.getPath("appData"), process.env.LICKETYSPLIT_DATA_DIR, !app.isPackaged || process.env.LICKETYSPLIT_TEST_MODE === "1"));
 registerAppSchemePrivileges();
 
 // Register crash/error reporting as early as possible so main-process faults and

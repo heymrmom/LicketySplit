@@ -13,10 +13,7 @@ directories:
 # Update feed for electron-updater. Builds embed app-update.yml pointing at the
 # R2-backed download subdomain and generate latest*.yml + blockmaps; the release
 # CI uploads everything to R2 (the generic provider does not upload itself).
-publish:
-  provider: generic
-  url: https://dl.openreel.video
-  channel: latest
+publish: null
 files:
   - dist/**/*
   - "!**/*.map"
@@ -47,23 +44,16 @@ mac:
   icon: build/icon.png
   target:
     - target: dmg
-      arch: [arm64, x64]
+      arch: [arm64]
     - target: zip
-      arch: [arm64, x64]
+      arch: [arm64]
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  # Sign downloadable (non-App-Store) builds with the Developer ID Application
-  # cert present in this team's keychain. `pnpm pack` (--dir) skips signing.
-  # electron-builder adds the "Developer ID Application:" prefix itself — supply
-  # only the common name (name + Team ID) or it errors on the duplicate prefix.
-  identity: "Augustus Otu (864H636QW4)"
-  # Notarization runs on `pnpm dist`. teamId is set here; credentials come from
-  # env at build time: APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD (or APPLE_API_KEY +
-  # APPLE_API_KEY_ID + APPLE_API_ISSUER). See apps/desktop/DISTRIBUTION.md.
-  notarize:
-    teamId: "864H636QW4"
+  minimumSystemVersion: "14.0"
+  identity: null
+
 win:
   icon: build/icon.png
   target:

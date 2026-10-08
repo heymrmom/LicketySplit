@@ -154,3 +154,11 @@ the live manifest.
 3. **macOS signing**: `MAC_CSC_LINK` / `MAC_CSC_KEY_PASSWORD` + `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` (§3, §6) — required for mac auto-update to install.
 4. **Windows signing**: `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`, or accept unsigned Windows (§4).
 5. Fill in the real support / source-offer contact in `LICENSES/FFMPEG.md`.
+
+## LicketySplit independent ARM64 candidate
+
+LicketySplit uses `com.heymrmom.licketysplit.desktop`, version `0.1.0-alpha.1`, macOS 14+, and its own Application Support/LicketySplit profile. Preserve installed legacy apps, profiles and projects. The dedicated `licketysplit-desktop.yml` workflow dispatch builds ARM64 DMG/ZIP test packages; it never publishes or changes upstream browser hosting. Node 22 and packageManager's frozen pnpm version are required. The pinned GPL ARM64 FFmpeg binary and upstream MIT attribution ship with the app.
+
+Local test build: `pnpm build:wasm`, `node apps/desktop/scripts/fetch-ffmpeg.mjs darwin-arm64`, `pnpm --filter @openreel/desktop build`, then `CSC_IDENTITY_AUTO_DISCOVERY=false pnpm --filter @openreel/desktop exec electron-builder --mac dmg zip --arm64 --publish never`. Run `verify-licketysplit-package.mjs` against the app before labelling architecture or identity verified. These packages are unsigned test artifacts, not Gatekeeper-ready downloads.
+
+Automatic update is disabled by default. Do not configure a feed, embed repository tokens, reuse the upstream author's Apple signing identity, publish a release or merge the feature branch without the separate authorized operation. Candidate tags use `licketysplit-desktop-v*`, outside upstream `v*` publishing triggers. Signing/notarization, real 8 GiB acceptance and downloaded installation are separate evidence gates. A successful archive does not close them.

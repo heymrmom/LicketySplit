@@ -1,0 +1,49 @@
+name: LicketySplit Apple silicon desktop
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Build an unsigned test candidate (publication is separate)
+        type: choice
+        options: [build-only]
+        default: build-only
+permissions:
+  contents: read
+concurrency:
+  group: licketysplit-desktop-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - run: test "$(uname -m)" = arm64
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:wasm
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: node apps/desktop/scripts/fetch-ffmpeg.mjs darwin-arm64
+      - run: pnpm --filter @openreel/desktop build
+      - run: pnpm --filter @openreel/desktop exec electron-builder --mac dmg zip --arm64 --publish never
+      - run: node apps/desktop/scripts/verify-licketysplit-package.mjs --app apps/desktop/release/mac-arm64/LicketySplit.app --version 0.1.0-alpha.1 --out apps/desktop/release/build-manifest.json
+      - run: |
+          cp apps/desktop/LICENSES/OPENREEL.md apps/desktop/release/THIRD-PARTY-NOTICES.md
+          cd apps/desktop/release
+          shasum -a 256 LicketySplit-*-arm64.dmg LicketySplit-*-arm64.zip build-manifest.json THIRD-PARTY-NOTICES.md > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LicketySplit-unsigned-arm64-test-${{ github.sha }}
+          path: |
+            apps/desktop/release/LicketySplit-*-arm64.dmg
+            apps/desktop/release/LicketySplit-*-arm64.zip
+            apps/desktop/release/SHA256SUMS
+            apps/desktop/release/build-manifest.json
+            apps/desktop/release/THIRD-PARTY-NOTICES.md
