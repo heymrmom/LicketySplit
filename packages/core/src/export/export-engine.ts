@@ -29,12 +29,11 @@ import { WebCodecsBackend } from "./webcodecs-backend";
 import { resolveWebCodecsExportLimits } from "./webcodecs-limits";
 import { checkBrowserExportCapability, getVideoExportValidationError, getMissingExportMedia } from "./browser-capabilities";
 import {
-  getMediaItemCapabilities,
   trackHasAudioItems,
 } from "../timeline/timeline-items";
 
 export class ExportEngine {
-  private static readonly AUDIO_EXPORT_CHUNK_DURATION_SECONDS = 15;
+  private static readonly AUDIO_EXPORT_CHUNK_DURATION_SECONDS = 10;
   private mediabunny: typeof import("mediabunny") | null = null;
   private initialized = false;
   private videoEngine: VideoEngine | null = null;
@@ -239,35 +238,15 @@ export class ExportEngine {
       }
 
       const mediaEngine = getMediaEngine();
-      const videoMediaIds: string[] = [];
-      for (const track of project.timeline.tracks) {
-        for (const clip of track.clips) {
-          const mediaItem = project.mediaLibrary.items.find(
-            (m) => m.id === clip.mediaId,
-          );
-          if (
-            mediaItem?.blob &&
-            getMediaItemCapabilities(mediaItem).visual &&
-            mediaItem.type === "video" &&
-            !videoMediaIds.includes(mediaItem.id)
-          ) {
-            videoMediaIds.push(mediaItem.id);
-            try {
-              await mediaEngine.createExportDecoder(
-                mediaItem.id,
-                mediaItem.blob,
-                fullSettings.width,
-              );
-            } catch {}
-          }
-        }
-      }
 
       let renderMsTotal = 0;
       for (let frame = 0; frame < totalFrames; frame++) {
         checkCancelled();
 
         const time = frame / fullSettings.frameRate;
+        // The common frame uses up to four sources; larger composites decode lazily in VideoEngine.
+        const frameSources=new Set<string>();for(const track of project.timeline.tracks)for(const clip of track.clips)if(clip.startTime<=time&&clip.startTime+clip.duration>time){const item=project.mediaLibrary.items.find(m=>m.id===clip.mediaId);if(item?.blob&&item.type==="video")frameSources.add(item.id);}
+        if(frameSources.size<=4)for(const id of frameSources){const item=project.mediaLibrary.items.find(m=>m.id===id)!;await mediaEngine.createExportDecoder(id,item.blob!,fullSettings.width);}
         const renderStart = performance.now();
         const rendered = await this.videoEngine!.renderFrame(
           project,
@@ -947,6 +926,7 @@ export class ExportEngine {
       renderProject,
       startTime,
       renderDuration,
+      this.abortController?.signal,
     );
 
     return rendered.buffer;

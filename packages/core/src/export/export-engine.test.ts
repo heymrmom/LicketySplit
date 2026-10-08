@@ -503,11 +503,12 @@ describe("ExportEngine", () => {
         if (done) break;
       }
 
-      expect(mockRenderAudio).toHaveBeenCalledTimes(3);
-      expect(mockRenderAudio).toHaveBeenNthCalledWith(1, project, 0, 15);
-      expect(mockRenderAudio).toHaveBeenNthCalledWith(2, project, 15, 15);
-      expect(mockRenderAudio).toHaveBeenNthCalledWith(3, project, 30, 10);
-      expect(mockAudioSourceAdd).toHaveBeenCalledTimes(3);
+      expect(mockRenderAudio).toHaveBeenCalledTimes(4);
+      expect(mockRenderAudio).toHaveBeenNthCalledWith(1, project, 0, 10, expect.any(AbortSignal));
+      expect(mockRenderAudio).toHaveBeenNthCalledWith(2, project, 10, 10, expect.any(AbortSignal));
+      expect(mockRenderAudio).toHaveBeenNthCalledWith(3, project, 20, 10, expect.any(AbortSignal));
+      expect(mockRenderAudio).toHaveBeenNthCalledWith(4, project, 30, 10, expect.any(AbortSignal));
+      expect(mockAudioSourceAdd).toHaveBeenCalledTimes(4);
       expect(mockAudioEngine.clearCache).toHaveBeenCalled();
     });
 
@@ -551,7 +552,7 @@ describe("ExportEngine", () => {
 
     it("renders export audio at the selected sample rate and channel count", async () => {
       expect(await drainVideoExport({ ...DEFAULT_VIDEO_SETTINGS, frameRate: 1, width: 640, height: 360, audioSettings: { ...DEFAULT_VIDEO_SETTINGS.audioSettings, sampleRate: 96000, channels: 1 } })).toMatchObject({ success: true });
-      expect(mockRenderAudio).toHaveBeenCalledWith(expect.objectContaining({ settings: expect.objectContaining({ sampleRate: 96000, channels: 1 }) }), 0, 1);
+      expect(mockRenderAudio).toHaveBeenCalledWith(expect.objectContaining({ settings: expect.objectContaining({ sampleRate: 96000, channels: 1 }) }), 0, 1, expect.any(AbortSignal));
     });
 
     it("cleans up when a cancelled export generator is closed at a yield", async () => {

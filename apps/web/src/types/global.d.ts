@@ -176,6 +176,7 @@ declare global {
     openreel?: {
       platform: "desktop";
       lickety?: {
+        audioWindow(args:{requestId?:string;assetId:string;trackIndex:number;startMs:number;durationMs:number;sampleRate:1000|16000|48000;channels:1|2}):Promise<{channels:Float32Array[];sampleRate:number}>;
         resourceProfile():Promise<ResourceProfile>;
         registerFile(mediaId:string,file:Blob):Promise<RegisteredAsset>;
         registerPath(mediaId:string,path:string):Promise<RegisteredAsset>;

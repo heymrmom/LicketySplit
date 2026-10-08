@@ -326,7 +326,7 @@ export class VideoEngine {
       }
 
       if (mediaId) {
-        const exportDecoder = mediaEngine.getExportDecoder(mediaId);
+        const exportDecoder = this.exportMode ? await mediaEngine.createExportDecoder(mediaId,blob,width) : mediaEngine.getExportDecoder(mediaId);
         if (exportDecoder) {
           const canvas = await exportDecoder.getFrame(time);
           if (canvas) {

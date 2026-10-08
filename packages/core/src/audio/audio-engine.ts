@@ -1,3 +1,4 @@
+import {getManagedBridge,prepareNativeOriginal,getNativeMediaSource} from "../media/native-media-bridge";
 import type { Timeline, Track, Clip, Effect } from "../types/timeline";
 import type { AudioEffectParams } from "../types/effects";
 import type { MediaItem, Project } from "../types/project";
@@ -50,11 +51,11 @@ class SegmentedAudioDecoder {
     if (this.initialized) return true;
 
     try {
-      const { Input, ALL_FORMATS, BlobSource, AudioBufferSink } =
+      const { Input, ALL_FORMATS, BlobSource, UrlSource, AudioBufferSink } =
         await import("mediabunny");
 
       this.input = new Input({
-        source: new BlobSource(this.file),
+        source: (await getNativeMediaSource(this.file,"export"))?new UrlSource((await getNativeMediaSource(this.file,"export"))!):new BlobSource(this.file),
         formats: ALL_FORMATS,
       }) as unknown as MediaBunnyAudioInput;
 
@@ -207,6 +208,7 @@ export class AudioEngine {
     project: Project,
     startTime: number,
     duration: number,
+    signal?:AbortSignal,
   ): Promise<RenderedAudio> {
     this.ensureInitialized();
 
@@ -239,6 +241,7 @@ export class AudioEngine {
           mediaItem,
           clipInfo,
           startTime,
+          signal,
         );
       }
     }
@@ -445,7 +448,20 @@ export class AudioEngine {
     mediaItem: MediaItem,
     clipInfo: AudioClipRenderInfo,
     renderStartTime: number,
+    signal?:AbortSignal,
   ): Promise<void> {
+    const managed=getManagedBridge();
+    if(managed&&mediaItem.metadata.duration>=120){
+      if(clipInfo.reversed)throw new Error("Bounded native audio export cannot reverse long recordings. Render and relink this audio stem first.");
+      const stateful=clipInfo.effects.filter(effect=>effect.enabled&&!/^(gain|volume|pan|invert|polarity)$/i.test(effect.type));
+      if(stateful.length)throw new Error(`Long native audio with ${stateful.map(e=>e.type).join(", ")} requires a rendered stem to preserve filter continuity. Render/relink the affected audio track before export.`);
+      const original=await prepareNativeOriginal(mediaItem);const {volumeGainNode,fadeGainNode}=this.createClipOutputNodes(context,clipInfo);const contextStartTime=Math.max(0,clipInfo.timelineStartTime-renderStartTime);this.applyVolumeAutomation(volumeGainNode,clipInfo,contextStartTime);this.applyFades(fadeGainNode,clipInfo,contextStartTime);
+      const speed=clipInfo.speed||1;const sourceDuration=clipInfo.duration*speed;
+      for(let offset=0;offset<sourceDuration;offset+=10){const duration=Math.min(10,sourceDuration-offset);signal?.throwIfAborted();const requestId=crypto.randomUUID();const abort=()=>{void managed.cancelMedia?.(requestId);};signal?.addEventListener("abort",abort,{once:true});let window;try{window=await managed.audioWindow!({requestId,assetId:original.nativeSource!.identity.assetId,trackIndex:clipInfo.audioTrackIndex??0,startMs:(clipInfo.sourceTime+offset)*1000,durationMs:duration*1000,sampleRate:48000,channels:2});}finally{signal?.removeEventListener("abort",abort);}signal?.throwIfAborted();if(!window.channels[0]?.length)continue;
+        const buffer=context.createBuffer(window.channels.length,window.channels[0].length,window.sampleRate);for(let c=0;c<window.channels.length;c++)buffer.getChannelData(c).set(window.channels[c]);
+        const processed=clipInfo.effects.some(e=>e.enabled)?await this.processClipBuffer(buffer,{...clipInfo,sourceTime:0,duration}):{buffer};const source=context.createBufferSource();source.buffer=processed.buffer;source.playbackRate.value=speed;source.connect(volumeGainNode);source.start(contextStartTime+offset/speed,0,duration);}
+      return;
+    }
     if (this.shouldUseSegmentedAudioDecoding(mediaItem, clipInfo)) {
       const renderedSegment = await this.renderClipToContextFromSegments(
         context,

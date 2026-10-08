@@ -1,3 +1,4 @@
+import {NativeAudioAnalysis} from "../lickety/audio-analysis";
 import {randomUUID} from "node:crypto";
 import {app,protocol} from 'electron';import {createReadStream,promises as fs} from 'node:fs';import {Readable} from 'node:stream';import path from 'node:path';import os from 'node:os';import {z} from 'zod';
 import {handle} from './index';import {CHANNELS} from '../../shared/channels';
@@ -5,6 +6,8 @@ import {ManagedAssetRegistry,boundedRange} from '../lickety/asset-registry';impo
 export const heavyQueue=new HeavyJobQueue();let registry:ManagedAssetRegistry|undefined;let jobs:ManagedMediaJobs|undefined;const controllers=new Map<string,AbortController>();
 export function getAssetRegistry(){return registry??=new ManagedAssetRegistry(path.join(app.getPath('userData'),'managed-media'));}
 export function installLicketyIpc(){const r=getAssetRegistry();jobs=new ManagedMediaJobs(r,heavyQueue);
+ const audio=new NativeAudioAnalysis(r,heavyQueue);
+ handle(CHANNELS.licketyAudioWindow,z.object({assetId:z.string(),trackIndex:z.number().int().nonnegative(),startMs:z.number().nonnegative(),durationMs:z.number().positive().max(10000),sampleRate:z.union([z.literal(1000),z.literal(16000),z.literal(48000)]),channels:z.union([z.literal(1),z.literal(2)]),requestId:z.string().optional()}),async args=>{const id=args.requestId??randomUUID();const controller=new AbortController();controllers.set(id,controller);try{return await audio.getNativeAudioWindow(args.assetId,args.trackIndex,args.startMs,args.durationMs,controller.signal,args.sampleRate,args.channels);}finally{controllers.delete(id);}});
  handle(CHANNELS.licketyResourceProfile,z.undefined(),()=>getResourceProfile(os.totalmem()));
  handle(CHANNELS.licketyRegisterAsset,z.object({mediaId:z.string().min(1),path:z.string().min(1),managed:z.boolean().optional()}),async args=>{let file=args.path;if(args.managed){const destination=path.join(r.cacheDir,'originals');await fs.mkdir(destination,{recursive:true});const target=path.join(destination,randomUUID()+path.extname(file));await fs.copyFile(file,target);file=target;}return r.registerOriginal(args.mediaId,file);});
  handle(CHANNELS.licketyFindAsset,z.object({mediaId:z.string()}),args=>r.findMedia(args.mediaId));

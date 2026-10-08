@@ -2,7 +2,7 @@ const WHISPER_SAMPLE_RATE = 16_000;
 
 /** Mix an AudioBuffer to mono and resample only the selected source range. */
 export function audioBufferToWhisperSamples(
-  audioBuffer: AudioBuffer,
+  audioBuffer: {sampleRate:number;numberOfChannels:number;getChannelData(channel:number):Float32Array;length:number;duration:number},
   startTime = 0,
   endTime = audioBuffer.duration,
 ): Float32Array {

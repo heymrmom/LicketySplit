@@ -1,3 +1,4 @@
+import type {AnalysisSamples} from "../../../services/lickety/analysis-audio";
 import type {
   Action,
   CameraAngle,
@@ -48,7 +49,7 @@ export function resolveMulticamSources(
 }
 
 export function prepareMulticamAnalysisAudio(
-  buffer: AudioBuffer,
+  buffer: AnalysisSamples,
   targetSampleRate = 2_000,
 ): { samples: Float32Array; sampleRate: number } {
   const sampleRate = Math.min(buffer.sampleRate, targetSampleRate);
@@ -162,7 +163,7 @@ export function findMulticamCalibrationRanges(
 }
 
 export async function analyzeMulticamSyncInWorker(
-  buffers: ReadonlyMap<string, AudioBuffer>,
+  buffers: ReadonlyMap<string, AnalysisSamples>,
   referenceAngleId: string,
 ): Promise<MulticamSyncAnalysis> {
   const referenceBuffer = buffers.get(referenceAngleId);
@@ -219,7 +220,7 @@ export async function analyzeMulticamSyncInWorker(
 
 export function getMulticamAnalysisDuration(
   sources: readonly ResolvedMulticamSource[],
-  buffers: ReadonlyMap<string, AudioBuffer>,
+  buffers: ReadonlyMap<string, AnalysisSamples>,
 ): number {
   if (sources.length === 0) return 0;
   return sources.reduce((duration, source) => {

@@ -1,3 +1,5 @@
+import {desktopMediaAvailable} from "../../../services/lickety/desktop-media";
+import {getCompactSourceBuffer,readDesktopAudio,type AnalysisSamples} from "../../../services/lickety/analysis-audio";
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   Video,
@@ -25,7 +27,7 @@ import { toast } from "../../../stores/notification-store";
 import { loadAudioBuffer } from "../../../utils/load-audio-buffer";
 import {
   analyzeMulticamActivity,
-  analyzeSileroVad,
+  analyzeSileroVad, analyzeSileroVadStream,
   calibrateMulticamBleed,
   createOrmaArtifact,
   extractMulticamSocialClips,
@@ -383,8 +385,9 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
     }),
   );
   const busyRef = useRef(false);
+  const analysisAbort=useRef(new AbortController());
   const mounted = useRef(true);
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false;analysisAbort.current.abort(new Error("Analysis cancelled")); }; }, []);
   const [syncBeforeAutoEdit, setSyncBeforeAutoEdit] = useState(true);
   const [processingGroupId, setProcessingGroupId] = useState<string | null>(null);
   const [groupStatus, setGroupStatus] = useState<Record<string, string>>({});
@@ -482,10 +485,11 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
           `${unsupportedSource.angle.name} must use normal-speed, forward playback for audio analysis.`,
         );
       }
-      const buffers = new Map<string, AudioBuffer>();
+      const buffers = new Map<string, AnalysisSamples>();
       const audioContext = new AudioContext();
       try {
         for (const source of sources) {
+          if(desktopMediaAvailable()){setStatus(group.id,`Preparing compact original audio · ${source.angle.name}`);buffers.set(source.angle.id,await getCompactSourceBuffer(source.media,analysisAbort.current.signal,source.clip.audioTrackIndex));continue;}
           if (!source.media.blob) {
             throw new Error(`${source.angle.name} needs its source media relinked.`);
           }
@@ -607,11 +611,13 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
       const group = multiCamEngine.getGroup(groupId);
       if (!group || busyRef.current) return;
       busyRef.current = true;
+      analysisAbort.current=new AbortController();
       setProcessingGroupId(groupId);
       const before = useProjectStore.getState().project;
       const snapshot = JSON.stringify([before.id, before.timeline, before.multicamGroups]);
       const ensureCurrent = () => {
         const latest = useProjectStore.getState().project;
+        analysisAbort.current.signal.throwIfAborted();
         if (!mounted.current || snapshot !== JSON.stringify([latest.id, latest.timeline, latest.multicamGroups])) {
           throw new Error("The project changed during analysis. Run the camera analysis again.");
         }
@@ -666,11 +672,13 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
       const group = multiCamEngine.getGroup(groupId);
       if (!group) return;
       busyRef.current = true;
+      analysisAbort.current=new AbortController();
       setProcessingGroupId(groupId);
       const before = useProjectStore.getState().project;
       const snapshot = JSON.stringify([before.id, before.timeline, before.multicamGroups]);
       const ensureCurrent = () => {
         const latest = useProjectStore.getState().project;
+        analysisAbort.current.signal.throwIfAborted();
         if (!mounted.current || snapshot !== JSON.stringify([latest.id, latest.timeline, latest.multicamGroups])) {
           throw new Error("The project changed during analysis. Run the camera analysis again.");
         }
@@ -704,6 +712,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
         for (const source of alignedSources) {
           const buffer = buffers.get(source.angle.id);
           if (!buffer) continue;
+          if(desktopMediaAvailable()){const vad=await analyzeSileroVadStream(readDesktopAudio(source.media,16000,{startMs:0,endMs:source.media.metadata.duration*1000},analysisAbort.current.signal,source.clip.audioTrackIndex),{signal:analysisAbort.current.signal,totalSamples:Math.ceil(source.media.metadata.duration*16000),onProgress:(completed,total)=>{if(completed===total||completed%100===0)setStatus(groupId,`Voice detection · ${source.angle.name} · ${Math.round(completed/total*100)}%`);}});vadTracks.set(source.angle.id,vad);continue;}
           const vadAudio = prepareMulticamAnalysisAudio(buffer, 16_000);
           const vad = await analyzeSileroVad(vadAudio.samples, vadAudio.sampleRate, {
             onProgress: (completed, total) => {
@@ -1125,6 +1134,8 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
   };
 
   return (
+    <>
+    {processingGroupId&&<button type="button" onClick={()=>analysisAbort.current.abort(new Error("Analysis cancelled"))} className="min-h-[40px] rounded border border-border px-3 text-sm">Cancel media analysis</button>}
     <fieldset disabled={Boolean(processingGroupId)} className="space-y-3 min-w-0">
       <div className="flex items-center gap-2 p-2 bg-primary/10 rounded-lg border border-primary/30">
         <Video size={16} className="text-primary" />
@@ -1357,7 +1368,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
       <Text type="supporting" color="secondary" className="text-[9px] text-fg-3 text-center">
         Automatic edits create an editable timeline track and undo in one step
       </Text>
-    </fieldset>
+    </fieldset></>
   );
 };
 

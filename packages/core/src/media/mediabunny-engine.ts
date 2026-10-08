@@ -258,7 +258,7 @@ export class MediaBunnyEngine {
 
     const existing = this.exportDecoders.get(mediaId);
     if (existing) {
-      return existing;
+      this.exportDecoders.delete(mediaId);this.exportDecoders.set(mediaId,existing);return existing;
     }
 
     const decoder = new ExportFrameDecoder(this.mediabunny!, file, width);
@@ -267,6 +267,7 @@ export class MediaBunnyEngine {
       return null;
     }
 
+    while(this.exportDecoders.size>=4){const oldest=this.exportDecoders.keys().next().value!;this.disposeExportDecoder(oldest);}
     this.exportDecoders.set(mediaId, decoder);
     return decoder;
   }

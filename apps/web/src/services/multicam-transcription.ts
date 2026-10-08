@@ -1,3 +1,4 @@
+import type {AnalysisSamples} from "./lickety/analysis-audio";
 import type { MulticamTranscriptSegment } from "@openreel/core";
 import { audioBufferToWhisperSamples } from "../utils/whisper-audio";
 import type { WhisperModelKey } from "../workers/whisper-models";
@@ -20,7 +21,7 @@ export function whisperChunksToMulticamTranscript(
 }
 
 export async function transcribeMulticamChannels(
-  buffers: ReadonlyMap<string, AudioBuffer>,
+  buffers: ReadonlyMap<string, AnalysisSamples>,
   options: {
     model?: WhisperModelKey;
     language?: string;

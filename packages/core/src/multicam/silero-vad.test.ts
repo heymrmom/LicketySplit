@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  analyzeSileroVad,
+  analyzeSileroVad, analyzeSileroVadStream,
   SILERO_VAD_CHUNK_SAMPLES,
   SILERO_VAD_CONTEXT_SAMPLES,
 } from "./silero-vad";
@@ -63,3 +63,5 @@ describe("Silero VAD", () => {
     expect(result.probabilities[0]).toBeCloseTo(0.75);
   });
 });
+
+it("streaming chunk boundaries preserve ONNX recurrence and frame count", async()=>{const options=()=>({runtime:{Tensor:TestTensor,InferenceSession:{create:vi.fn()}},session:{run:async(feeds:Record<string,TestTensor>)=>({output:{data:new Float32Array([Number(feeds.state.data[0])+.1])},stateN:{data:new Float32Array(256).fill(Number(feeds.state.data[0])+.1)}})}});const samples=new Float32Array(1024).fill(.25);const batch=await analyzeSileroVad(samples,16000,options());async function* chunks(){yield samples.slice(0,300);yield samples.slice(300);}const streamed=await analyzeSileroVadStream(chunks(),{...options(),totalSamples:1024});expect([...streamed.probabilities]).toEqual([...batch.probabilities]);});

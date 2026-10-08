@@ -134,6 +134,8 @@ export function getNativeMediaSource(blob:Blob,purpose:'preview'|'export'='previ
 }
 export async function nativeVideoUrl(blob:Blob,purpose:'preview'|'export'='preview'):Promise<string>{return (await getNativeMediaSource(blob,purpose))??URL.createObjectURL(blob);}
 export interface ManagedRendererBridge {
+ cancelMedia?(assetId:string):Promise<void>;
+ audioWindow?(args:{requestId?:string;assetId:string;trackIndex:number;startMs:number;durationMs:number;sampleRate:1000|16000|48000;channels:1|2}):Promise<{channels:Float32Array[];sampleRate:number}>;
  registerFile(mediaId:string,file:Blob):Promise<import('../lickety/types').RegisteredAsset>;
  registerPath(mediaId:string,path:string):Promise<import('../lickety/types').RegisteredAsset>;
  findAsset(mediaId:string):Promise<import('../lickety/types').RegisteredAsset|undefined>;

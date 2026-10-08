@@ -144,6 +144,8 @@ describe.skipIf(!HAS_FFMPEG)("native export integration", () => {
         let stderr = "";
         proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
         proc.on("error", reject);
+        // A rejected hardware encoder may close stdin before the feeder finishes.
+        proc.stdin.on("error", reject);
         proc.on("close", (code) => {
           if (code === 0) resolve();
           else reject(new Error(`ffmpeg (${encoder}) exited with code ${code}\n${stderr.slice(-2000)}`));
