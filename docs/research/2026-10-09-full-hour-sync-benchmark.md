@@ -18,7 +18,7 @@ The audio is continuous low-pass aperiodic synthetic noise, not speech. It tests
 
 The native first pass wrote 18 feature/waveform JSON files totaling 59,830,435 bytes; the largest was 6,525,425 bytes. Native first analysis requested 6,525 audio windows, capped each request and FFmpeg input decode at 10 seconds, emitted at most 256,000 bytes, and ran one FFmpeg child at a time. The corrected and warm native review passes requested 900 bounded windows (largest request 6.12 seconds; largest input decode 8.12 seconds).
 
-Compact mode retained eight full 1 kHz source arrays while comparing them, then read Bob channel 0 separately; the eight primary arrays alone occupy about 115 MB. Across both compact passes, the reader stayed within 10-second windows, 32,000-byte output, and one FFmpeg child. RSS values are sampled every 750 ms, not a continuous memory trace. “First” and “repeat” describe this sequence: the OS file cache was not flushed, so these are not cold-storage measurements. Compact has no application-level analysis cache.
+Compact mode retained eight full 1 kHz source arrays while comparing them, then read Bob channel 0 separately; the eight primary arrays alone occupy 71,861,280 bytes (71.9 MB), calculated from the manifest durations with the harness’s floor(duration × 1,000) Float32 allocation. Across both compact passes, the reader stayed within 10-second windows, 32,000-byte output, and one FFmpeg child. RSS values are sampled every 750 ms, not a continuous memory trace. “First” and “repeat” describe this sequence: the OS file cache was not flushed, so these are not cold-storage measurements. Compact has no application-level analysis cache.
 
 The initial native cold run was retained as the requested profiling pass, but its temporary group setup assigned Bob’s independent stereo decoy channel to Bob. The controlled native revision maps only channel 0 to Bob and leaves channel 1 usable but unassigned. Its [receipt](../../.superpowers/work/takeover/verification/full-hour-20261009/benchmark/native-corrected-warm.json) is authoritative for participant mapping: it verifies unchanged registered source IDs and manifest hashes, all nine unchanged feature keys, and exact offset/scale/status equality for all eight placements. Thus the first run’s source fingerprint and timing measurements remain useful, while its participant assignment is not treated as accepted setup.
 
@@ -47,3 +47,18 @@ TAKEOVER_HOUR_MODE="native-corrected" \
 The manifests and machine-readable receipts are in the local ignored `.superpowers/work/takeover/verification/full-hour-20261009/` evidence directory: `manifest.json`, `challenges/manifest.json`, and `benchmark/{native-cold,native-corrected-warm,native-warm,compact-cold,compact-warm}.json`. Synthetic generation scripts are [generate-full-hour.mjs](../../scripts/takeover-verification/generate-full-hour.mjs) and [generate-correlation-challenges.mjs](../../scripts/takeover-verification/generate-correlation-challenges.mjs).
 
 Verification passed: desktop TypeScript check; all 11 `podcast/service.test.ts` tests; and all five full-hour benchmark modes. Whole-hour interactive editor/render proof remains separate.
+
+## Per-original timing errors on warm reopen
+
+These are synthetic affine mapping errors sampled at source start, 0.5 seconds, quarter, middle and half a second before the source end. Split-file starts and ends therefore bracket the known camera boundaries; they do not substitute for rendered picture/audio inspection.
+
+| Original | Expected episode offset (s) | Start error (ms) | Middle error (ms) | Near-end error (ms) | Maximum absolute error (ms) | Drift error (ppm) |
+|---|---:|---:|---:|---:|---:|---:|
+| cam-a-1 | 0.000000 | -0.001618 | -0.003594 | -0.005569 | 0.005569 | -0.002196 |
+| cam-a-2 | 1799.000000 | 0.016708 | -0.000104 | -0.016907 | 0.016907 | -0.018649 |
+| cam-b-1 | 35.000000 | 0.018803 | 0.014669 | 0.010538 | 0.018803 | -0.004593 |
+| cam-b-2 | 1835.216000 | 0.028374 | 0.019645 | 0.010921 | 0.028374 | -0.009882 |
+| cam-c-1 | 0.000000 | -0.003071 | 0.019400 | 0.041859 | 0.041859 | 0.024968 |
+| cam-c-2 | 1810.000000 | -0.028751 | 0.001829 | 0.032393 | 0.032393 | 0.034127 |
+| mic-alice | 0.000000 | 0.000000 | 0.000000 | 0.000000 | 0.000000 | 0.000000 |
+| mic-bob | 0.250000 | 0.016983 | 0.009819 | 0.002658 | 0.016983 | -0.003978 |
