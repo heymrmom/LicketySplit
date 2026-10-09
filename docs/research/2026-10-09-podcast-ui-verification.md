@@ -47,3 +47,16 @@ Ignored evidence directory: `.superpowers/work/takeover/verification/normal-ui-1
 - Setup, manual review, and restart screenshots from the same isolated profile.
 
 These receipts identify a development checkpoint, not the final source-matched installer. Final candidate evidence must add new-origin migration, branded assets, bounded decoders, selected-mic playback, split-boundary cuts/relink/export, replacement MCP shim, and embedded source receipt/checksums.
+
+
+## Actual origin migration checkpoint
+
+The development build at `540e9fd` ran the new primary origin `app://licketysplit` with a restricted, hidden top-level `app://openreel` reader and native MessagePorts. An earlier iframe experiment saw partitioned empty storage and incorrectly recorded v1 completion; the corrected v2 implementation disregards that marker. The failed experiment remains in the local evidence rather than being counted as success.
+
+On the existing synthetic hour profile, read-only top-level inventories verified all five legacy databases remained intact. The destination retained eight media records, three autosaves, one activity artifact, matching database schemas, and exact hashes for all three stored preferences. This checkpoint copies data across origins; the subsequent v3 namespace migration must still verify new database/key names and consumers.
+
+A second isolated profile tested values that JSON migration would lose: a 2 MiB Blob with matching SHA-256, a usable nonextractable AES-GCM CryptoKey, typed array, Date, Map, and a unique IndexedDB index. Existing destination values won conflicts. The encrypted browser vault still decrypted its synthetic secret using its retained legacy verifier. The native protected-key file was copied byte-for-byte with mode 0600 and remained usable; its source was unchanged. Custom shortcut bindings and preset values were retained for the later namespace upgrade.
+
+A real origin-bound OPFS file handle could not cross origins. The application correctly displayed an incomplete migration, offered Retry or Continue, and did not write v2 completion. Normal Continue persisted the warning across reload. Reload closed an in-flight hidden reader (two windows became one). After explicit synthetic fixture setup supplied a destination handle, normal Retry completed, the reader closed, and the original old-origin handle still read its original contents. This verifies incomplete/retry/cleanup behavior; supplying that fixture handle is not normal media-bin relinking or owner-file acceptance.
+
+Receipts: `verification/migration-retry-1791580636727/top-level-migration-inventory.json` and `verification/migration-retry-1791580656143/rich-migration-{readback,recovery}.json`, relative to the ignored takeover evidence directory. The rich fixture screenshots were visually inspected. Final branding, v3 namespace migration, saved-project hydration, and packaged behavior remain separate checks.
