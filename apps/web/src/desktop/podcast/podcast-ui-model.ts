@@ -2,12 +2,15 @@ import type { MediaItem, Project } from "@openreel/core";
 import type { PodcastGroup, PodcastSetup, PodcastSetupStep } from "@openreel/core/lickety/podcast-types";
 import { podcastTimelineModel } from "./podcast-review-model";
 
+export type PodcastPictureGapPolicy = "keep-picture-gaps" | "available-camera-fallback";
+
 export type PodcastWizardCheckpoint = {
   setupId?: string;
   step: PodcastSetupStep;
   selectedMediaIds: string[];
   groups?: PodcastGroup[];
   participants?: PodcastSetup["participants"];
+  pictureGapPolicy?: PodcastPictureGapPolicy;
   updatedAt: string;
 };
 
@@ -30,7 +33,23 @@ export function getTimelineMediaIds(project: Pick<Project, "timeline">): Set<str
 }
 
 export function readPodcastWizardCheckpoint(project: Project): PodcastWizardCheckpoint | undefined {
-  return (project as ProjectWithPodcastCheckpoint).lickety?.podcastWizard;
+  const checkpoint = (project as ProjectWithPodcastCheckpoint).lickety?.podcastWizard;
+  if (!checkpoint) return undefined;
+  const policy = (checkpoint as PodcastWizardCheckpoint & { pictureGapPolicy?: unknown }).pictureGapPolicy;
+  if (isPodcastPictureGapPolicy(policy) || policy === undefined) return checkpoint;
+  const { pictureGapPolicy: _invalidPolicy, ...validCheckpoint } = checkpoint;
+  return validCheckpoint;
+}
+
+export function isPodcastPictureGapPolicy(value: unknown): value is PodcastPictureGapPolicy {
+  return value === "keep-picture-gaps" || value === "available-camera-fallback";
+}
+
+export function resolvePodcastPictureGapPolicy(project: Project): PodcastPictureGapPolicy | null {
+  const savedPolicy = readPodcastWizardCheckpoint(project)?.pictureGapPolicy;
+  if (savedPolicy) return savedPolicy;
+  const assemblyPolicy = project.lickety?.podcastAssembly?.pictureGapPolicy;
+  return isPodcastPictureGapPolicy(assemblyPolicy) ? assemblyPolicy : null;
 }
 
 export function buildPodcastReviewPoints(setup: PodcastSetup): Array<{ label: string; projectSeconds: number; assetId?: string }> {

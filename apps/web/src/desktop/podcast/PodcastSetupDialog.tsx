@@ -9,7 +9,7 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Clock3, Pause, Play, Plus, Trash2
 import { useProjectStore } from "../../stores/project-store";
 import { applyPodcastSetup } from "../../services/lickety/podcast";
 import { resolveDesktopMedia, registerDesktopMedia } from "../../services/lickety/desktop-media";
-import { readPodcastWizardCheckpoint, selectablePodcastMedia, buildPodcastReviewPoints } from "./podcast-ui-model";
+import { readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia, buildPodcastReviewPoints, type PodcastPictureGapPolicy } from "./podcast-ui-model";
 import { loadPodcastCheckpoint, savePodcastCheckpoint } from "./podcast-project-draft";
 import { moveGroupAsset, splitPodcastGroup, mergePodcastGroups, excludePodcastAsset, simultaneousPodcastSuggestions, podcastRecorderTimingLinked, setPodcastRecorderTimingLinked } from "./podcast-group-edits";
 import { clipReview, formatReviewTime, PACKET_TIMING_WARNING, podcastReviewState, podcastTimelineModel, reviewComparison, reviewLabel, timelinePercent, timelineWaveformPath, unwaivedTimingBlockers } from "./podcast-review-model";
@@ -50,17 +50,18 @@ function audioPreviewChoices(setup: PodcastSetup): Array<{ id: string; label: st
     for (const assetId of group.assetIds) {
       const asset = setup.analysis.assets.find((candidate) => candidate.id === assetId);
       if (!asset) continue;
+      const sourceLabel = group.assetIds.length > 1 ? `${group.name} · ${asset.name}` : group.name;
       for (const stream of asset.streams ?? []) {
         if (stream.kind !== "audio") continue;
         const channelCount = Math.max(1, stream.channels ?? asset.channels ?? 1);
         if (group.audioMode === "shared-mix") {
-          choices.push({ id: `${asset.id}:${stream.index}:shared`, label: `${group.name} · shared recording`, source: { assetId: asset.id, streamIndex: stream.index } });
+          choices.push({ id: `${asset.id}:${stream.index}:shared`, label: `${sourceLabel} · shared recording`, source: { assetId: asset.id, streamIndex: stream.index } });
           continue;
         }
         for (let channel = 0; channel < channelCount; channel += 1) {
           const binding = group.audioBindings?.find((candidate) => candidate.assetId === asset.id && candidate.streamIndex === stream.index && candidate.channel === channel);
           const participant = setup.participants.find((candidate) => candidate.id === binding?.participantId)?.name;
-          choices.push({ id: `${asset.id}:${stream.index}:${channel}`, label: `${group.name} · ${participant || `channel ${channel + 1}`}`, source: { assetId: asset.id, streamIndex: stream.index, channel } });
+          choices.push({ id: `${asset.id}:${stream.index}:${channel}`, label: `${sourceLabel} · ${participant || `channel ${channel + 1}`}`, source: { assetId: asset.id, streamIndex: stream.index, channel } });
         }
       }
     }
@@ -83,9 +84,10 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
+  const [pictureGapPolicy, setPictureGapPolicy] = useState<PodcastPictureGapPolicy | null>(null);
   const requestIdRef = useRef<string | null>(null);
 
-  const persist = useCallback((next: { step?: PodcastSetupStep; setup?: PodcastSetup | null; groups?: PodcastGroup[]; participants?: PodcastSetup["participants"]; selectedMediaIds?: string[] }) => {
+  const persist = useCallback((next: { step?: PodcastSetupStep; setup?: PodcastSetup | null; groups?: PodcastGroup[]; participants?: PodcastSetup["participants"]; selectedMediaIds?: string[]; pictureGapPolicy?: PodcastPictureGapPolicy }) => {
     const current = useProjectStore.getState().project;
     if (current.id !== project.id) return false;
     const nextStep = next.step ?? step;
@@ -93,15 +95,22 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
     const nextGroups = next.groups ?? groups;
     const nextParticipants = next.participants ?? participants;
     const nextMediaIds = next.selectedMediaIds ?? selectedMediaIds;
+    const nextPictureGapPolicy = next.pictureGapPolicy ?? pictureGapPolicy;
     return savePodcastCheckpoint(project.id, {
       ...(nextSetup ? { setupId: nextSetup.setupId } : {}),
       step: nextStep,
       selectedMediaIds: [...nextMediaIds],
       groups: structuredClone(nextGroups),
       participants: structuredClone(nextParticipants),
+      ...(nextPictureGapPolicy ? { pictureGapPolicy: nextPictureGapPolicy } : {}),
       updatedAt: new Date().toISOString(),
     }, next.setup === undefined ? undefined : nextSetup ?? undefined);
-  }, [project.id, step, setup, groups, participants, selectedMediaIds]);
+  }, [project.id, step, setup, groups, participants, selectedMediaIds, pictureGapPolicy]);
+
+  const changePictureGapPolicy = useCallback((policy: PodcastPictureGapPolicy) => {
+    setPictureGapPolicy(policy);
+    persist({ pictureGapPolicy: policy });
+  }, [persist]);
 
   const acceptNativeSetup = useCallback((next: PodcastSetup, nextStep?: PodcastSetupStep) => {
     if (next.projectId !== project.id) throw new Error("This podcast setup belongs to a different project.");
@@ -121,6 +130,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
     const projectId = activeProject.id;
     setError(null); setNotice(null); setProgress(null); setSetup(null); setGroups([]); setParticipants([]);
     const checkpoint = loadPodcastCheckpoint(activeProject);
+    setPictureGapPolicy(resolvePodcastPictureGapPolicy(activeProject));
     if (checkpoint) {
       setStep(checkpoint.step);
       setSelectedMediaIds(checkpoint.selectedMediaIds.filter((id) => mediaItems.some((item) => item.id === id)));
@@ -147,6 +157,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
         selectedMediaIds: restoredMediaIds,
         groups: structuredClone(checkpoint?.groups ?? restored.groups),
         participants: structuredClone(checkpoint?.participants ?? restored.participants),
+        ...(resolvePodcastPictureGapPolicy(activeProject) ? { pictureGapPolicy: resolvePodcastPictureGapPolicy(activeProject)! } : {}),
         updatedAt: new Date().toISOString(),
       }, restored);
     }).catch((cause: unknown) => {
@@ -282,6 +293,10 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
 
   const applyToTimeline = useCallback(async () => {
     if (!setup || !bridge) return;
+    if (!pictureGapPolicy) {
+      setError("Choose what to show when no camera covers part of the timeline.");
+      return;
+    }
     setBusy(true); setError(null); setNotice(null);
     try {
       const latest = await bridge.get({ setupId: setup.setupId });
@@ -289,7 +304,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
         acceptNativeSetup(latest);
         throw new Error("Timing changed before apply. Review the current native revision before applying.");
       }
-      await applyPodcastSetup({ setup: latest, expectedRevision: latest.revision, expectedTimeline: JSON.stringify(useProjectStore.getState().project.timeline) }, {
+      await applyPodcastSetup({ setup: latest, expectedRevision: latest.revision, expectedTimeline: JSON.stringify(useProjectStore.getState().project.timeline), pictureGapPolicy }, {
         bridge,
         getProject: () => useProjectStore.getState().project,
         executeAction,
@@ -297,7 +312,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
       requestClose();
     } catch (cause) { setError(friendlyError(cause)); }
     finally { setBusy(false); }
-  }, [setup, bridge, project.id, executeAction, acceptNativeSetup, requestClose]);
+  }, [setup, bridge, project.id, executeAction, acceptNativeSetup, requestClose, pictureGapPolicy]);
 
   const setStage = useCallback((next: PodcastSetupStep) => {
     setStep(next);
@@ -389,11 +404,11 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                 })}</div>
               </section>}
               {step === "lineup" && setup && <section className="space-y-4" aria-labelledby="podcast-lineup-title"><div><h2 id="podcast-lineup-title" className="text-lg font-semibold">Line up the original recordings</h2><p className="mt-1 text-sm text-fg-2">Native analysis uses bounded source windows. A canceled or failed run keeps completed cache work for retry; it never applies source tracks.</p></div><PodcastTimelineOverview setup={setup} model={setupTimelineModel!} playheadSeconds={0} /><div className="rounded border border-border bg-bg-1 p-4"><p className="text-sm">{setup.placements.length ? `${setup.placements.length} saved placements are available to review.` : "Analysis has not been run for these groups."}</p><p className="mt-1 text-xs text-fg-2">Analysis can return unmatched sources. Those remain visibly unresolved until you adjust or exclude them.</p>{setup.warnings.map((warning, index) => <p key={`${warning}-${index}`} className="mt-2 text-xs text-yellow-300">{warning}</p>)}</div>{busy && <div className="rounded border border-border p-3 text-sm" role="status">{progress ?? "Working…"}<button type="button" onClick={cancelAnalysis} className="ml-3 underline">Cancel this run</button></div>}</section>}
-              {step === "check" && setup && <PodcastTimingReview setup={setup} groups={groups} mediaItems={mediaItems} audioChoices={audioChoices} busy={busy} onUpdate={updateTiming} onRetry={() => void runAnalysis()} />}
+              {step === "check" && setup && <PodcastTimingReview setup={setup} groups={groups} mediaItems={mediaItems} audioChoices={audioChoices} busy={busy} pictureGapPolicy={pictureGapPolicy} onPictureGapPolicyChange={changePictureGapPolicy} onUpdate={updateTiming} onRetry={() => void runAnalysis()} />}
             </div>
           </LayoutContent>
         }
-        footer={<LayoutFooter hasDivider><div className="flex w-full items-center justify-between gap-4"><div className="flex min-w-0 items-center gap-2 text-xs text-fg-2">{busy ? <><Clock3 size={14} aria-hidden />{progress ?? "Working…"}</> : groupsDirty ? <><AlertTriangle size={14} aria-hidden />Setup edits are saved as a draft; save them before continuing.</> : <span>Project draft autosaves. After creating the timeline, one undo restores the project before it.</span>}</div><div className="flex shrink-0 items-center gap-2"><Button label="Close" variant="secondary" size="sm" onClick={requestClose} isDisabled={busy} />{step !== "recordings" && <Button label="Back" variant="secondary" size="sm" icon={<ArrowLeft size={14} aria-hidden />} onClick={() => setStage(STEPS[Math.max(0, STEPS.findIndex((item) => item.id === step) - 1)].id)} isDisabled={busy} />}{step === "recordings" && <Button label="Inspect selected originals" variant="primary" size="sm" onClick={() => void startInspection()} isDisabled={busy || !selectedMediaIds.length} />}{step === "setup" && <Button label="Save setup and continue" variant="primary" size="sm" icon={<ArrowRight size={14} aria-hidden />} onClick={() => void saveGroups("lineup")} isDisabled={busy || !groups.length || participants.some((person) => !person.name?.trim())} />}{step === "lineup" && <Button label={setup?.placements.length ? "Review saved timing" : "Line up recordings"} variant="primary" size="sm" icon={<ArrowRight size={14} aria-hidden />} onClick={() => setup?.placements.length ? setStage("check") : void runAnalysis()} isDisabled={busy || !canEnterLineup} />}{step === "check" && <Button label="Create timeline" variant="primary" size="sm" onClick={() => void applyToTimeline()} isDisabled={busy || !setup?.placements.length || (setupReviewState?.attention.length ?? 0) > 0} />}</div></div></LayoutFooter>}
+        footer={<LayoutFooter hasDivider><div className="flex w-full items-center justify-between gap-4"><div className="flex min-w-0 items-center gap-2 text-xs text-fg-2">{busy ? <><Clock3 size={14} aria-hidden />{progress ?? "Working…"}</> : groupsDirty ? <><AlertTriangle size={14} aria-hidden />Setup edits are saved as a draft; save them before continuing.</> : <span>Project draft autosaves. After creating the timeline, one undo restores the project before it.</span>}</div><div className="flex shrink-0 items-center gap-2"><Button label="Close" variant="secondary" size="sm" onClick={requestClose} isDisabled={busy} />{step !== "recordings" && <Button label="Back" variant="secondary" size="sm" icon={<ArrowLeft size={14} aria-hidden />} onClick={() => setStage(STEPS[Math.max(0, STEPS.findIndex((item) => item.id === step) - 1)].id)} isDisabled={busy} />}{step === "recordings" && <Button label="Inspect selected originals" variant="primary" size="sm" onClick={() => void startInspection()} isDisabled={busy || !selectedMediaIds.length} />}{step === "setup" && <Button label="Save setup and continue" variant="primary" size="sm" icon={<ArrowRight size={14} aria-hidden />} onClick={() => void saveGroups("lineup")} isDisabled={busy || !groups.length || participants.some((person) => !person.name?.trim())} />}{step === "lineup" && <Button label={setup?.placements.length ? "Review saved timing" : "Line up recordings"} variant="primary" size="sm" icon={<ArrowRight size={14} aria-hidden />} onClick={() => setup?.placements.length ? setStage("check") : void runAnalysis()} isDisabled={busy || !canEnterLineup} />}{step === "check" && <Button label="Create timeline" variant="primary" size="sm" onClick={() => void applyToTimeline()} isDisabled={busy || !pictureGapPolicy || !setup?.placements.length || (setupReviewState?.attention.length ?? 0) > 0} />}</div></div></LayoutFooter>}
       />
     </Dialog>
   );
@@ -437,12 +452,14 @@ function PodcastTimelineOverview({ model, playheadSeconds, waveform, waveformCha
   </section>;
 }
 
-function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, onUpdate, onRetry }: {
+function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, pictureGapPolicy, onPictureGapPolicyChange, onUpdate, onRetry }: {
   setup: PodcastSetup;
   groups: PodcastGroup[];
   mediaItems: MediaItem[];
   audioChoices: ReturnType<typeof audioPreviewChoices>;
   busy: boolean;
+  pictureGapPolicy: PodcastPictureGapPolicy | null;
+  onPictureGapPolicyChange: (policy: PodcastPictureGapPolicy) => void;
   onUpdate: (request: PodcastUpdatePatch) => Promise<void>;
   onRetry: () => void;
 }): JSX.Element {
@@ -453,6 +470,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, on
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioPreparing, setAudioPreparing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
@@ -481,6 +499,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, on
   const [waveform, setWaveform] = useState<PodcastWaveformSummary | undefined>();
 
   useEffect(() => {
+    setPreviewError(null);
     videoRef.current?.pause();
     videoRef.current?.removeAttribute("src");
     videoRef.current?.load();
@@ -492,17 +511,27 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, on
   }, [videoMedia]);
 
   useEffect(() => {
+    setPreviewError(null);
+    setAudioPreparing(false);
     audioRef.current?.pause();
     audioRef.current?.removeAttribute("src");
     audioRef.current?.load();
     setAudioUrl(null);
     if (!audioMedia || !activeAudio) return;
     let active = true;
+    setAudioPreparing(true);
     const bridge = window.openreel?.lickety;
-    if (!bridge?.ensureAudioStream) { setAudioUrl(null); setPreviewError("The selected original audio is not registered for preview yet."); return; }
-    void registerDesktopMedia(audioMedia).then((asset) => bridge.ensureAudioStream(asset.identity.assetId, activeAudio.source.streamIndex, activeAudio.source.channel)).then((url) => { if (active) setAudioUrl(url); }).catch((cause: unknown) => { if (active) setPreviewError(friendlyError(cause)); });
+    if (!bridge?.ensureAudioStream) { setAudioUrl(null); setAudioPreparing(false); setPreviewError("The selected original audio is not registered for preview yet."); return; }
+    const selectedAsset = setup.analysis.assets.find((asset) => asset.id === activeAudio.source.assetId);
+    const audioOrdinal = selectedAsset?.streams?.filter((stream) => stream.kind === "audio").findIndex((stream) => stream.index === activeAudio.source.streamIndex) ?? -1;
+    if (audioOrdinal < 0) {
+      setAudioPreparing(false);
+      setPreviewError("The selected audio stream is no longer available in this original.");
+      return () => { active = false; };
+    }
+    void registerDesktopMedia(audioMedia).then((asset) => bridge.ensureAudioStream(asset.identity.assetId, audioOrdinal, activeAudio.source.channel)).then((url) => { if (active) { setAudioUrl(url); setAudioPreparing(false); } }).catch((cause: unknown) => { if (active) { setAudioPreparing(false); setPreviewError(friendlyError(cause)); } });
     return () => { active = false; };
-  }, [audioMedia, activeAudio]);
+  }, [audioMedia, activeAudio, setup.analysis.assets]);
 
   useEffect(() => {
     if (!activeChannel) { setWaveform(undefined); return; }
@@ -520,12 +549,11 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, on
     return () => { live = false; };
   }, [setup.setupId, setup.revision, activeChannel, timelineModel]);
 
-  const mapToSource = (assetId: string, timelineSeconds: number) => {
+  const mapToSource = (assetId: string, timelineSeconds: number, laneKind: "video" | "audio") => {
     const placement = setup.placements.find((candidate) => candidate.assetId === assetId);
     const asset = setup.analysis.assets.find((candidate) => candidate.id === assetId);
     if (!placement || !asset) return null;
-    const channelId = asset.kind === "audio" && activeAudio?.source.assetId === assetId ? activeChannel?.id : undefined;
-    const laneKind = asset.kind === "video" ? "video" : "audio";
+    const channelId = laneKind === "audio" && activeAudio?.source.assetId === assetId ? activeChannel?.id : undefined;
     const clip = timelineModel.lanes.filter((lane) => lane.kind === laneKind).flatMap((lane) => lane.clips).find((candidate) => candidate.assetId === assetId && (laneKind !== "audio" || !channelId || candidate.channelId === channelId) && candidate.status !== "excluded" && timelineSeconds >= candidate.startSeconds && timelineSeconds < candidate.endSeconds);
     if (!clip) return null;
     const region = clip.regionId ? placement.regions?.find((candidate) => candidate.id === clip.regionId) : undefined;
@@ -551,14 +579,13 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, on
     setPlayheadSeconds(next);
     previewClockRef.current = { timelineSeconds: next, wallMs: performance.now() };
     previewDriftStartedRef.current.clear();
-    const videoTime = activeVideo ? mapToSource(activeVideo.id, next) : null;
-    const audioTime = activeAudio ? mapToSource(activeAudio.source.assetId, next) : null;
+    const videoTime = activeVideo ? mapToSource(activeVideo.id, next, "video") : null;
+    const audioTime = activeAudio ? mapToSource(activeAudio.source.assetId, next, "audio") : null;
     if (videoRef.current && videoTime?.inBounds) { videoRef.current.currentTime = videoTime.fileRelative; videoRef.current.playbackRate = videoTime.rate; }
     else videoRef.current?.pause();
     if (audioRef.current && audioTime?.inBounds) { audioRef.current.currentTime = audioTime.fileRelative; audioRef.current.playbackRate = audioTime.rate; }
     else audioRef.current?.pause();
-    if (!videoTime?.inBounds && !audioTime?.inBounds) setPreviewError("No selected source covers this moment; the gap is preserved as silence and no media is stretched.");
-    else setPreviewError(null);
+    setPreviewError(null);
   };
 
   const togglePlayback = async () => {
@@ -566,8 +593,8 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, on
     if (!video && !audio) return;
     if (previewPlaying) { video?.pause(); audio?.pause(); setPreviewPlaying(false); return; }
     seek(playheadSeconds);
-    const videoSource = activeVideo ? mapToSource(activeVideo.id, playheadSeconds) : null;
-    const audioSource = activeAudio ? mapToSource(activeAudio.source.assetId, playheadSeconds) : null;
+    const videoSource = activeVideo ? mapToSource(activeVideo.id, playheadSeconds, "video") : null;
+    const audioSource = activeAudio ? mapToSource(activeAudio.source.assetId, playheadSeconds, "audio") : null;
     const playPromises = [videoSource?.inBounds ? video?.play() : undefined, audioSource?.inBounds ? audio?.play() : undefined].filter((promise): promise is Promise<void> => Boolean(promise));
     await Promise.allSettled(playPromises);
     setPreviewPlaying(Boolean(videoUrl || audioUrl));
@@ -610,8 +637,8 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, on
         if (correction.kind === "seek") { element.currentTime = expected.fileRelative; previewDriftStartedRef.current.delete(key); }
         if (Math.abs(element.playbackRate - correction.playbackRate) > 0.001) element.playbackRate = correction.playbackRate;
       };
-      const videoExpected = activeVideo ? mapToSource(activeVideo.id, nextClock.timelineSeconds) : null;
-      const audioExpected = activeAudio ? mapToSource(activeAudio.source.assetId, nextClock.timelineSeconds) : null;
+      const videoExpected = activeVideo ? mapToSource(activeVideo.id, nextClock.timelineSeconds, "video") : null;
+      const audioExpected = activeAudio ? mapToSource(activeAudio.source.assetId, nextClock.timelineSeconds, "audio") : null;
       correctSecondary("video", videoUrl ? video : null, videoExpected, !audioClock && Boolean(videoClock));
       correctSecondary("audio", audioUrl ? audio : null, audioExpected, Boolean(audioClock));
       frame = window.requestAnimationFrame(tick);
@@ -622,11 +649,14 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, on
 
   useEffect(() => {
     if (!videoUrl && !audioUrl) return;
-    const videoSource = activeVideo ? mapToSource(activeVideo.id, playheadSeconds) : null;
-    const audioSource = activeAudio ? mapToSource(activeAudio.source.assetId, playheadSeconds) : null;
+    const videoSource = activeVideo ? mapToSource(activeVideo.id, playheadSeconds, "video") : null;
+    const audioSource = activeAudio ? mapToSource(activeAudio.source.assetId, playheadSeconds, "audio") : null;
     if (videoUrl && videoRef.current && videoSource?.inBounds) { videoRef.current.currentTime = videoSource.fileRelative; videoRef.current.playbackRate = videoSource.rate; }
     if (audioUrl && audioRef.current && audioSource?.inBounds) { audioRef.current.currentTime = audioSource.fileRelative; audioRef.current.playbackRate = audioSource.rate; }
   }, [videoUrl, audioUrl, activeVideo, activeAudio]);
+
+  const videoAtPlayhead = activeVideo ? mapToSource(activeVideo.id, playheadSeconds, "video") : null;
+  const audioAtPlayhead = activeAudio ? mapToSource(activeAudio.source.assetId, playheadSeconds, "audio") : null;
 
   const updatePlacement = (assetId: string, patch: PodcastUpdatePatch) => onUpdate({ ...patch, assetId });
   const noteKey = (assetId: string, regionId?: string) => `${assetId}${regionId ? `:${regionId}` : ""}`;
@@ -671,14 +701,22 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, on
   return <section className="space-y-5" aria-labelledby="podcast-check-title">
     <div><h2 id="podcast-check-title" className="text-lg font-semibold">Check picture and sound</h2><p className="mt-1 text-xs font-semibold text-fg-2">{reviewState.title}</p><p role="status" className="mt-1 text-sm text-fg-2">{setup.analysisProposal ? "A new timing proposal is waiting for your apply or discard choice." : reviewState.message}</p></div>
     {setup.analysisProposal && <div className="flex flex-wrap items-center gap-3 rounded border border-yellow-500/40 bg-yellow-500/5 p-3"><p className="min-w-0 flex-1 text-sm">New timing results are staged. Existing placements stay in use until you apply this proposal.</p><button type="button" disabled={busy} onClick={() => void onUpdate({ analysisDecision: "apply" })} className="min-h-9 rounded bg-accent px-3 text-sm text-white">Use new timing</button><button type="button" disabled={busy} onClick={() => void onUpdate({ analysisDecision: "discard" })} className="min-h-9 rounded border border-border px-3 text-sm">Keep previous timing</button></div>}
+    <fieldset disabled={busy} className="space-y-2 rounded border border-border bg-bg-1 p-3">
+      <legend className="px-1 text-sm font-medium">When the selected camera has no picture</legend>
+      <p className="text-xs text-fg-2">Choose what the timeline should show during gaps. Select one before creating the timeline.</p>
+      <label className="flex items-start gap-2 text-sm"><input type="radio" name="picture-gap-policy" value="keep-picture-gaps" checked={pictureGapPolicy === "keep-picture-gaps"} onChange={() => onPictureGapPolicyChange("keep-picture-gaps")} /><span><strong>Keep picture gaps</strong><span className="mt-0.5 block text-xs text-fg-2">Leave missing camera coverage blank.</span></span></label>
+      <label className="flex items-start gap-2 text-sm"><input type="radio" name="picture-gap-policy" value="available-camera-fallback" checked={pictureGapPolicy === "available-camera-fallback"} onChange={() => onPictureGapPolicyChange("available-camera-fallback")} /><span><strong>Use another available camera</strong><span className="mt-0.5 block text-xs text-fg-2">Show another camera that has coverage at that time.</span></span></label>
+    </fieldset>
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
       <section className="space-y-3 rounded border border-border bg-bg-1 p-3" aria-label="Synchronized source preview">
         <div className="grid gap-2 sm:grid-cols-2"><label className="space-y-1 text-xs"><span>Camera to check</span><select aria-label="Camera source to preview" className="block w-full rounded border border-border bg-bg px-2 py-2 text-sm" value={videoAssetId} onChange={(event) => setVideoAssetId(event.target.value)}>{videoAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label><label className="space-y-1 text-xs"><span>Microphone or comparison channel</span><select aria-label="Audio channel to preview" className="block w-full rounded border border-border bg-bg px-2 py-2 text-sm" value={audioChoiceId} onChange={(event) => setAudioChoiceId(event.target.value)}>{audioChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}</select></label></div>
-        <div className="flex aspect-video max-h-[44vh] min-h-[180px] items-center justify-center overflow-hidden rounded bg-black"><video ref={videoRef} src={videoUrl ?? undefined} muted preload="metadata" playsInline aria-label="Muted podcast source picture preview" className="max-h-full max-w-full object-contain" />{!videoUrl && <span className="text-xs text-white/70">Choose a camera source</span>}</div>
+        <div className="relative flex aspect-video max-h-[44vh] min-h-[180px] items-center justify-center overflow-hidden rounded bg-black"><video ref={videoRef} src={videoUrl ?? undefined} muted preload="metadata" playsInline aria-label="Muted podcast source picture preview" className="max-h-full max-w-full object-contain" />{activeVideo && !videoAtPlayhead?.inBounds ? <div role="status" className="absolute inset-0 z-10 flex items-center justify-center bg-black px-4 text-center text-sm text-white">No picture from this source at this time.</div> : !videoUrl && <span className="text-xs text-white/70">{activeVideo ? "Loading camera preview…" : "Choose a camera source"}</span>}</div>
         <audio ref={audioRef} src={audioUrl ?? undefined} preload="metadata" aria-label="Soloed podcast comparison audio" />
         {waveform && activeChannel && <svg viewBox="0 0 480 34" role="img" aria-label="Prepared audio waveform summary" className="h-8 w-full text-accent"><path d={timelineWaveformPath(waveform, activeChannel, waveform.sourceStartSeconds, waveform.sourceStartSeconds + waveform.durationSeconds, 480, 34)} fill="none" stroke="currentColor" strokeWidth="1" /></svg>}
         {comparison && <div className="flex flex-wrap items-center gap-2 text-xs text-fg-2"><span>{comparison.evidence ? "Connected timing evidence is saved for this recording." : "Comparison channel is for listening only; no timing evidence is implied."}</span>{comparison.evidence && comparisonChoice && <button type="button" disabled={busy} onClick={() => { setAudioChoiceId(comparisonChoice.id); seek(comparison.start); }} className="min-h-8 rounded border border-border px-2 underline">Review saved comparison</button>}</div>}
-        <div className="flex flex-wrap items-center gap-3"><button type="button" disabled={!videoUrl && !audioUrl} aria-label={previewPlaying ? "Pause picture and selected sound" : "Play picture and selected sound"} onClick={() => void togglePlayback()} className="flex min-h-9 items-center gap-2 rounded bg-accent px-3 text-sm text-white">{previewPlaying ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}{previewPlaying ? "Pause" : "Play picture and selected sound"}</button><button type="button" disabled={!videoUrl && !audioUrl} onClick={() => { videoRef.current?.pause(); audioRef.current?.pause(); setPreviewPlaying(false); }} className="flex min-h-9 items-center gap-2 rounded border border-border px-3 text-sm"><Pause size={14} aria-hidden />Stop</button><span className="text-xs tabular-nums text-fg-muted">Episode {formatClock(playheadSeconds)}</span></div>
+        {activeAudio && !audioAtPlayhead?.inBounds && <p role="status" className="text-xs text-fg-2">No selected sound from this source at this time.</p>}
+        {audioPreparing && <p role="status" className="text-xs text-fg-2">Preparing selected sound…</p>}
+        <div className="flex flex-wrap items-center gap-3"><button type="button" disabled={(!videoUrl && !audioUrl) || audioPreparing} aria-label={previewPlaying ? "Pause picture and selected sound" : "Play picture and selected sound"} onClick={() => void togglePlayback()} className="flex min-h-9 items-center gap-2 rounded bg-accent px-3 text-sm text-white">{previewPlaying ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}{previewPlaying ? "Pause" : "Play picture and selected sound"}</button><button type="button" disabled={!videoUrl && !audioUrl} onClick={() => { videoRef.current?.pause(); audioRef.current?.pause(); setPreviewPlaying(false); }} className="flex min-h-9 items-center gap-2 rounded border border-border px-3 text-sm"><Pause size={14} aria-hidden />Stop</button><span className="text-xs tabular-nums text-fg-muted">Episode {formatClock(playheadSeconds)}</span></div>
         <label className="flex items-center gap-3 text-xs"><span className="w-12">Position</span><input aria-label="Episode playhead" type="range" min={0} max={Math.max(1, ...points.map((point) => point.projectSeconds))} step={0.01} value={Math.min(playheadSeconds, Math.max(1, ...points.map((point) => point.projectSeconds)))} onChange={(event) => seek(Number(event.target.value))} className="min-w-0 flex-1" /><span>{formatClock(playheadSeconds)}</span></label>
         {previewError && <p role="status" className="text-xs text-yellow-300">{previewError}</p>}
       </section>

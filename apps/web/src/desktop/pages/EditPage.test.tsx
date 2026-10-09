@@ -95,4 +95,14 @@ describe("EditPage AI Editor dock", () => {
     expect(getResponsiveTimelineHeight(640, 900)).toBe(640);
     expect(getResponsiveTimelineHeight(200, 680)).toBe(200);
   });
+
+  it("suspends only the viewer preview while podcast review is open", () => {
+    render(<EditPage suspendPreview />);
+
+    expect(screen.getByText("Podcast review is open; viewer preview is paused.")).toBeTruthy();
+    expect(screen.queryByText("Preview panel")).toBeNull();
+    expect(screen.getByText("Media panel")).toBeTruthy();
+    expect(screen.getByText("Inspector panel")).toBeTruthy();
+    expect(screen.getByText("Timeline panel")).toBeTruthy();
+  });
 });

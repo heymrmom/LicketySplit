@@ -117,7 +117,7 @@ function RowHandle({
   );
 }
 
-export function EditPage(): JSX.Element {
+export function EditPage({ suspendPreview = false }: { suspendPreview?: boolean }): JSX.Element {
   const editPageRef = useRef<HTMLDivElement>(null);
   const [availableSize, setAvailableSize] = useState({ width: 0, height: 0 });
   const chatVisible = useUIStore(
@@ -218,9 +218,15 @@ export function EditPage(): JSX.Element {
       </DockRegion>
 
       <DockRegion label="Viewer" name="Viewer" area="stage" icon="play.fill" className="bg-stage-bg">
-        <Suspense fallback={<PanelLoading />}>
-          <Preview />
-        </Suspense>
+        {suspendPreview ? (
+          <div data-testid="desktop-preview-suspended" className="grid h-full min-h-0 place-items-center p-4 text-center text-sm text-fg-muted">
+            Podcast review is open; viewer preview is paused.
+          </div>
+        ) : (
+          <Suspense fallback={<PanelLoading />}>
+            <Preview />
+          </Suspense>
+        )}
       </DockRegion>
 
       <DockRegion label="Inspector" name="Inspector" area="inspector" icon="slider.horizontal.3">

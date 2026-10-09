@@ -8,6 +8,7 @@ import { useProjectStore } from "../stores/project-store";
 import type { ProjectState } from "../stores/project-store";
 import { useUIStore } from "../stores/ui-store";
 import { useSettingsStore } from "../stores/settings-store";
+import { useTimelineStore } from "../stores/timeline-store";
 
 vi.mock("../stores/project-store", () => ({
   useProjectStore: vi.fn(),
@@ -19,12 +20,18 @@ vi.mock("./editor/EditorBootstrapGate", () => ({
   ),
 }));
 
+vi.mock("./shell/Workspace", () => ({
+  Workspace: ({ suspendPreview }: { suspendPreview?: boolean }) => (
+    <div data-testid="desktop-workspace" data-preview-suspended={String(Boolean(suspendPreview))} />
+  ),
+}));
+
 vi.mock("./pages/EditPage", () => ({
   EditPage: () => null,
 }));
 
 vi.mock("./podcast/PodcastSetupDialog", () => ({
-  PodcastSetupDialog: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div role="dialog" aria-label="Podcast preparation test dialog"><input aria-label="Podcast dialog text field" /></div> : null,
+  PodcastSetupDialog: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => isOpen ? <div role="dialog" aria-label="Podcast preparation test dialog"><input aria-label="Podcast dialog text field" /><button type="button" onClick={onClose}>Close podcast setup</button></div> : null,
 }));
 
 vi.mock("./editor/DesktopExportButton", () => ({
@@ -44,6 +51,8 @@ function mockHasProject(value: boolean): void {
 }
 
 beforeEach(() => {
+  useTimelineStore.getState().pause();
+  useTimelineStore.getState().setPlayheadPosition(0);
   const panels = useUIStore.getState().panels;
   useUIStore.setState({
     desktopPage: "edit",
@@ -59,6 +68,7 @@ beforeEach(() => {
   };
 });
 afterEach(() => {
+  useTimelineStore.getState().pause();
   delete (mockedUseProjectStore as unknown as { getState?: unknown }).getState;
   delete (window as unknown as { openreel?: unknown }).openreel;
   vi.clearAllMocks();
@@ -114,6 +124,24 @@ describe("DesktopApp", () => {
     const editor = render(<DesktopApp />);
     act(() => window.dispatchEvent(new CustomEvent("openreel:podcast:open")));
     expect(editor.getByRole("dialog", { name: "Podcast preparation test dialog" })).toBeTruthy();
+  });
+
+  it("pauses editor playback while podcast setup is open and does not resume on close", () => {
+    mockHasProject(true);
+    useTimelineStore.getState().setPlayheadPosition(42);
+    useTimelineStore.getState().play();
+    const editor = render(<DesktopApp />);
+    expect(editor.getByTestId("desktop-workspace").getAttribute("data-preview-suspended")).toBe("false");
+
+    act(() => window.dispatchEvent(new CustomEvent("openreel:podcast:open")));
+    expect(useTimelineStore.getState().playbackState).toBe("paused");
+    expect(useTimelineStore.getState().playheadPosition).toBe(42);
+    expect(editor.getByTestId("desktop-workspace").getAttribute("data-preview-suspended")).toBe("true");
+
+    fireEvent.click(editor.getByRole("button", { name: "Close podcast setup" }));
+    expect(editor.getByTestId("desktop-workspace").getAttribute("data-preview-suspended")).toBe("false");
+    expect(useTimelineStore.getState().playbackState).toBe("paused");
+    expect(useTimelineStore.getState().playheadPosition).toBe(42);
   });
 
   it("blocks native editor and file commands behind a dialog but preserves focused text editing", async () => {

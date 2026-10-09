@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Project } from "@openreel/core";
 import type { PodcastSetup } from "@openreel/core/lickety/podcast-types";
-import { buildPodcastReviewPoints, getTimelineMediaIds, selectablePodcastMedia } from "./podcast-ui-model";
+import { buildPodcastReviewPoints, getTimelineMediaIds, readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia } from "./podcast-ui-model";
 import { createEmptyProject } from "../../stores/project/project-helpers";
 
 describe("podcast UI model", () => {
@@ -23,6 +23,34 @@ describe("podcast UI model", () => {
     })) as never[];
     const withPlaceholder = [...items, { id: "missing", name: "missing", type: "audio", isPlaceholder: true }] as never[];
     expect(selectablePodcastMedia(withPlaceholder).map((item) => item.id)).toEqual(["video", "audio"]);
+  });
+
+  it("validates a saved picture-gap policy and falls back only to this project's assembly policy", () => {
+    const project = createEmptyProject("Podcast UI");
+    const saved = {
+      ...project,
+      lickety: {
+        schemaVersion: 1 as const,
+        podcastAssembly: { setupId: "setup", setupRevision: 1, originShiftSeconds: 0, ownedTrackIds: [], groupIds: [], pictureGapPolicy: "available-camera-fallback" },
+        podcastWizard: { step: "check" as const, selectedMediaIds: [], updatedAt: "now", pictureGapPolicy: "keep-picture-gaps" },
+      },
+    } as Project;
+    expect(resolvePodcastPictureGapPolicy(saved)).toBe("keep-picture-gaps");
+    expect(readPodcastWizardCheckpoint(saved)?.pictureGapPolicy).toBe("keep-picture-gaps");
+
+    const savedWizard = (saved as unknown as { lickety: { podcastWizard: Record<string, unknown> } }).lickety.podcastWizard;
+    const invalid = {
+      ...saved,
+      lickety: {
+        ...saved.lickety,
+        podcastWizard: { ...savedWizard, pictureGapPolicy: "silently-freeze-frame" },
+      },
+    } as unknown as Project;
+    expect(readPodcastWizardCheckpoint(invalid)?.pictureGapPolicy).toBeUndefined();
+    expect(resolvePodcastPictureGapPolicy(invalid)).toBe("available-camera-fallback");
+
+    const anotherProject = createEmptyProject("Different project");
+    expect(resolvePodcastPictureGapPolicy(anotherProject)).toBeNull();
   });
 
   it("offers episode checkpoints and every included recording/region boundary", () => {

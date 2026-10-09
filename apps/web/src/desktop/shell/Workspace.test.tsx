@@ -8,7 +8,7 @@ vi.mock("../editor/EditorBootstrapGate", () => ({
   EditorBootstrapGate: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock("../pages/EditPage", () => ({
-  EditPage: () => <div data-testid="edit-page" />,
+  EditPage: ({ suspendPreview }: { suspendPreview?: boolean }) => <div data-testid="edit-page" data-preview-suspended={String(Boolean(suspendPreview))} />,
 }));
 import { Workspace } from "./Workspace";
 
@@ -34,5 +34,11 @@ describe("Workspace", () => {
     render(<Workspace />);
     expect(await screen.findByTestId("edit-page")).toBeTruthy();
     expect(screen.queryByTestId("motion-page")).toBeNull();
+  });
+
+  it("passes podcast review suspension through to the desktop edit page", async () => {
+    render(<Workspace suspendPreview />);
+    const editPage = await screen.findByTestId("edit-page");
+    expect(editPage.getAttribute("data-preview-suspended")).toBe("true");
   });
 });

@@ -11,6 +11,7 @@ import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { EditorBootstrapGate } from "./editor/EditorBootstrapGate";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { useProjectStore } from "../stores/project-store";
+import { useTimelineStore } from "../stores/timeline-store";
 import { autoSaveManager } from "../services/auto-save";
 import { UpdateBanner } from "./UpdateBanner";
 import { installRendererCrashHandlers, reportRendererCrash } from "./crash-reporting";
@@ -25,7 +26,6 @@ import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from
 import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent, ToolcraftLayoutFooter as LayoutFooter } from "@openreel/ui";
 import { Settings, Sparkles, Keyboard } from "@/icons/lucide-compat";
 import { deleteTimelineItem } from "../utils/timeline-item-actions";
-import { useTimelineStore } from "../stores/timeline-store";
 import { DESKTOP_FORMATS, startNewProject } from "./start/desktop-project-actions";
 
 function isTextEditingFocused(): boolean {
@@ -167,7 +167,10 @@ export function DesktopApp(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    const open = () => setPodcastSetupOpen(true);
+    const open = () => {
+      useTimelineStore.getState().pause();
+      setPodcastSetupOpen(true);
+    };
     window.addEventListener("openreel:podcast:open", open);
     return () => window.removeEventListener("openreel:podcast:open", open);
   }, []);
@@ -240,7 +243,7 @@ export function DesktopApp(): JSX.Element {
         >
           {hasProject ? (
             <EditorBootstrapGate>
-              <Workspace />
+              <Workspace suspendPreview={podcastSetupOpen} />
             </EditorBootstrapGate>
           ) : (
             <DesktopStartScreen />
