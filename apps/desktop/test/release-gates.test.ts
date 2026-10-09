@@ -1,0 +1,4 @@
+import {it,expect} from 'vitest';
+// @ts-expect-error native packaging script
+import {requireReleaseEvidence} from '../scripts/release-gates.mjs';
+it('rejects unsigned, mismatched, simulated-memory or download-unaccepted candidates',()=>{const m={signing:'signed-notarized',teamId:'TEAM',sourceCommit:'sha',sha256:'pkg'};const e={sourceCommit:'sha',packageSha256:'pkg',physicalMemoryBytes:8*1024**3,architecture:'arm64',workflowAccepted:true,freshDownloadGatekeeperAccepted:true};expect(requireReleaseEvidence(m,e)).toBe(true);for(const bad of [{...e,physicalMemoryBytes:16*1024**3},{...e,sourceCommit:'other'},{...e,freshDownloadGatekeeperAccepted:false}])expect(()=>requireReleaseEvidence(m,bad)).toThrow();expect(()=>requireReleaseEvidence({...m,signing:'unsigned-test-unverified'},e)).toThrow();});

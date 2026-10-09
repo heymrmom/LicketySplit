@@ -101,3 +101,7 @@ xcuserdata/
 /Openreel Video Android/
 /apps/ios/
 /apps/android/
+
+# Source receipt generated only after source is committed for a package.
+apps/desktop/resources/BUILD_SOURCE.json
+scripts/__pycache__/

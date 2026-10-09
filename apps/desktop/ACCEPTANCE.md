@@ -17,3 +17,28 @@ Use intercepted/cached synthetic provider responses by default; never spend Asse
 Unsigned/ad-hoc ARM64 archives are test packages. Release readiness requires the owner's DeveloperID signing identity and notarization credentials in GitHub secrets, successful codesign/notary/stapler/spctl checks, actual8GiB evidence, downloaded matching checksums and normal launch/reopen without developer tooling. Preserve the installed legacy app/profile/projects/credentials. Keep draft releases draft and update feeds disabled; public promotion and shared-branch merge require their own explicit authorization.
 
 Current host prerequisites are known to be missing at implementation: actual8GiB hardware; paid provider/editorial quality authorization; a valid local DeveloperID identity and repository signing/notarization secrets; signed downloaded-install proof. Complete the remaining engineering and retain exact evidence rather than marking these gates passed.
+
+
+A committed source receipt is embedded as `Contents/Resources/BUILD_SOURCE.json`.
+Run `node apps/desktop/scripts/write-source-receipt.mjs` from a clean committed
+checkout before packaging. The package verifier rejects a candidate whose
+embedded source differs from the checked commit.
+
+Signing remains an explicit next stage: a Developer ID Application identity,
+its matching Apple Team ID, notarization credentials and a stapled ticket must
+be supplied in a protected build environment. The unsigned build workflow does
+not request them or publish assets. Preserve the unsigned candidate as separate
+engineering evidence. After signing, verify every nested executable's signature,
+`codesign --verify --deep --strict`, `xcrun stapler validate`, and `spctl --assess`
+on the resulting app. Signing changes executable hashes: generate a fresh signed
+manifest from the verified artifact, including `signing: signed-notarized` and
+`teamId`; never relabel the unsigned manifest.
+
+Before creating even a draft release, run
+`node apps/desktop/scripts/release-gates.mjs signed-manifest.json acceptance.json`.
+The acceptance document must match the source commit and final package digest,
+identify a physical8GiB ARM64 machine, and record completed normal workflows and
+fresh-download Gatekeeper acceptance. Missing evidence blocks draft creation.
+After those prerequisites, attach the matching DMG, ZIP, manifest, checksums and
+third-party notices to a **draft** GitHub release targeting that exact commit.
+Publishing remains a separate user action.

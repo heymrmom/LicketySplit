@@ -11,6 +11,7 @@ export const CHANNELS = {
   licketyRegisterAsset: "openreel:lickety:registerAsset",
   licketyFindAsset: "openreel:lickety:findAsset",
   licketyResolve: "openreel:lickety:resolve",
+  licketyEnsureAudioStream: "openreel:lickety:ensureAudioStream",
   licketyEnsureProxy: "openreel:lickety:ensureProxy",
   licketyCancelMedia: "openreel:lickety:cancelMedia",
   probeHardware: "openreel:probeHardware",

@@ -86,7 +86,7 @@ export {
 export type { JobState, ResourceProfile, AssetIdentity, RegisteredAsset, ProxyReceipt, DialogueSpan, AnalysisSnapshot, PreparedAudio, TranscriptWord as LicketyTranscriptWord, TranscriptDocument, TimelineWord, NarrativeExcerpt, NarrativeProposal, TimelineRange, NarrativeResult, GapEvidence, PauseCut, Cue, PublishingPackage, SemanticShort, LicketyProjectState } from "./lickety/types";
 export { cloneProjectForWorkflow } from "./lickety/clone-project";
 
-export {bindNativeMediaSources,getNativeMediaSource,nativeVideoUrl} from "./media/native-media-bridge";
+export {getManagedBridge,prepareNativeOriginal,bindNativeMediaSources,getNativeMediaSource,nativeVideoUrl} from "./media/native-media-bridge";
 
 export {createAnalysisSnapshot,fullEditRevision,revisionHash} from "./lickety/snapshot";
 export {normalizeAssemblyTranscript} from "./lickety/transcript";

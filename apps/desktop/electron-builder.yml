@@ -19,6 +19,8 @@ files:
   - "!**/*.map"
   - package.json
 extraResources:
+  - from: resources/BUILD_SOURCE.json
+    to: BUILD_SOURCE.json
   - from: ../web/dist
     to: renderer
     filter:

@@ -1,3 +1,4 @@
+import { splitFrame } from "../../../desktop/src/shared/frame-chunks";
 import type {
   EncoderBackend,
   VideoExportSettings,
@@ -299,7 +300,7 @@ export class NativeFFmpegBackend implements EncoderBackend {
     // The renderer<->MessagePortMain bridge does not deliver a message whose
     // payload is sent in the transfer list (it arrives as null on the main
     // side), so the RGBA buffer is structured-cloned rather than transferred.
-    port.postMessage({ type: "frame", ts: timestampSec, buffer: rgba });
+    for(const chunk of splitFrame(rgba,this.frameCount,timestampSec))port.postMessage(chunk);
   }
 
   async finalize(): Promise<void> {

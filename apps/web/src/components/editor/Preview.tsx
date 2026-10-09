@@ -1,3 +1,4 @@
+import { getManagedBridge, prepareNativeOriginal } from "@openreel/core";
 import {getOriginalFadePhase} from "@openreel/core";
 import {getNativeMediaSource,nativeVideoUrl} from "@openreel/core";
 import React, {
@@ -873,6 +874,8 @@ export const Preview: React.FC = () => {
   const audioGraphRef = useRef<ReturnType<typeof getRealtimeAudioGraph> | null>(
     null,
   );
+  const nativeAudioUriRef = useRef<Map<string,string>>(new Map());
+  const nativeAudioPendingRef = useRef<Map<string,Promise<string>>>(new Map());
   const audioBufferCacheRef = useRef<Map<string, AudioBuffer>>(new Map());
   const processedAudioBufferCacheRef = useRef<Map<string, AudioBuffer>>(new Map());
   const noAudioBufferRef = useRef<Set<string>>(new Set());
@@ -880,6 +883,18 @@ export const Preview: React.FC = () => {
   const getAudioBufferCacheKey = (mediaId: string, audioTrackIndex?: number): string =>
     `${mediaId}:${audioTrackIndex ?? 0}`;
 
+  const prepareNativeAudio = useCallback(async (item:MediaItem,index:number):Promise<string|undefined> => {
+    const bridge=getManagedBridge();if(!bridge?.ensureAudioStream)return;
+    const original=await prepareNativeOriginal(item);const key=getAudioBufferCacheKey(item.id,index);
+    const pendingKey=`${original.nativeSource!.identity.sha256}:${index}`;
+    let pending=nativeAudioPendingRef.current.get(pendingKey);
+    if(!pending){pending=bridge.ensureAudioStream(original.nativeSource!.identity.assetId,index);nativeAudioPendingRef.current.set(pendingKey,pending);pending.catch(()=>nativeAudioPendingRef.current.delete(pendingKey));}
+    const uri=await pending;nativeAudioUriRef.current.set(key,uri);return uri;
+  },[]);
+  const nativeSchedule = (clip:Track['clips'][number],track:Track,uri:string):AudioClipSchedule => {
+    const fades=getTrackTransitionAudioFades(track,clip.id);
+    return {clipId:clip.id,trackId:track.id,nativeUri:uri,audioBuffer:null,startTime:clip.startTime,endTime:clip.startTime+clip.duration,mediaOffset:clip.inPoint||0,volume:clip.volume??1,volumeAutomation:getResolvedClipVolumeAutomation(clip),pan:0,effects:getResolvedClipAudioEffects(clip),speed:clip.speed??1,fadeOffset:getOriginalFadePhase(clip).offset,fadeDuration:getOriginalFadePhase(clip).duration,fadeIn:Math.max(clip.fade?.fadeIn??0,fades.fadeIn),fadeOut:Math.max(clip.fade?.fadeOut??0,fades.fadeOut)};
+  };
   const loadAudioBuffer = async (
     audioContext: AudioContext | BaseAudioContext,
     blob: Blob,
@@ -2063,6 +2078,11 @@ export const Preview: React.FC = () => {
             timelinePosition < clipEnd
           ) {
             const mediaItem = getOriginalMediaItem(audioClip.mediaId);
+            if (mediaItem && getManagedBridge()?.ensureAudioStream) {
+              const uri=await prepareNativeAudio(mediaItem,audioClip.audioTrackIndex??0);
+              if(uri)scheduledClips.push(nativeSchedule(audioClip,audioTrack,uri));
+              continue;
+            }
             if (!mediaItem?.blob) {
               continue;
             }
@@ -2158,6 +2178,7 @@ export const Preview: React.FC = () => {
     },
     [
       getOriginalMediaItem,
+      prepareNativeAudio,
       getPreviewAudioBufferForEffects,
       getResolvedClipAudioEffects,
       getResolvedClipVolumeAutomation,
@@ -2183,6 +2204,7 @@ export const Preview: React.FC = () => {
           continue;
         }
         const cacheKey = getAudioBufferCacheKey(clip.mediaId, clip.audioTrackIndex);
+        if(getManagedBridge()?.ensureAudioStream){const item=getOriginalMediaItem(clip.mediaId);if(item)await prepareNativeAudio(item,clip.audioTrackIndex??0);continue;}
         let audioBuffer: AudioBuffer | null | undefined =
           audioBufferCacheRef.current.get(cacheKey);
 
@@ -2231,6 +2253,7 @@ export const Preview: React.FC = () => {
     }
   }, [
     getOriginalMediaItem,
+    prepareNativeAudio,
     getPreviewAudioBufferForEffects,
     getResolvedClipAudioEffects,
     mediaClipHasAudio,
@@ -2305,6 +2328,8 @@ export const Preview: React.FC = () => {
             continue;
           }
 
+          const nativeUri=nativeAudioUriRef.current.get(getAudioBufferCacheKey(clip.mediaId,clip.audioTrackIndex));
+          if(nativeUri){schedules.push(nativeSchedule(clip,track,nativeUri));continue;}
           const audioBuffer = audioBufferCacheRef.current.get(
             getAudioBufferCacheKey(clip.mediaId, clip.audioTrackIndex),
           );

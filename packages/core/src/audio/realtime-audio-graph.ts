@@ -1,3 +1,4 @@
+import { createNativeStreamingSource } from "./native-streaming-preview";
 import {
   getMasterClock,
   MasterTimelineClock,
@@ -12,7 +13,8 @@ export interface AudioClipSchedule {
   fadeDuration?:number;
   clipId: string;
   trackId: string;
-  audioBuffer: AudioBuffer;
+  audioBuffer: AudioBuffer | null;
+  nativeUri?: string;
   startTime: number;
   endTime: number;
   mediaOffset: number;
@@ -36,7 +38,7 @@ export interface TrackConfig {
 
 interface ScheduledSource {
   clipId: string;
-  source: AudioBufferSourceNode;
+  source: {stop():void;disconnect():void};
   startedAt: number;
   duration: number;
 }
@@ -544,6 +546,20 @@ export class RealtimeAudioGraph {
     const trackNodes = this.trackNodes.get(schedule.trackId);
     if (!trackNodes) return;
 
+    if (schedule.nativeUri) {
+      const clipGain=this.audioContext.createGain();const fadeGain=this.audioContext.createGain();
+      clipGain.connect(fadeGain);fadeGain.connect(trackNodes.inputGain);
+      const offset=Math.max(0,this.masterClock.currentTime-schedule.startTime);
+      const start=this.audioContext.currentTime+Math.max(0,schedule.startTime-this.masterClock.currentTime);
+      const duration=schedule.endTime-schedule.startTime;
+      scheduleVolumeAutomationOnGain(clipGain,schedule.volumeAutomation,schedule.volume,offset,duration-offset,start);
+      scheduleClipFadeEnvelope(fadeGain.gain,{startTime:start,clipOffset:offset+(schedule.fadeOffset??0),rangeDuration:duration-offset,clipDuration:schedule.fadeDuration??duration,fadeIn:schedule.fadeIn,fadeOut:schedule.fadeOut});
+      const sources=this.scheduledSources.get(schedule.trackId)||[];
+      const scheduled:ScheduledSource={clipId:schedule.clipId,source:{stop(){},disconnect(){}},startedAt:schedule.startTime,duration:duration-offset};
+      scheduled.source=createNativeStreamingSource(this.audioContext,this.masterClock,schedule,clipGain,()=>{const index=sources.indexOf(scheduled);if(index>=0)sources.splice(index,1);clipGain.disconnect();fadeGain.disconnect();},error=>console.error('[Preview]',error));
+      sources.push(scheduled);this.scheduledSources.set(schedule.trackId,sources);return;
+    }
+    if (!schedule.audioBuffer) return;
     const source = this.audioContext.createBufferSource();
     source.buffer = schedule.audioBuffer;
     source.playbackRate.value = schedule.speed;

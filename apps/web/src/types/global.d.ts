@@ -189,6 +189,7 @@ declare global {
         registerPath(mediaId:string,path:string):Promise<RegisteredAsset>;
         findAsset(mediaId:string):Promise<RegisteredAsset|undefined>;
         resolve(assetId:string,purpose:"original"|"proxy"):Promise<string>;
+        ensureAudioStream(assetId:string,trackIndex:number):Promise<string>;
         ensureProxy(assetId:string):Promise<ProxyReceipt>;
         cancelMedia(assetId:string):Promise<void>;
       };

@@ -387,6 +387,19 @@ export class AudioEngine {
     if (cached) return cached;
     if (this.noAudioMedia.has(cacheKey)) return null;
 
+    const managed = getManagedBridge();
+    if (managed?.audioWindow) {
+      if (mediaItem.metadata.duration >= 120) throw new Error("Render and relink a stem before processing stateful effects on long recordings.");
+      const original = await prepareNativeOriginal(mediaItem);
+      const frames = Math.ceil(mediaItem.metadata.duration * 48000);
+      const buffer = context.createBuffer(2, frames, 48000);
+      for (let offset = 0; offset < mediaItem.metadata.duration; offset += 10) {
+        const window = await managed.audioWindow({assetId: original.nativeSource!.identity.assetId, trackIndex: audioTrackIndex, startMs: offset * 1000, durationMs: Math.min(10, mediaItem.metadata.duration-offset)*1000, sampleRate:48000, channels:2});
+        for (let channel=0;channel<window.channels.length;channel++) buffer.getChannelData(channel).set(window.channels[channel].subarray(0, frames-offset*48000),offset*48000);
+      }
+      this.mediaBuffers.set(cacheKey, buffer);
+      return buffer;
+    }
     if (!mediaItem.blob) {
       console.warn(`No blob available for media item ${mediaItem.id}`);
       return null;
@@ -453,7 +466,7 @@ export class AudioEngine {
     signal?:AbortSignal,
   ): Promise<void> {
     const managed=getManagedBridge();
-    if(managed&&mediaItem.metadata.duration>=120){
+    if(managed && (mediaItem.metadata.duration>=120 || (!clipInfo.reversed && !clipInfo.effects.some(e=>e.enabled&&!/^(gain|volume|pan|invert|polarity)$/i.test(e.type))))){
       if(clipInfo.reversed)throw new Error("Bounded native audio export cannot reverse long recordings. Render and relink this audio stem first.");
       const stateful=clipInfo.effects.filter(effect=>effect.enabled&&!/^(gain|volume|pan|invert|polarity)$/i.test(effect.type));
       if(stateful.length)throw new Error(`Long native audio with ${stateful.map(e=>e.type).join(", ")} requires a rendered stem to preserve filter continuity. Render/relink the affected audio track before export.`);

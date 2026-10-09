@@ -500,9 +500,9 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
       encodeMode: customSettings.encodeMode ?? "balanced",
     };
     if (getExportValidationError(settings, duration)) return;
-    onExport(settings, delivery);
+    if(generatePublishing)onExport(settings,delivery,{generatePublishing:true});else onExport(settings, delivery);
     onClose();
-  }, [sourceMatch, customSettings, duration, onExport, onClose, delivery]);
+  }, [generatePublishing,sourceMatch, customSettings, duration, onExport, onClose, delivery]);
 
   const formatFileSize = (bitrate: number, durationSec: number): string => {
     const bytes = (bitrate * 1000 * durationSec) / 8;

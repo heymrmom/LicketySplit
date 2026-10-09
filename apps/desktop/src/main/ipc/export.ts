@@ -1,3 +1,5 @@
+import { FrameAssembler, type FrameChunk } from "../../shared/frame-chunks";
+import { heavyQueue } from "../lickety/media-jobs";
 import { MessageChannelMain, type WebContents, type MessagePortMain } from "electron";
 import path from "node:path";
 import os from "node:os";
@@ -29,6 +31,8 @@ const MAX_INITIAL_CREDITS = 10;
 const MAX_IN_FLIGHT_FRAME_BYTES = 128 * 1024 * 1024;
 
 interface JobEntry {
+  controller:AbortController;
+  starting?:Promise<void>;
   job: ExportJob | null;
   cfr: CfrWriter | null;
   port: MessagePortMain;
@@ -82,6 +86,7 @@ export async function startExport(wc: WebContents, args: ExportStartArgs): Promi
 
   const { port1, port2 } = new MessageChannelMain();
   const entry: JobEntry = {
+    controller:new AbortController(),
     job: null,
     cfr: null,
     port: port1,
@@ -99,11 +104,13 @@ export async function startExport(wc: WebContents, args: ExportStartArgs): Promi
   // preventing the frame-duplication race (inflated duration / looping frames)
   // and the stdin listener pile-up. "finish" is chained after all frames so
   // endInput() cannot close stdin while frames are still queued.
+  const assembler=new FrameAssembler(args.width*args.height*4);
   port1.on("message", (e) => {
-    const msg = e.data as
+    let msg = e.data as
       | { type?: string; ts?: number; buffer?: ArrayBuffer }
       | null;
     if (!msg || typeof msg.type !== "string") return;
+    if(msg.type==='frame-chunk'){try{const complete=assembler.accept(msg as FrameChunk);if(!complete)return;msg={type:'frame',...complete};}catch(error){port1.postMessage({type:'error',message:String(error)});entry.controller.abort();entry.job?.cancel();return;}}
     if (msg.type === "frame" && msg.buffer) {
       const buffer = msg.buffer;
       const ts = msg.ts ?? 0;
@@ -140,7 +147,7 @@ export async function writeAudioWav(args: { jobId: string; wav: ArrayBuffer }): 
     fs.writeFile(entry.audioWavPath, Buffer.from(args.wav)),
   );
   await entry.audioQueue;
-  startNativeExportJob(args.jobId, entry);
+  await startNativeExportJob(args.jobId, entry);
 }
 
 export async function writeAudioChunk(args: {
@@ -162,7 +169,7 @@ export async function finishAudio(args: { jobId: string }): Promise<void> {
   const entry = jobs.get(args.jobId);
   if (!entry) throw new Error(`unknown export job ${args.jobId}`);
   await entry.audioQueue;
-  startNativeExportJob(args.jobId, entry);
+  await startNativeExportJob(args.jobId, entry);
 }
 
 async function writeFileChunk(
@@ -184,31 +191,22 @@ async function writeFileChunk(
   }
 }
 
-function startNativeExportJob(jobId: string, entry: JobEntry): void {
-  if (entry.started) return;
-  entry.job = new ExportJob(
-    entry.exportArgs,
-    (frame) => entry.port.postMessage({ type: "progress", frame }),
-    () => {
-      entry.port.postMessage({ type: "done" });
-      cleanupJob(jobId);
-    },
-    (msg) => {
-      entry.port.postMessage({ type: "error", message: msg });
-      cleanupJob(jobId);
-    },
-  );
-  entry.cfr = new CfrWriter(entry.exportArgs.frameRate, async (f) => {
-    await entry.job!.writeFrame(f);
-  });
-  entry.job.start();
-  entry.started = true;
-  entry.port.postMessage({ type: "credit", credits: initialFrameCredits(entry.exportArgs) });
+function startNativeExportJob(jobId:string,entry:JobEntry):Promise<void>{
+ if(entry.starting)return entry.starting;
+ entry.starting=new Promise<void>((resolve,reject)=>{
+  void heavyQueue.run(()=>new Promise<void>(finished=>{
+   const finish=()=>{cleanupJob(jobId);finished();};
+   entry.job=new ExportJob(entry.exportArgs,frame=>entry.port.postMessage({type:'progress',frame}),()=>{entry.port.postMessage({type:'done'});finish();},message=>{entry.port.postMessage({type:'error',message});finish();});
+   entry.cfr=new CfrWriter(entry.exportArgs.frameRate,frame=>entry.job!.writeFrame(frame));
+   entry.job.start();entry.started=true;entry.port.postMessage({type:'credit',credits:initialFrameCredits(entry.exportArgs)});resolve();
+  }),entry.controller.signal).catch(error=>{entry.port.postMessage({type:'error',message:String(error)});cleanupJob(jobId);reject(error);});
+ });return entry.starting;
 }
 
 export function cancelAllExports(): void {
   for (const [, entry] of jobs) {
     try {
+      entry.controller.abort(new Error("Export cancelled"));
       entry.job?.cancel();
     } catch {
       /* best-effort kill on quit */
@@ -228,6 +226,7 @@ function cleanupJob(jobId: string): void {
 export async function cancelExport(args: { jobId: string }): Promise<void> {
   const entry = jobs.get(args.jobId);
   if (!entry) return;
+  entry.controller.abort(new Error("Export cancelled"));
   entry.job?.cancel();
   try {
     await fs.rm(entry.audioWavPath, { force: true });

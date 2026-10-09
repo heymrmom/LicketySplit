@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("openreel", {
     registerPath: (mediaId: string, path: string) => ipcRenderer.invoke(CHANNELS.licketyRegisterAsset, {mediaId,path,managed:true}),
     findAsset: (mediaId: string) => ipcRenderer.invoke(CHANNELS.licketyFindAsset, {mediaId}),
     resolve: (assetId: string, purpose: string) => ipcRenderer.invoke(CHANNELS.licketyResolve, {assetId,purpose}),
+    ensureAudioStream: (assetId:string,trackIndex:number) => ipcRenderer.invoke(CHANNELS.licketyEnsureAudioStream,{assetId,trackIndex}),
     ensureProxy: (assetId: string) => ipcRenderer.invoke(CHANNELS.licketyEnsureProxy, {assetId}),
     cancelMedia: (assetId: string) => ipcRenderer.invoke(CHANNELS.licketyCancelMedia, {assetId}),
   },

@@ -3,21 +3,36 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: Build an unsigned test candidate (publication is separate)
+        description: Build only, sign a test candidate, or prepare a gated draft
         type: choice
-        options: [build-only]
+        options: [build-only, signed-test, draft-release]
         default: build-only
+      signed_artifact_id:
+        description: For draft only, the already-tested signed artifact ID
+        type: string
+        required: false
+      acceptance_json:
+        description: For draft only, matching physical8GiB and fresh-download evidence JSON
+        type: string
+        required: false
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: licketysplit-desktop-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   build:
+    if: inputs.stage != 'draft-release'
     runs-on: macos-14
+    environment: licketysplit-desktop-release
     timeout-minutes: 60
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      CSC_LINK: ${{ inputs.stage != 'build-only' && secrets.MAC_CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ inputs.stage != 'build-only' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+      APPLE_ID: ${{ inputs.stage != 'build-only' && secrets.APPLE_ID || '' }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ inputs.stage != 'build-only' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+      APPLE_TEAM_ID: ${{ inputs.stage != 'build-only' && secrets.APPLE_TEAM_ID || '' }}
     steps:
       - uses: actions/checkout@v4
       - run: test "$(uname -m)" = arm64
@@ -26,24 +41,58 @@ jobs:
         with:
           node-version: '22'
           cache: pnpm
+      - if: inputs.stage != 'build-only'
+        run: test -n "$CSC_LINK" && test -n "$CSC_KEY_PASSWORD" && test -n "$APPLE_ID" && test -n "$APPLE_APP_SPECIFIC_PASSWORD" && test -n "$APPLE_TEAM_ID"
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:wasm
       - run: pnpm typecheck
       - run: pnpm test
       - run: node apps/desktop/scripts/fetch-ffmpeg.mjs darwin-arm64
+      - run: node apps/desktop/scripts/write-source-receipt.mjs
       - run: pnpm --filter @openreel/desktop build
-      - run: pnpm --filter @openreel/desktop exec electron-builder --mac dmg zip --arm64 --publish never
-      - run: node apps/desktop/scripts/verify-licketysplit-package.mjs --app apps/desktop/release/mac-arm64/LicketySplit.app --version 0.1.0-alpha.1 --out apps/desktop/release/build-manifest.json
+      - if: inputs.stage == 'build-only'
+        run: pnpm --filter @openreel/desktop exec electron-builder --mac dmg zip --arm64 --publish never
+      - if: inputs.stage != 'build-only'
+        run: pnpm --filter @openreel/desktop exec electron-builder --mac dmg zip --arm64 --publish never --config.mac.identity="Developer ID Application" --config.mac.notarize=true
+      - if: inputs.stage == 'build-only'
+        run: node apps/desktop/scripts/verify-licketysplit-package.mjs --app apps/desktop/release/mac-arm64/LicketySplit.app --version 0.1.0-alpha.1 --out apps/desktop/release/build-manifest.json
+      - if: inputs.stage != 'build-only'
+        run: node apps/desktop/scripts/verify-licketysplit-package.mjs --app apps/desktop/release/mac-arm64/LicketySplit.app --version 0.1.0-alpha.1 --team "$APPLE_TEAM_ID" --out apps/desktop/release/build-manifest.json
       - run: |
           cp apps/desktop/LICENSES/OPENREEL.md apps/desktop/release/THIRD-PARTY-NOTICES.md
           cd apps/desktop/release
           shasum -a 256 LicketySplit-*-arm64.dmg LicketySplit-*-arm64.zip build-manifest.json THIRD-PARTY-NOTICES.md > SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: LicketySplit-unsigned-arm64-test-${{ github.sha }}
+          name: LicketySplit-${{ inputs.stage }}-arm64-${{ github.sha }}
           path: |
             apps/desktop/release/LicketySplit-*-arm64.dmg
             apps/desktop/release/LicketySplit-*-arm64.zip
             apps/desktop/release/SHA256SUMS
             apps/desktop/release/build-manifest.json
             apps/desktop/release/THIRD-PARTY-NOTICES.md
+  draft:
+    if: inputs.stage == 'draft-release'
+    runs-on: ubuntu-latest
+    environment: licketysplit-desktop-release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.signed_artifact_id }}
+          merge-multiple: true
+          path: candidate
+      - env:
+          ACCEPTANCE_JSON: ${{ inputs.acceptance_json }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -n "$ACCEPTANCE_JSON"
+          node -e 'JSON.parse(process.env.ACCEPTANCE_JSON); require("fs").writeFileSync("acceptance.json",process.env.ACCEPTANCE_JSON)'
+          node apps/desktop/scripts/release-gates.mjs candidate/build-manifest.json acceptance.json
+          node -e 'const m=JSON.parse(require("fs").readFileSync("candidate/build-manifest.json"));if(m.sourceCommit!==process.env.GITHUB_SHA)throw new Error("Source commit mismatch")'
+          cd candidate
+          sha256sum -c SHA256SUMS
+          gh release create "licketysplit-desktop-v0.1.0-alpha.1" --draft --prerelease --target "$GITHUB_SHA" --title "LicketySplit 0.1.0-alpha.1" --notes "Signed Apple silicon test candidate. Publication requires separate approval." LicketySplit-*-arm64.dmg LicketySplit-*-arm64.zip SHA256SUMS build-manifest.json THIRD-PARTY-NOTICES.md

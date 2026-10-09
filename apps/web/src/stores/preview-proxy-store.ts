@@ -32,6 +32,7 @@ export const previewProxyCache = new PreviewProxyCache({
   },
 });
 
+const forcedNativeProxy=new WeakSet<object>();
 const nativePrepared=new WeakMap<object, {item:import("@openreel/core").MediaItem; ready:boolean;cancelled?:boolean}>();
 const nativeResolve=previewProxyCache.resolve.bind(previewProxyCache);
 previewProxyCache.resolve=(projectId,item,purpose="preview")=>{if(purpose==="export"||!desktopMediaAvailable()||item.type!=="video")return nativeResolve(projectId,item,purpose);const prepared=nativePrepared.get(item);return prepared?.ready?prepared.item:{...item,blob:null};};
@@ -43,14 +44,14 @@ const sync = () => {
     const runtime:{item:import("@openreel/core").MediaItem;ready:boolean;cancelled?:boolean}={item,ready:false};nativePrepared.set(item,runtime);
     previewProxyCache.store.setState(state=>({entries:{...state.entries,[item.id]:{source:item,preset:"low",status:"encoding",progress:0,enabled:true,createdAt:Date.now()}}}));
     void (async()=>{const asset=await registerDesktopMedia(item);const blob=item.blob??new Blob([]);runtime.item={...item,blob,nativeSource:asset,isPlaceholder:false};if(runtime.cancelled)return;
-      const original=resolveDesktopMedia(runtime.item,"export");const preview=resolveDesktopMedia(runtime.item,"preview");bindNativeMediaSources(blob,original,preview);await preview;if(runtime.cancelled)return;runtime.ready=true;
+      const original=resolveDesktopMedia(runtime.item,"export");const preview=resolveDesktopMedia(runtime.item,"preview",forcedNativeProxy.has(item));bindNativeMediaSources(blob,original,preview);await preview;if(runtime.cancelled)return;runtime.ready=true;
       previewProxyCache.store.setState(state=>({revision:state.revision+1,entries:{...state.entries,[item.id]:{...state.entries[item.id],status:"ready",progress:100}}}));
     })().catch(error=>{previewProxyCache.store.setState(state=>({revision:state.revision+1,entries:{...state.entries,[item.id]:{...state.entries[item.id],status:"error",error:`${error.message}. Relink or retry media preparation.`}}}));});
   }
 };
 const nativeRequest=previewProxyCache.request.bind(previewProxyCache);
 const nativeRemove=previewProxyCache.remove.bind(previewProxyCache);
-previewProxyCache.request=(item,preset)=>{if(!desktopMediaAvailable())return nativeRequest(item,preset);nativePrepared.delete(item);sync();};
+previewProxyCache.request=(item,preset)=>{if(!desktopMediaAvailable())return nativeRequest(item,preset);forcedNativeProxy.add(item);nativePrepared.delete(item);sync();};
 previewProxyCache.remove=id=>{if(desktopMediaAvailable()){const item=useProjectStore.getState().getMediaItem(id);const runtime=item&&nativePrepared.get(item);if(runtime){runtime.cancelled=true;runtime.ready=false;const assetId=runtime.item.nativeSource?.identity.assetId;if(assetId)void window.openreel?.lickety?.cancelMedia(assetId);}}nativeRemove(id);};
 sync();
 const unsubscribe = useProjectStore.subscribe((state, previous) => {
