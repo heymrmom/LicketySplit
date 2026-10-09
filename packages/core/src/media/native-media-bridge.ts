@@ -144,8 +144,8 @@ export interface ManagedRendererBridge {
 export function getManagedBridge():ManagedRendererBridge|undefined {return (globalThis as unknown as {openreel?:{platform?:string;lickety?:ManagedRendererBridge}}).openreel?.lickety;}
 export async function prepareNativeOriginal(item:import('../types/project').MediaItem):Promise<import('../types/project').MediaItem>{
  const managed=getManagedBridge();if(!managed)return item;
- let asset=item.nativeSource??await managed.findAsset(item.id);
  const blob=item.blob??await item.fileHandle?.getFile();
+ let asset=(blob&&typeof File!=="undefined"&&blob instanceof File&&!nativeSources.has(blob))?await managed.registerFile(item.id,blob):item.nativeSource??await managed.findAsset(item.id);
  if(!asset){if(!blob)throw new Error(`Relink original ${item.name} before exporting`);try{asset=await managed.registerFile(item.id,blob);}catch(e){const bridge=getBridge();if(!bridge)throw e;asset=await managed.registerPath(item.id,await materializeToTemp(bridge,blob));}}
  const uri=await managed.resolve(asset.identity.assetId,'original');const runtimeBlob=blob??new Blob([]);
  if(!nativeSources.has(runtimeBlob))bindNativeMediaSources(runtimeBlob,Promise.resolve(uri),Promise.resolve(uri));

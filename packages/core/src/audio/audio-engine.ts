@@ -22,7 +22,7 @@ import {
   resolveClipVolumeAutomation,
 } from "./clip-audio-resolution";
 import { scheduleVolumeAutomationOnGain } from "./clip-volume-automation";
-import { scheduleClipFadeEnvelope } from "./clip-fade-envelope";
+import { getOriginalFadePhase, scheduleClipFadeEnvelope } from "./clip-fade-envelope";
 import { getTrackTransitionAudioFades } from "./transition-audio-fades";
 import {
   getMediaItemCapabilities,
@@ -360,6 +360,8 @@ export class AudioEngine {
       mediaId: clip.mediaId,
       sourceTime,
       clipOffset: offsetInClip,
+      fadeClipOffset:offsetInClip+getOriginalFadePhase(clip).offset,
+      fadeClipDuration:getOriginalFadePhase(clip).duration,
       timelineStartTime: clipStart,
       duration: clipEnd - clipStart,
       clipDuration: clip.duration,
@@ -740,9 +742,9 @@ export class AudioEngine {
   ): void {
     scheduleClipFadeEnvelope(gainNode.gain, {
       startTime,
-      clipOffset: clipInfo.clipOffset,
+      clipOffset: clipInfo.fadeClipOffset??clipInfo.clipOffset,
       rangeDuration: clipInfo.duration,
-      clipDuration: clipInfo.clipDuration,
+      clipDuration: clipInfo.fadeClipDuration??clipInfo.clipDuration,
       fadeIn: clipInfo.fadeIn,
       fadeOut: clipInfo.fadeOut,
     });

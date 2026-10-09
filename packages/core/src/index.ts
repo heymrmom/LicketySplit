@@ -92,3 +92,8 @@ export {createAnalysisSnapshot,fullEditRevision,revisionHash} from "./lickety/sn
 export {normalizeAssemblyTranscript} from "./lickety/transcript";
 
 export {serializeProjectFile,assertReaderCompatibility} from "./storage/project-serializer";
+
+export {compileNarrative,sliceTimeline,deriveTimelineWords,projectTranscript,narrativeLimitations} from "./lickety/timeline-slicer";
+export {validateNarrativeProposal} from "./lickety/proposals";
+
+export {getOriginalFadePhase} from "./audio/clip-fade-envelope";

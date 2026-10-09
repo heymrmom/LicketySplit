@@ -1,3 +1,4 @@
+import {getOriginalFadePhase} from "@openreel/core";
 import {getNativeMediaSource,nativeVideoUrl} from "@openreel/core";
 import React, {
   useRef,
@@ -2135,6 +2136,8 @@ export const Preview: React.FC = () => {
               pan: 0,
               effects: previewAudio.effects,
               speed: audioClip.speed ?? 1,
+              fadeOffset:getOriginalFadePhase(audioClip).offset,
+              fadeDuration:getOriginalFadePhase(audioClip).duration,
               fadeIn: Math.max(
                 audioClip.fade?.fadeIn ?? 0,
                 transitionFades.fadeIn,
@@ -2345,6 +2348,8 @@ export const Preview: React.FC = () => {
             pan: 0,
             effects: scheduleEffects,
             speed: clip.speed ?? 1,
+            fadeOffset:getOriginalFadePhase(clip).offset,
+            fadeDuration:getOriginalFadePhase(clip).duration,
             fadeIn: Math.max(
               clip.fade?.fadeIn ?? 0,
               transitionFades.fadeIn,

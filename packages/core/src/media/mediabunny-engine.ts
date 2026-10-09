@@ -633,11 +633,13 @@ export class MediaBunnyEngine {
     file: File | Blob,
     timestamp: number,
     width?: number,
+    purpose:"preview"|"export"="preview",
   ): Promise<VideoFrameResult | null> {
     this.ensureInitialized();
     const { CanvasSink } = this.mediabunny!;
     const fileName = "name" in file ? file.name : "blob";
-    const cacheKey = `${fileName}-${file.size}-${timestamp}-${width || "auto"}`;
+    const nativeUri=await getNativeMediaSource(file,purpose);
+    const cacheKey = `${nativeUri??fileName}-${file.size}-${timestamp}-${width || "auto"}-${purpose}`;
     const cached = this.frameCache.get(cacheKey);
     if (cached) {
       cached.lastAccessed = Date.now();
@@ -650,7 +652,7 @@ export class MediaBunnyEngine {
       };
     }
 
-    const input = await this.createInput(file,"preview");
+    const input = await this.createInput(file,purpose);
 
     try {
       const videoTrack = await input.getPrimaryVideoTrack();

@@ -30,6 +30,8 @@ export interface AudioTrackRenderInfo {
 }
 
 export interface AudioClipRenderInfo {
+  readonly fadeClipOffset?:number;
+  readonly fadeClipDuration?:number;
   readonly clipId: string;
   readonly mediaId: string;
   readonly sourceTime: number;

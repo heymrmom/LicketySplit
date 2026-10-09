@@ -8,6 +8,8 @@ import { scheduleVolumeAutomationOnGain } from "./clip-volume-automation";
 import { scheduleClipFadeEnvelope } from "./clip-fade-envelope";
 
 export interface AudioClipSchedule {
+  fadeOffset?:number;
+  fadeDuration?:number;
   clipId: string;
   trackId: string;
   audioBuffer: AudioBuffer;
@@ -574,9 +576,9 @@ export class RealtimeAudioGraph {
       );
       scheduleClipFadeEnvelope(fadeGain.gain, {
         startTime: playbackStartTime,
-        clipOffset,
+        clipOffset:clipOffset+(schedule.fadeOffset??0),
         rangeDuration: playbackDuration,
-        clipDuration: duration,
+        clipDuration:schedule.fadeDuration??duration,
         fadeIn: schedule.fadeIn,
         fadeOut: schedule.fadeOut,
       });
@@ -601,9 +603,9 @@ export class RealtimeAudioGraph {
         );
         scheduleClipFadeEnvelope(fadeGain.gain, {
           startTime: playbackStartTime,
-          clipOffset,
+          clipOffset:clipOffset+(schedule.fadeOffset??0),
           rangeDuration: playbackDuration,
-          clipDuration: duration,
+          clipDuration:schedule.fadeDuration??duration,
           fadeIn: schedule.fadeIn,
           fadeOut: schedule.fadeOut,
         });

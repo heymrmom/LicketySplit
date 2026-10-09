@@ -335,7 +335,7 @@ export class VideoEngine {
         }
       }
 
-      const result = await mediaEngine.getFrameAtTime(blob, time, width);
+      const result = await mediaEngine.getFrameAtTime(blob, time, width, this.exportMode?"export":"preview");
       if (result?.canvas) {
         return createImageBitmap(result.canvas);
       }
