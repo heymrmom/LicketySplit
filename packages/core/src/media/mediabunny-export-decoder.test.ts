@@ -23,6 +23,8 @@ vi.mock("mediabunny", () => {
         displayWidth: 640,
         displayHeight: 360,
         canDecode: async () => true,
+        getFirstTimestamp: async () => 0,
+        computeDuration: async () => 1,
       };
     }
     [Symbol.dispose]() {
@@ -31,6 +33,10 @@ vi.mock("mediabunny", () => {
   }
   class MockCanvasSink {
     constructor(_track: unknown, _options?: unknown) {}
+    async *canvasesAtTimestamps(_timestamps: number[]) {
+      mediaMocks.canvasStarted?.();
+      await mediaMocks.canvasGate;
+    }
     async getCanvas(timestamp: number) {
       mediaMocks.canvasStarted?.();
       await mediaMocks.canvasGate;
@@ -218,6 +224,55 @@ describe("ExportFrameDecoder", () => {
     await expect(result).resolves.toMatchObject({ timestamp: 2, width: 640, height: 360 });
     expect(videoDecoderBudget.size).toBe(before);
     expect(drawImage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["thumbnail generation", (engine: MediaBunnyEngine) => engine.generateThumbnails(new Blob(["video"]), 1)],
+    ["filmstrip generation", (engine: MediaBunnyEngine) => engine.generateFilmstripThumbnails(new Blob(["video"]), 1)],
+    ["image sequence export", (engine: MediaBunnyEngine) => engine.exportImageSequence(new Blob(["video"]), 0, 1, 1)],
+  ])("counts %s against the shared four-slot budget", async (_name, run) => {
+    const baseline = videoDecoderBudget.size;
+    const otherOwners: VideoDecoderLease[] = [];
+    while (videoDecoderBudget.size < videoDecoderBudget.limit - 1) {
+      const lease = videoDecoderBudget.reserve(() => {});
+      expect(lease).not.toBeNull();
+      otherOwners.push(lease!);
+    }
+
+    let signalStarted!: () => void;
+    const started = new Promise<void>((resolve) => { signalStarted = resolve; });
+    let finishCanvas!: () => void;
+    mediaMocks.canvasGate = new Promise<void>((resolve) => { finishCanvas = resolve; });
+    mediaMocks.canvasStarted = signalStarted;
+
+    const engine = new MediaBunnyEngine();
+    await engine.initialize();
+    const result = run(engine);
+    await started;
+    expect(videoDecoderBudget.size).toBe(videoDecoderBudget.limit);
+    expect(videoDecoderBudget.reserve(() => {})).toBeNull();
+
+    finishCanvas();
+    await expect(result).resolves.toEqual([]);
+    expect(videoDecoderBudget.size).toBe(videoDecoderBudget.limit - 1);
+    for (const lease of otherOwners) lease.release();
+    expect(videoDecoderBudget.size).toBe(baseline);
+  });
+
+  it("rejects thumbnail decoding before opening an input when every decoder is pinned", async () => {
+    const leases: VideoDecoderLease[] = [];
+    while (videoDecoderBudget.size < videoDecoderBudget.limit) {
+      const lease = videoDecoderBudget.reserve(() => {});
+      expect(lease).not.toBeNull();
+      leases.push(lease!);
+    }
+
+    mediaMocks.inputs.mockClear();
+    const engine = new MediaBunnyEngine();
+    await engine.initialize();
+    await expect(engine.generateThumbnails(new Blob(["video"]), 1)).rejects.toThrow(/capacity/);
+    expect(mediaMocks.inputs).not.toHaveBeenCalled();
+    for (const lease of leases) lease.release();
   });
 
   it("decodes monotonic export requests through one sequential canvas iterator", async () => {

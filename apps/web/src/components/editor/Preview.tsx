@@ -2,7 +2,9 @@ import {
   createBudgetedVideoElement,
   getManagedBridge,
   prepareNativeOriginal,
+  videoDecoderBudget,
   type BudgetedVideoElement,
+  type VideoDecoderLease,
 } from "@openreel/core";
 import {getOriginalFadePhase} from "@openreel/core";
 import {getNativeMediaSource,nativeVideoUrl} from "@openreel/core";
@@ -108,6 +110,7 @@ import {
 } from "./preview/index";
 import { snapCanvasPosition } from "./preview/canvas-snapping";
 import { captureNativeVideoFrame } from "./preview/video-frame";
+import { createBudgetedPreviewDecoder } from "./preview/budgeted-decoder";
 import { resolvePlaybackLoop, resolvePlaybackStart } from "../../utils/playback-loop";
 import { ProcessingOverlay } from "./ProcessingOverlay";
 import { editingFrameDurationMs } from "./editing-frame-rate";
@@ -1739,9 +1742,11 @@ export const Preview: React.FC = () => {
         mediaId: string;
         clipId: string;
         trackIndex: number;
+        lease: VideoDecoderLease;
       }
     >
   >(new Map());
+  const previewCanvasDecoderLeasesRef = useRef(new Set<VideoDecoderLease>());
 
   const imageBitmapCacheRef = useRef<Map<string, ImageBitmap>>(new Map());
   const failedImageDecodesRef = useRef<Set<string>>(new Set());
@@ -1759,9 +1764,11 @@ export const Preview: React.FC = () => {
   const cleanupPlaybackResources = useCallback(() => {
     const resources = playbackResourcesRef.current;
     for (const [, resource] of resources) {
-      resource.input[Symbol.dispose]?.();
+      resource.lease.release();
     }
     playbackResourcesRef.current = new Map();
+    for (const lease of previewCanvasDecoderLeasesRef.current) lease.release();
+    previewCanvasDecoderLeasesRef.current.clear();
 
     for (const [, bitmap] of imageBitmapCacheRef.current) {
       bitmap.close();
@@ -4650,6 +4657,7 @@ export const Preview: React.FC = () => {
       _track: (typeof timelineTracksRef.current)[0],
       timelinePosition: number,
     ) => {
+      let releaseDecoder = () => {};
       try {
         const mediaItem = getMediaItem(clip.mediaId);
         if (!mediaItem?.blob) {
@@ -4666,30 +4674,41 @@ export const Preview: React.FC = () => {
           }
           return;
         }
+        const mediaBlob = mediaItem.blob;
 
-        try {
+        let inputForCleanup: { [Symbol.dispose]?: () => void } | null = null;
+        let inputDisposed = false;
+        let reservedLease: VideoDecoderLease | null = null;
+        const disposeInput = () => {
+          if (inputForCleanup && !inputDisposed) {
+            inputDisposed = true;
+            inputForCleanup[Symbol.dispose]?.();
+          }
+          if (reservedLease) previewCanvasDecoderLeasesRef.current.delete(reservedLease);
+        };
+        const managed = await createBudgetedPreviewDecoder(async () => {
           const mediabunny = await import("mediabunny");
           const { Input, ALL_FORMATS, BlobSource, UrlSource, CanvasSink } = mediabunny;
+          if (!isActive || !reservedLease?.active) return null;
 
+          const nativeSource = await getNativeMediaSource(mediaBlob);
+          if (!isActive || !reservedLease?.active) return null;
           const input = new Input({
-            source: (await getNativeMediaSource(mediaItem.blob)) ? new UrlSource((await getNativeMediaSource(mediaItem.blob))!) : new BlobSource(mediaItem.blob),
+            source: nativeSource ? new UrlSource(nativeSource) : new BlobSource(mediaBlob),
             formats: ALL_FORMATS,
           });
+          inputForCleanup = input;
 
           const videoTrack = await input.getPrimaryVideoTrack();
-          if (!videoTrack || !isActive) {
-            input[Symbol.dispose]?.();
-            return;
-          }
+          if (!videoTrack || !isActive || !reservedLease?.active) return null;
 
           const canDecode = await videoTrack.canDecode();
-          if (!canDecode || !isActive) {
-            input[Symbol.dispose]?.();
-            if (isActive && !canDecode) failProxyPlayback(clip.mediaId, mediaItem.blob);
-            return;
+          if (!canDecode || !isActive || !reservedLease?.active) {
+            if (isActive && !canDecode) failProxyPlayback(clip.mediaId, mediaBlob);
+            return null;
           }
 
-          // Ensure canvas has valid dimensions BEFORE creating CanvasSink
+          // Ensure canvas has valid dimensions BEFORE creating CanvasSink.
           if (canvas.width === 0 || canvas.height === 0) {
             console.warn(
               "[Preview] Canvas has zero dimensions, setting from project settings",
@@ -4698,9 +4717,24 @@ export const Preview: React.FC = () => {
             canvas.height = previewRes.height;
           }
 
-          const sink = new CanvasSink(videoTrack, {
-            poolSize: 3,
-          });
+          const sink = new CanvasSink(videoTrack, { poolSize: 3 });
+          return { videoTrack, sink };
+        }, disposeInput, () => {
+          setVideoDecoderNotice("Preview paused because a visible camera could not obtain a video decoder slot.");
+          if (isActive) pause();
+        }, videoDecoderBudget, (lease) => {
+          reservedLease = lease;
+          previewCanvasDecoderLeasesRef.current.add(lease);
+        });
+        if (!managed) return;
+        const { videoTrack, sink } = managed.value;
+        const lease = managed.lease;
+        releaseDecoder = () => {
+          previewCanvasDecoderLeasesRef.current.delete(lease);
+          lease.release();
+        };
+
+        try {
 
           const speedEngine = getSpeedEngine();
           const clipLocalTime = Math.max(0, timelinePosition - clip.startTime);
@@ -4742,17 +4776,26 @@ export const Preview: React.FC = () => {
           );
           const mediaStartTime = (clip.inPoint || 0) + adjustedLocalTime;
 
+          const mediaDuration = await videoTrack.computeDuration();
+          if (!isActive) {
+            releaseDecoder();
+            return;
+          }
           const mediaEndTime = Math.min(
             clip.outPoint || (clip.inPoint || 0) + clip.duration,
-            (await videoTrack.computeDuration()) || Infinity,
+            mediaDuration || Infinity,
           );
 
           await setupAudioFromAudioTrack(timelinePosition);
+          if (!isActive) {
+            releaseDecoder();
+            return;
+          }
 
           const ctx = canvas.getContext("2d");
           if (!ctx) {
             console.error("[Preview] Failed to get 2D context from canvas");
-            input[Symbol.dispose]?.();
+            releaseDecoder();
             return;
           }
 
@@ -4765,13 +4808,13 @@ export const Preview: React.FC = () => {
 
           const processNextFrame = async () => {
             if (!isActive) {
-              input[Symbol.dispose]?.();
+              releaseDecoder();
               return;
             }
 
             try {
               if (currentMediaTime >= mediaEndTime) {
-                input[Symbol.dispose]?.();
+                releaseDecoder();
                 cleanupAudioResources();
 
                 const clipEndTime = clip.startTime + clip.duration;
@@ -4801,6 +4844,10 @@ export const Preview: React.FC = () => {
                   } | null>;
                 }
               ).getCanvas(currentMediaTime);
+              if (!isActive) {
+                releaseDecoder();
+                return;
+              }
 
               frameCount++;
 
@@ -4841,7 +4888,7 @@ export const Preview: React.FC = () => {
                   startPositionRef.current = 0;
                   pause();
                 }
-                input[Symbol.dispose]?.();
+                releaseDecoder();
                 return;
               }
 
@@ -4998,7 +5045,7 @@ export const Preview: React.FC = () => {
               }
             } catch (error) {
               console.error("[Preview] Frame error:", error);
-              input[Symbol.dispose]?.();
+              releaseDecoder();
               pause();
             }
           };
@@ -5006,6 +5053,7 @@ export const Preview: React.FC = () => {
           animationRef.current = requestAnimationFrame(processNextFrame);
         } catch (error) {
           console.error("[Preview] MediaBunny setup error:", error);
+          releaseDecoder();
           if (!isActive) return;
           if (mediaItem.blob !== getOriginalMediaItem(clip.mediaId)?.blob) {
             failProxyPlayback(clip.mediaId, mediaItem.blob);
@@ -5030,41 +5078,61 @@ export const Preview: React.FC = () => {
       if (!mediaItem?.blob) {
         return null;
       }
+      const mediaBlob = mediaItem.blob;
 
       // Images don't need MediaBunny resources - they're rendered directly via createImageBitmap
       if (mediaItem.type === "image") {
         return null;
       }
 
+      let inputForCleanup: { [Symbol.dispose]?: () => void } | null = null;
+      let inputDisposed = false;
+      let reservedLease: VideoDecoderLease | null = null;
+      const disposeInput = () => {
+        if (inputForCleanup && !inputDisposed) {
+          inputDisposed = true;
+          inputForCleanup[Symbol.dispose]?.();
+        }
+        if (reservedLease) previewCanvasDecoderLeasesRef.current.delete(reservedLease);
+      };
+
       try {
-        const mediabunny = await import("mediabunny");
-        const { Input, ALL_FORMATS, BlobSource, UrlSource, CanvasSink } = mediabunny;
+        const managed = await createBudgetedPreviewDecoder(async () => {
+          const mediabunny = await import("mediabunny");
+          const { Input, ALL_FORMATS, BlobSource, UrlSource, CanvasSink } = mediabunny;
+          if (!isActive || !reservedLease?.active) return null;
 
-        const input = new Input({
-          source: (await getNativeMediaSource(mediaItem.blob)) ? new UrlSource((await getNativeMediaSource(mediaItem.blob))!) : new BlobSource(mediaItem.blob),
-          formats: ALL_FORMATS,
+          const nativeSource = await getNativeMediaSource(mediaBlob);
+          if (!isActive || !reservedLease?.active) return null;
+          const input = new Input({
+            source: nativeSource ? new UrlSource(nativeSource) : new BlobSource(mediaBlob),
+            formats: ALL_FORMATS,
+          });
+          inputForCleanup = input;
+
+          const videoTrack = await input.getPrimaryVideoTrack();
+          if (!videoTrack || !isActive || !reservedLease?.active) return null;
+
+          const canDecode = await videoTrack.canDecode();
+          if (!canDecode || !isActive || !reservedLease?.active) {
+            if (isActive && !canDecode) failProxyPlayback(clip.mediaId, mediaBlob);
+            return null;
+          }
+
+          const sink = new CanvasSink(videoTrack, { poolSize: 3 });
+          return { input, sink };
+        }, disposeInput, () => {
+          setVideoDecoderNotice("Preview paused because a visible camera could not obtain a video decoder slot.");
+          if (isActive) pause();
+        }, videoDecoderBudget, (lease) => {
+          reservedLease = lease;
+          previewCanvasDecoderLeasesRef.current.add(lease);
         });
-
-        const videoTrack = await input.getPrimaryVideoTrack();
-        if (!videoTrack || !isActive) {
-          input[Symbol.dispose]?.();
-          return null;
-        }
-
-        const canDecode = await videoTrack.canDecode();
-        if (!canDecode || !isActive) {
-          input[Symbol.dispose]?.();
-          if (isActive) failProxyPlayback(clip.mediaId, mediaItem.blob);
-          return null;
-        }
-
-        const sink = new CanvasSink(videoTrack, {
-          poolSize: 3,
-        });
+        if (!managed) return null;
 
         return {
-          input,
-          sink,
+          ...managed.value,
+          lease: managed.lease,
           mediaId: clip.mediaId,
           clipId: clip.id,
           trackIndex,
@@ -5145,10 +5213,13 @@ export const Preview: React.FC = () => {
       for (const { clip, trackIndex } of initialClips) {
         if (!playbackResourcesRef.current.has(clip.id)) {
           const resources = await initClipResources(clip, trackIndex);
-          if (resources) {
+          if (resources && isActive && resources.lease.active) {
             playbackResourcesRef.current.set(clip.id, resources);
+          } else {
+            resources?.lease.release();
           }
         }
+        if (!isActive) return;
       }
 
       const hasTextOrShapeContent =
@@ -5381,10 +5452,13 @@ export const Preview: React.FC = () => {
           for (const { clip, trackIndex } of activeClips) {
             if (!playbackResourcesRef.current.has(clip.id)) {
               const resources = await initClipResources(clip, trackIndex);
-              if (resources) {
+              if (resources && isActive && resources.lease.active) {
                 playbackResourcesRef.current.set(clip.id, resources);
+              } else {
+                resources?.lease.release();
               }
             }
+            if (!isActive) return;
           }
 
           // Active transition takes over the whole frame: decode both clips
@@ -5431,13 +5505,16 @@ export const Preview: React.FC = () => {
                     lookup.clip,
                     lookup.trackIndex,
                   );
-                  if (resources) {
+                  if (resources && isActive && resources.lease.active) {
                     playbackResourcesRef.current.set(
                       lookup.clip.id,
                       resources,
                     );
+                  } else {
+                    resources?.lease.release();
                   }
                 }
+                if (!isActive) return;
               }
 
               const decodeClipFrameForTransition = async (
@@ -5609,7 +5686,7 @@ export const Preview: React.FC = () => {
           const activeClipIds = new Set(activeClips.map((c) => c.clip.id));
           for (const [clipId, resources] of playbackResourcesRef.current) {
             if (!activeClipIds.has(clipId)) {
-              resources.input[Symbol.dispose]?.();
+              resources.lease.release();
               playbackResourcesRef.current.delete(clipId);
             }
           }

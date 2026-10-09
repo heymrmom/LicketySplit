@@ -59,6 +59,12 @@ export function inferMediaType(
   if (SUPPORTED_IMAGE_FORMATS.includes(baseMimeType)) return "image";
   return null;
 }
+
+function requireVideoDecoderLease(dispose: () => void): VideoDecoderLease {
+  const lease = videoDecoderBudget.reserve(dispose);
+  if (!lease) throw new Error("Video decoder capacity is currently in use");
+  return lease;
+}
 type MediaBunnyInput = {
   computeDuration(): Promise<number>;
   getMimeType(): Promise<string>;
@@ -549,9 +555,11 @@ export class MediaBunnyEngine {
   ): Promise<ThumbnailResult[]> {
     this.ensureInitialized();
     const { CanvasSink } = this.mediabunny!;
-    const input = await this.createInput(file);
+    let input: MediaBunnyInput | undefined;
+    const lease = requireVideoDecoderLease(() => input?.[Symbol.dispose]?.());
 
     try {
+      input = await this.createInput(file);
       const videoTrack = await input.getPrimaryVideoTrack();
       if (!videoTrack) {
         return [];
@@ -614,7 +622,7 @@ export class MediaBunnyEngine {
 
       return thumbnails;
     } finally {
-      input[Symbol.dispose]?.();
+      lease.release();
     }
   }
 
@@ -626,9 +634,11 @@ export class MediaBunnyEngine {
   ): Promise<ThumbnailResult[]> {
     this.ensureInitialized();
     const { CanvasSink } = this.mediabunny!;
-    const input = await this.createInput(file);
+    let input: MediaBunnyInput | undefined;
+    const lease = requireVideoDecoderLease(() => input?.[Symbol.dispose]?.());
 
     try {
+      input = await this.createInput(file);
       const videoTrack = await input.getPrimaryVideoTrack();
       if (!videoTrack) {
         return [];
@@ -687,7 +697,7 @@ export class MediaBunnyEngine {
 
       return thumbnails;
     } finally {
-      input[Symbol.dispose]?.();
+      lease.release();
     }
   }
 
@@ -1248,9 +1258,11 @@ export class MediaBunnyEngine {
   ): Promise<Blob[]> {
     this.ensureInitialized();
     const { CanvasSink } = this.mediabunny!;
-    const input = await this.createInput(file);
+    let input: MediaBunnyInput | undefined;
+    const lease = requireVideoDecoderLease(() => input?.[Symbol.dispose]?.());
 
     try {
+      input = await this.createInput(file);
       const videoTrack = await input.getPrimaryVideoTrack();
       if (!videoTrack) {
         throw new Error("No video track found");
@@ -1299,7 +1311,7 @@ export class MediaBunnyEngine {
 
       return blobs;
     } finally {
-      input[Symbol.dispose]?.();
+      lease.release();
     }
   }
 
