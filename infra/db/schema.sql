@@ -1,5 +1,5 @@
 -- =====================================================================
--- OpenReel Marketplace — canonical Postgres schema (STUDIO_PLAN Appendix F)
+-- LicketySplit Marketplace — canonical Postgres schema (STUDIO_PLAN Appendix F)
 --
 -- Money is always bigint cents, never float (§33.1). IDs are uuid; expose
 -- opaque handles/slugs externally, never internal ids (§33.2). Apply with:
