@@ -1,4 +1,9 @@
-import { getManagedBridge, prepareNativeOriginal } from "@openreel/core";
+import {
+  createBudgetedVideoElement,
+  getManagedBridge,
+  prepareNativeOriginal,
+  type BudgetedVideoElement,
+} from "@openreel/core";
 import {getOriginalFadePhase} from "@openreel/core";
 import {getNativeMediaSource,nativeVideoUrl} from "@openreel/core";
 import React, {
@@ -864,9 +869,8 @@ export const Preview: React.FC = () => {
   const videoUrlRef = useRef<string | null>(null);
   const currentVideoMediaIdRef = useRef<string | null>(null);
   const nativePlaybackActiveRef = useRef<boolean>(false);
-  const nativeVideoCacheRef = useRef<
-    Map<string, { video: HTMLVideoElement; url: string }>
-  >(new Map());
+  type PreviewVideoElement = BudgetedVideoElement & { lastUsed: number };
+  const nativeVideoCacheRef = useRef<Map<string, PreviewVideoElement>>(new Map());
   const nativeImageBitmapCacheRef = useRef<Map<string, ImageBitmap>>(new Map());
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -1011,6 +1015,7 @@ export const Preview: React.FC = () => {
   const [showZoomMenu, setShowZoomMenu] = useState(false);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showAspectMenu, setShowAspectMenu] = useState(false);
+  const [videoDecoderNotice, setVideoDecoderNotice] = useState<string | null>(null);
   const [showCompositionGrid, setShowCompositionGrid] = useState(false);
   const [showSafeMargins, setShowSafeMargins] = useState(false);
   const [canvasSnappingEnabled, setCanvasSnappingEnabled] = useState(true);
@@ -1080,20 +1085,10 @@ export const Preview: React.FC = () => {
 
   // Video element cache for native hardware-accelerated frame decoding (thumbnails/scrubbing)
   // Much more reliable than MediaBunny's CanvasSink for random-access seeking
-  const videoElementCacheRef = useRef<
-    Map<string, { video: HTMLVideoElement; url: string; lastUsed: number }>
-  >(new Map());
+  const videoElementCacheRef = useRef<Map<string, PreviewVideoElement>>(new Map());
 
   const releaseVideoElement = useCallback(
-    (entry: { video: HTMLVideoElement; url: string }): void => {
-      const { video, url } = entry;
-      video.pause();
-      video.removeAttribute("src");
-      video.onloadedmetadata = null;
-      video.onerror = null;
-      video.load();
-      URL.revokeObjectURL(url);
-    },
+    (entry: BudgetedVideoElement): void => entry.lease.release(),
     [],
   );
 
@@ -1101,14 +1096,13 @@ export const Preview: React.FC = () => {
     let oldestKey = "";
     let oldestTime = Infinity;
     for (const [key, entry] of videoElementCacheRef.current.entries()) {
-      if (entry.lastUsed < oldestTime) {
+      if (entry.lease.pinned === 0 && entry.lastUsed < oldestTime) {
         oldestTime = entry.lastUsed;
         oldestKey = key;
       }
     }
 
     if (!oldestKey) return;
-
     const oldEntry = videoElementCacheRef.current.get(oldestKey);
     if (!oldEntry) return;
 
@@ -2454,6 +2448,7 @@ export const Preview: React.FC = () => {
             return;
           }
 
+          let activeCacheKey: string | undefined;
           try {
             const clipLocalTime = time - clip.startTime;
             const speedEngine = getSpeedEngine();
@@ -2464,40 +2459,63 @@ export const Preview: React.FC = () => {
             const isStabilized = vidstab.hasStabilized(clip.id);
             const mediaTime = isStabilized ? adjustedLocalTime : (clip.inPoint || 0) + adjustedLocalTime;
             const cacheKey = isStabilized ? `${clip.mediaId}:stabilized` : clip.mediaId;
+            activeCacheKey = cacheKey;
             let cached = videoElementCacheRef.current.get(cacheKey);
 
             if (!cached) {
-              const url = await nativeVideoUrl(mediaBlob);
-              const video = document.createElement("video");
-              video.src = url;
-              video.muted = true;
-              video.playsInline = true;
-              video.preload = "metadata";
-              video.crossOrigin = "anonymous";
-
-              await new Promise<void>((res, rej) => {
-                const timeoutId = setTimeout(
-                  () => rej(new Error("Video load timeout")),
-                  10000,
-                );
-                video.onloadedmetadata = () => {
-                  clearTimeout(timeoutId);
-                  res();
-                };
-                video.onerror = () => {
-                  clearTimeout(timeoutId);
-                  rej(new Error("Video load failed"));
-                };
-              });
-
-              if (isStaleRequest()) {
-                releaseVideoElement({ video, url });
+              let created: BudgetedVideoElement | null = null;
+              created = await createBudgetedVideoElement(
+                () => nativeVideoUrl(mediaBlob),
+                {
+                  isCurrent: () => !isStaleRequest(),
+                  preload: "metadata",
+                  crossOrigin: "anonymous",
+                  onDispose: () => {
+                    const current = videoElementCacheRef.current.get(cacheKey);
+                    if (current && current.video === created?.video) {
+                      videoElementCacheRef.current.delete(cacheKey);
+                    }
+                  },
+                },
+              );
+              if (!created) {
                 resolve(null);
                 return;
               }
-
-              cached = { video, url, lastUsed: Date.now() };
+              const video = created.video;
+              try {
+                await new Promise<void>((res, rej) => {
+                  let settled = false;
+                  const timeoutId = setTimeout(
+                    () => finish(new Error("Video load timeout")),
+                    10000,
+                  );
+                  const finish = (error?: Error) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeoutId);
+                    video.onloadedmetadata = null;
+                    video.onerror = null;
+                    if (error) rej(error);
+                    else res();
+                  };
+                  video.onloadedmetadata = () => finish();
+                  video.onerror = () => finish(new Error("Video load failed"));
+                  video.src = created!.url;
+                  video.load();
+                });
+                if (isStaleRequest()) {
+                  created.lease.release();
+                  resolve(null);
+                  return;
+                }
+              } catch (error) {
+                created.lease.release();
+                throw error;
+              }
+              cached = { ...created, lastUsed: Date.now() };
               videoElementCacheRef.current.set(cacheKey, cached);
+              created.lease.unpin();
 
               while (videoElementCacheRef.current.size > 2) {
                 evictOldestVideoElement();
@@ -2505,6 +2523,8 @@ export const Preview: React.FC = () => {
             }
 
             cached.lastUsed = Date.now();
+            cached.lease.pin();
+            try {
             const { video } = cached;
 
             const clampedTime = Math.max(
@@ -2602,12 +2622,17 @@ export const Preview: React.FC = () => {
             }
             scheduleScrubVideoRelease();
             resolve(frame);
+            } finally {
+              cached.lease.unpin();
+            }
           } catch {
             if (!isStaleRequest()) failProxyPlayback(clip.mediaId, mediaBlob);
-            const cached = videoElementCacheRef.current.get(clip.mediaId);
+            const cached = activeCacheKey
+              ? videoElementCacheRef.current.get(activeCacheKey)
+              : undefined;
             if (cached) {
               releaseVideoElement(cached);
-              videoElementCacheRef.current.delete(clip.mediaId);
+              videoElementCacheRef.current.delete(activeCacheKey!);
             }
             scheduleScrubVideoRelease();
             resolve(null);
@@ -3640,26 +3665,46 @@ export const Preview: React.FC = () => {
 
       const videoCache = nativeVideoCacheRef.current;
       const loadingVideos = new Map<string, Promise<void>>();
+      const pinnedVideoIds = new Set<string>();
+
+      const videoCacheIdForClip = (
+        clip: (typeof timelineTracks)[0]["clips"][0],
+      ): string => getVidstabEngine().hasStabilized(clip.id)
+        ? `stabilized:${clip.id}`
+        : clip.mediaId;
+
+      const pinNativeVideoSources = (sourceIds: string[]): void => {
+        const next = new Set(sourceIds);
+        for (const sourceId of pinnedVideoIds) {
+          if (!next.has(sourceId)) videoCache.get(sourceId)?.lease.unpin();
+        }
+        for (const sourceId of next) {
+          if (!pinnedVideoIds.has(sourceId)) videoCache.get(sourceId)?.lease.pin();
+        }
+        pinnedVideoIds.clear();
+        for (const sourceId of next) pinnedVideoIds.add(sourceId);
+      };
 
       const loadVideoForClip = async (
         clip: (typeof timelineTracks)[0]["clips"][0],
         mediaItem: NonNullable<ReturnType<typeof getMediaItem>>,
       ): Promise<void> => {
         if (!isCurrentPlayback()) return Promise.resolve();
-        const vidstabCheck = getVidstabEngine();
-        const clipStabilized = vidstabCheck.hasStabilized(clip.id);
-        const videoCacheId = clipStabilized ? `stabilized:${clip.id}` : clip.mediaId;
+        const videoCacheId = videoCacheIdForClip(clip);
 
         const existingLoad = loadingVideos.get(videoCacheId);
         if (existingLoad) {
           return existingLoad;
         }
 
-        const cachedVideo = videoCache.get(videoCacheId)?.video;
-        if (cachedVideo) {
-          if (cachedVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-            return Promise.resolve();
-          }
+        const cachedEntry = videoCache.get(videoCacheId);
+        if (cachedEntry?.lease.active && cachedEntry.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          cachedEntry.lastUsed = Date.now();
+          cachedEntry.lease.touch();
+          return Promise.resolve();
+        }
+        if (cachedEntry) {
+          releaseVideoElement(cachedEntry);
         }
 
         if (!mediaItem.blob) {
@@ -3672,42 +3717,66 @@ export const Preview: React.FC = () => {
           ? vidstabEng.getStabilizedBlob(clip.id)
           : mediaItem.blob)!;
         const cacheId = isStabilized ? `stabilized:${clip.id}` : clip.mediaId;
-        const url = await nativeVideoUrl(playBlob);
-        const video = document.createElement("video");
-        video.src = url;
-        video.muted = true;
-        video.playsInline = true;
-        video.preload = "auto";
-
-        videoCache.set(cacheId, { video, url });
-
-        const loadPromise = new Promise<void>((resolve) => {
-          let settled = false;
-          const finish = () => {
-            if (settled) return;
-            settled = true;
-            video.onloadedmetadata = null;
-            video.onloadeddata = null;
-            video.oncanplay = null;
-            video.onerror = null;
-            loadingVideos.delete(cacheId);
-            resolve();
-          };
-          video.onloadeddata = finish;
-          video.oncanplay = finish;
-          video.onloadedmetadata = () => {
-            if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-              finish();
+        let created: BudgetedVideoElement | null = null;
+        const loadPromise = (async () => {
+          try {
+            created = await createBudgetedVideoElement(
+              () => nativeVideoUrl(playBlob),
+              {
+                preload: "auto",
+                isCurrent: isCurrentPlayback,
+                onDispose: () => {
+                  const current = videoCache.get(cacheId);
+                  if (current && current.video === created?.video) videoCache.delete(cacheId);
+                },
+              },
+            );
+            if (!created) {
+              if (isCurrentPlayback() && pinnedVideoIds.has(cacheId)) {
+                setVideoDecoderNotice("Preview paused because a visible camera could not obtain a video decoder slot.");
+              }
+              return;
             }
-          };
-          video.onerror = () => {
+            const entry: PreviewVideoElement = { ...created, lastUsed: Date.now() };
+            const video = entry.video;
+            videoCache.set(cacheId, entry);
+            if (pinnedVideoIds.has(cacheId)) entry.lease.pin();
+            await new Promise<void>((resolve, reject) => {
+              let settled = false;
+              const timeout = setTimeout(() => finish(new Error("Video load timeout")), 10000);
+              const finish = (error?: Error) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeout);
+                video.onloadedmetadata = null;
+                video.onloadeddata = null;
+                video.oncanplay = null;
+                video.onerror = null;
+                if (error) reject(error);
+                else resolve();
+              };
+              video.onloadeddata = () => finish();
+              video.oncanplay = () => finish();
+              video.onloadedmetadata = () => {
+                if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) finish();
+              };
+              video.onerror = () => finish(new Error("Video load failed"));
+              video.src = entry.url;
+              video.load();
+            });
+            if (!isCurrentPlayback()) {
+              entry.lease.release();
+              return;
+            }
+            entry.lease.unpin();
+            entry.lastUsed = Date.now();
+          } catch {
+            created?.lease.release();
             if (isCurrentPlayback() && !isStabilized) failProxyPlayback(clip.mediaId, playBlob);
-            finish();
-          };
-          video.load();
-          setTimeout(finish, 1200);
-        });
-
+          } finally {
+            loadingVideos.delete(cacheId);
+          }
+        })();
         loadingVideos.set(cacheId, loadPromise);
         return loadPromise;
       };
@@ -3718,15 +3787,13 @@ export const Preview: React.FC = () => {
           startPosition < clip.startTime + clip.duration,
       );
       if (activeStartClip) {
+        pinNativeVideoSources([videoCacheIdForClip(activeStartClip.clip)]);
         await loadVideoForClip(activeStartClip.clip, activeStartClip.mediaItem);
-      }
-      if (!isCurrentPlayback()) return () => {};
-
-      for (const entry of clips) {
-        if (entry !== activeStartClip) {
-          loadVideoForClip(entry.clip, entry.mediaItem).catch(() => {});
+        if (!videoCache.get(videoCacheIdForClip(activeStartClip.clip))) {
+          throw new Error("The visible camera could not obtain a video decoder slot.");
         }
       }
+      if (!isCurrentPlayback()) return () => {};
 
       const masterClock = getMasterClock();
       masterClock.setDuration(actualEndTime);
@@ -3908,12 +3975,19 @@ export const Preview: React.FC = () => {
             const records = clipBRecord
               ? [clipARecord, clipBRecord]
               : [clipARecord];
+            pinNativeVideoSources(records.map((record) => videoCacheIdForClip(record.clip)));
             await Promise.all(
               records.map((record) =>
                 loadVideoForClip(record.clip, record.mediaItem),
               ),
             );
             if (!isActive || !nativePlaybackActiveRef.current) return;
+            if (records.some((record) => !videoCache.get(videoCacheIdForClip(record.clip)))) {
+              setVideoDecoderNotice("Preview paused because a visible camera could not obtain a video decoder slot.");
+              cleanup(true);
+              onEnd();
+              return;
+            }
 
             const clipACacheId = getVidstabEngine().hasStabilized(
               clipARecord.clip.id,
@@ -4061,6 +4135,7 @@ export const Preview: React.FC = () => {
         const activeClip = findClipAtTime(currentPlayhead);
 
         if (!activeClip) {
+          pinNativeVideoSources([]);
           fillPreviewBackground(
             ctx,
             playheadPositionRef.current,
@@ -4156,6 +4231,7 @@ export const Preview: React.FC = () => {
         }
 
         const { clip, mediaItem } = activeClip;
+        pinNativeVideoSources([videoCacheIdForClip(clip)]);
         const vidstabPlay = getVidstabEngine();
         const clipIsStabilized = vidstabPlay.hasStabilized(clip.id);
         const playbackCacheId = clipIsStabilized ? `stabilized:${clip.id}` : clip.mediaId;
@@ -4164,6 +4240,12 @@ export const Preview: React.FC = () => {
         if (!cached) {
           await loadVideoForClip(clip, mediaItem);
           if (!isActive || !nativePlaybackActiveRef.current) return;
+          if (!videoCache.get(playbackCacheId)) {
+            setVideoDecoderNotice("Preview paused because a visible camera could not obtain a video decoder slot.");
+            cleanup(true);
+            onEnd();
+            return;
+          }
           const nowNoCached = performance.now();
           if (nowNoCached - lastPlayheadUpdateRef.current >= editingFrameDuration) {
             lastPlayheadUpdateRef.current = nowNoCached;
@@ -4417,6 +4499,7 @@ export const Preview: React.FC = () => {
       const cleanup = (preserveCaches = false) => {
         isActive = false;
         nativePlaybackActiveRef.current = false;
+        pinNativeVideoSources([]);
         if (rafId) cancelAnimationFrame(rafId);
 
         if (preserveCaches) {
@@ -6044,6 +6127,7 @@ export const Preview: React.FC = () => {
     };
 
     const startPlayback = async () => {
+      setVideoDecoderNotice(null);
       const nativeCheck = canUseNativeVideoPlayback(playbackStartPosition);
 
       if (nativeCheck.canUse && nativeCheck.clips.length > 0) {
@@ -7660,6 +7744,10 @@ export const Preview: React.FC = () => {
   const cropVideoSrc = cropMediaData?.src ?? null;
   const cropMediaType = cropMediaData?.type ?? "video";
 
+  useEffect(() => () => {
+    if (cropMediaData?.src.startsWith("blob:")) URL.revokeObjectURL(cropMediaData.src);
+  }, [cropMediaData]);
+
   const shouldShowCropMode = cropMode && cropClipId && cropClip && cropVideoSrc;
 
   return (
@@ -7747,6 +7835,15 @@ export const Preview: React.FC = () => {
               cursor: hoveredGraphicClipId && !isPlaying ? "pointer" : "default",
             }}
           />
+
+          {videoDecoderNotice && (
+            <div
+              role="status"
+              className="pointer-events-none absolute inset-x-3 bottom-3 z-40 rounded bg-black/85 px-3 py-2 text-xs text-white"
+            >
+              {videoDecoderNotice}
+            </div>
+          )}
 
           {showCompositionGrid && !cropMode ? (
             <div

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { ToolcraftButton as Button } from "@openreel/ui";
 import { ToolcraftIconButton as IconButton } from "@openreel/ui";
 import { Check, X, Maximize2 } from "@/icons/lucide-compat";
-import type { Clip } from "@openreel/core";
+import { videoDecoderBudget, type Clip, type VideoDecoderLease } from "@openreel/core";
 
 interface CropModeViewProps {
   clip: Clip;
@@ -55,6 +55,7 @@ export const CropModeView: React.FC<CropModeViewProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoDisplayRef = useRef<HTMLVideoElement>(null);
+  const videoLeaseRef = useRef<VideoDecoderLease | null>(null);
   const imageDisplayRef = useRef<HTMLImageElement>(null);
   const initialCrop = clip.transform.crop || {
     x: 0,
@@ -71,9 +72,11 @@ export const CropModeView: React.FC<CropModeViewProps> = ({
   const [lockedAspect, setLockedAspect] = useState<number | null>(null);
   const [videoSize, setVideoSize] = useState({ width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(true);
+  const [videoNotice, setVideoNotice] = useState<string | null>(null);
 
   useEffect(() => {
     setIsLoading(true);
+    setVideoNotice(null);
 
     if (mediaType === "image") {
       const image = imageDisplayRef.current;
@@ -105,6 +108,23 @@ export const CropModeView: React.FC<CropModeViewProps> = ({
     } else {
       const video = videoDisplayRef.current;
       if (!video) return;
+      let lease: VideoDecoderLease | null = null;
+      lease = videoDecoderBudget.reserve(() => {
+        video.pause();
+        video.removeAttribute("src");
+        video.load();
+        if (videoLeaseRef.current === lease) {
+          videoLeaseRef.current = null;
+          setIsLoading(false);
+          setVideoNotice("Crop preview paused because no video decoder slot is available.");
+        }
+      });
+      if (!lease) {
+        setIsLoading(false);
+        setVideoNotice("Crop preview is unavailable while all video decoder slots are in use.");
+        return;
+      }
+      videoLeaseRef.current = lease;
 
       const handleLoadedMetadata = () => {
         if (video.videoWidth > 0 && video.videoHeight > 0) {
@@ -113,25 +133,37 @@ export const CropModeView: React.FC<CropModeViewProps> = ({
             height: video.videoHeight,
           });
           setIsLoading(false);
+          setVideoNotice(null);
         }
       };
 
       const handleError = () => {
         console.error("[CropModeView] Video load error");
+        if (videoLeaseRef.current === lease) videoLeaseRef.current = null;
+        lease?.release();
         setIsLoading(false);
+        setVideoNotice("Crop video could not be loaded.");
       };
 
       video.addEventListener("loadedmetadata", handleLoadedMetadata);
       video.addEventListener("error", handleError);
+      // Reserve a shared decoder slot before assigning a source URL.
       video.src = videoSrc;
-      video.currentTime = currentTime;
 
       return () => {
         video.removeEventListener("loadedmetadata", handleLoadedMetadata);
         video.removeEventListener("error", handleError);
+        if (videoLeaseRef.current === lease) videoLeaseRef.current = null;
+        lease?.release();
       };
     }
-  }, [videoSrc, currentTime, mediaType]);
+  }, [videoSrc, mediaType]);
+
+  useEffect(() => {
+    if (mediaType === "video" && videoDisplayRef.current) {
+      videoDisplayRef.current.currentTime = currentTime;
+    }
+  }, [currentTime, mediaType, videoSrc]);
 
   const handleMouseDown = (e: React.MouseEvent, handle: DragHandle) => {
     e.preventDefault();
@@ -419,6 +451,11 @@ export const CropModeView: React.FC<CropModeViewProps> = ({
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background-secondary">
             <div className="text-text-muted text-sm">Loading video...</div>
+          </div>
+        )}
+        {videoNotice && (
+          <div role="status" className="absolute inset-x-4 top-4 z-20 rounded bg-black/85 px-3 py-2 text-center text-sm text-white">
+            {videoNotice}
           </div>
         )}
 

@@ -10,7 +10,15 @@ Explicit **Keep picture gaps** enabled **Create timeline**. The actual control c
 
 One Undo removed the assembly, and Redo restored it. Normal Save wrote the project, then File → Open restored that saved assembly after Undo had removed the live version. Only the native picker selection was stubbed to the isolated fixture's `Horizontal.oreel` path; application menu dispatch, serialization, file write/read, and renderer restoration were real. The main window had to be focused because native menu dispatch targets `BrowserWindow.getFocusedWindow()`. No project data was injected to claim this result. The owner's similarly named project was not read or modified.
 
-The reopened editor displayed the synthetic purple camera picture and retained the hour-long duration and Used on timeline indicators. This confirms visible picture restoration, not audible synchronization quality. Selected microphone playback and boundary/export checks remain to be completed against the integrated candidate.
+The reopened editor displayed the synthetic purple camera picture and retained the hour-long duration and Used on timeline indicators. This confirms visible picture restoration, not human listening quality. A subsequent normal review check selected Bob channel 0 and jumped to the Camera B beginning at episode 35 seconds. The selected audio was readyState 4, unmuted, and advanced from 34.748612 to 37.255746 file-relative seconds at rate 0.9999600055774138 while muted camera picture advanced from 0 to 2.489689 seconds. Stop paused both elements. A temporary captureStream analyser, without changing device or output-volume settings, observed one decoded audio track with RMS 0.2060469833 and peak 0.7124947906 across 24576 samples; the capture tracks/context were disposed. This proves nonzero decoded output from the selected derivative and running shared-clock behavior, not human lip-sync acceptance. Boundary/cut/relink/export checks remain for the integrated candidate.
+
+## Routed microphone Auto Edit
+
+The normal **Auto Edit** control recognized the grouped podcast and analyzed routed original microphones on the episode clock. Direct camera resynchronization was disabled for this group, preserving onboarding timing authority. It created 524 planned shots materialized as 525 native program clips, saved through the ordinary Save command. All program source bounds were valid. At the Camera A original boundary, the first file ended at source 1800 seconds; the next program piece started at approximately source 0.999978 seconds of the second file, correctly respecting the confirmed one-second overlap and original order.
+
+Only Camera A was confirmed as a view in this particular UI fixture; Camera B/C participant framing remained explicitly unknown. Therefore the planner used the known wide view, with both original Camera A segments. The continuous-noise fixture exercises the routing/materialization path; its activity labels and shot count are not evidence of real-speech editorial quality or participant-camera identification.
+
+One Undo returned the program to its original two clips; Redo restored all 525. Both states retained nine tracks, three physical angles, and two microphone clips. Each state was saved/read back to verify coherent application. A 60-second process sample window begun after the Auto Edit trigger observed a combined main/descendant RSS peak of 1,151,776 KiB. It spans completion/warm editing and is not a complete cold-job trace or an 8 GiB hardware acceptance result.
 
 ## Full Extent Zoom and shortcut UI
 
@@ -34,6 +42,8 @@ Ignored evidence directory: `.superpowers/work/takeover/verification/normal-ui-1
 - `project-reopened-from-disk.png`, `timeline-created.png`, `timeline-undone.png`, `timeline-redone.png` and the saved fixture project.
 - `full-extent-metrics.json`; top/bottom screenshots for both requested sizes.
 - `shortcuts-ui-receipt.json` and `shortcuts-resolve-search.png`.
+- `selected-bob-audio-runtime.json`, `selected-bob-audio-runtime.png`, and `selected-bob-audio-signal.json`.
+- `autoedit-saved-receipt.json`, `autoedit-undo-redo-receipt.json`, `autoedit-process-samples.json`, and before/after screenshots.
 - Setup, manual review, and restart screenshots from the same isolated profile.
 
 These receipts identify a development checkpoint, not the final source-matched installer. Final candidate evidence must add new-origin migration, branded assets, bounded decoders, selected-mic playback, split-boundary cuts/relink/export, replacement MCP shim, and embedded source receipt/checksums.

@@ -15,6 +15,7 @@ import type {
   ConversionOptions,
   WrappedCanvas,
 } from "mediabunny";
+import { videoDecoderBudget, type VideoDecoderLease } from "../video/video-decoder-budget";
 
 export const SUPPORTED_VIDEO_FORMATS = [
   "video/mp4",
@@ -220,7 +221,9 @@ export class MediaBunnyEngine {
   private mediabunny: typeof import("mediabunny") | null = null;
   private frameCache: Map<string, FrameCacheEntry> = new Map();
   private readonly MAX_CACHE_SIZE = 5;
-  private exportDecoders: Map<string, ExportFrameDecoder> = new Map();
+  private exportDecoders = new Map<string, { decoder: ExportFrameDecoder; lease: VideoDecoderLease }>();
+  private exportDecoderLoads = new Map<string, Promise<{ decoder: ExportFrameDecoder; lease: VideoDecoderLease } | null>>();
+  private exportDecoderEpoch = 0;
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
@@ -258,36 +261,95 @@ export class MediaBunnyEngine {
 
     const existing = this.exportDecoders.get(mediaId);
     if (existing) {
-      this.exportDecoders.delete(mediaId);this.exportDecoders.set(mediaId,existing);return existing;
+      this.exportDecoders.delete(mediaId);
+      this.exportDecoders.set(mediaId, existing);
+      existing.lease.touch();
+      return existing.decoder;
     }
 
-    const decoder = new ExportFrameDecoder(this.mediabunny!, file, width);
-    const success = await decoder.initialize();
-    if (!success) {
-      return null;
-    }
+    const pending = this.exportDecoderLoads.get(mediaId);
+    if (pending) return (await pending)?.decoder ?? null;
 
-    while(this.exportDecoders.size>=4){const oldest=this.exportDecoders.keys().next().value!;this.disposeExportDecoder(oldest);}
-    this.exportDecoders.set(mediaId, decoder);
-    return decoder;
+    let decoder: ExportFrameDecoder | null = null;
+    let entry: { decoder: ExportFrameDecoder; lease: VideoDecoderLease } | null = null;
+    const epoch = this.exportDecoderEpoch;
+    const lease = videoDecoderBudget.reserve(() => {
+      if (entry && this.exportDecoders.get(mediaId) === entry) this.exportDecoders.delete(mediaId);
+      decoder?.dispose();
+    });
+    if (!lease) return null;
+
+    decoder = new ExportFrameDecoder(this.mediabunny!, file, width);
+    const load = (async () => {
+      try {
+        if (!await decoder!.initialize() || epoch !== this.exportDecoderEpoch) {
+          lease.release();
+          return null;
+        }
+        entry = { decoder: decoder!, lease };
+        this.exportDecoders.set(mediaId, entry);
+        lease.unpin();
+        return entry;
+      } catch (error) {
+        lease.release();
+        throw error;
+      }
+    })();
+    this.exportDecoderLoads.set(mediaId, load);
+    try {
+      return (await load)?.decoder ?? null;
+    } finally {
+      if (this.exportDecoderLoads.get(mediaId) === load) this.exportDecoderLoads.delete(mediaId);
+    }
+  }
+
+  async acquireExportDecoder(
+    mediaId: string,
+    file: File | Blob,
+    width?: number,
+  ): Promise<{ decoder: ExportFrameDecoder; release: () => void } | null> {
+    const decoder = await this.createExportDecoder(mediaId, file, width);
+    if (!decoder) return null;
+    const entry = this.exportDecoders.get(mediaId);
+    if (!entry || entry.decoder !== decoder || !entry.lease.active) return null;
+    entry.lease.pin();
+    let released = false;
+    return {
+      decoder,
+      release: () => {
+        if (released) return;
+        released = true;
+        entry.lease.unpin();
+      },
+    };
   }
 
   getExportDecoder(mediaId: string): ExportFrameDecoder | null {
-    return this.exportDecoders.get(mediaId) || null;
+    const entry = this.exportDecoders.get(mediaId);
+    entry?.lease.touch();
+    return entry?.decoder ?? null;
+  }
+
+  pinExportDecoder(mediaId: string): () => void {
+    const lease = this.exportDecoders.get(mediaId)?.lease;
+    if (!lease?.active) return () => {};
+    lease.pin();
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      lease.unpin();
+    };
   }
 
   disposeExportDecoder(mediaId: string): void {
-    const decoder = this.exportDecoders.get(mediaId);
-    if (decoder) {
-      decoder.dispose();
-      this.exportDecoders.delete(mediaId);
-    }
+    this.exportDecoders.get(mediaId)?.lease.release();
   }
 
   disposeAllExportDecoders(): void {
-    for (const decoder of this.exportDecoders.values()) {
-      decoder.dispose();
-    }
+    this.exportDecoderEpoch += 1;
+    this.exportDecoderLoads.clear();
+    for (const entry of this.exportDecoders.values()) entry.lease.release();
     this.exportDecoders.clear();
   }
 
@@ -652,9 +714,11 @@ export class MediaBunnyEngine {
       };
     }
 
-    const input = await this.createInput(file,purpose);
-
+    const decoderLease = videoDecoderBudget.reserve(() => {});
+    if (!decoderLease) return null;
+    let input: MediaBunnyInput | undefined;
     try {
+      input = await this.createInput(file,purpose);
       const videoTrack = await input.getPrimaryVideoTrack();
       if (!videoTrack) {
         return null;
@@ -721,7 +785,8 @@ export class MediaBunnyEngine {
         height: clone.height,
       };
     } finally {
-      input[Symbol.dispose]?.();
+      input?.[Symbol.dispose]?.();
+      decoderLease.release();
     }
   }
 

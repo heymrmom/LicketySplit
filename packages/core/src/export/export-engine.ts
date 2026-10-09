@@ -245,7 +245,7 @@ export class ExportEngine {
 
         const time = frame / fullSettings.frameRate;
         // The common frame uses up to four sources; larger composites decode lazily in VideoEngine.
-        const frameSources=new Set<string>();for(const track of project.timeline.tracks)for(const clip of track.clips)if(clip.startTime<=time&&clip.startTime+clip.duration>time){const item=project.mediaLibrary.items.find(m=>m.id===clip.mediaId);if(item?.blob&&item.type==="video")frameSources.add(item.id);}
+        const frameSources=new Set<string>();for(const track of project.timeline.tracks)if(!track.hidden)for(const clip of track.clips)if(clip.startTime<=time&&clip.startTime+clip.duration>time){const item=project.mediaLibrary.items.find(m=>m.id===clip.mediaId);if(item?.blob&&item.type==="video")frameSources.add(item.id);}
         if(frameSources.size<=4)for(const id of frameSources){const item=project.mediaLibrary.items.find(m=>m.id===id)!;await mediaEngine.createExportDecoder(id,item.blob!,fullSettings.width);}
         const renderStart = performance.now();
         const rendered = await this.videoEngine!.renderFrame(

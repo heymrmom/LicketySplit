@@ -98,6 +98,7 @@ describe("buildPodcastAssembly", () => {
       sourceStartSeconds: 31.25,
       sourceEndSeconds: 3661.75,
     });
+    expect(result.project.timeline.tracks.find((track) => track.name.includes("Host mic"))?.name).toBe("Host mic · Host");
     expect(result.project.timeline.tracks.find((track) => track.name.includes("Host mic"))?.clips[0]).toMatchObject({
       mediaId: "media-mic1",
       startTime: 0,

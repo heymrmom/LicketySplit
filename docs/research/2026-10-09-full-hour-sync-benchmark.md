@@ -32,15 +32,19 @@ It recovered the zero-offset camera and Bob timing; it could not recover segment
 
 On the repeated-content challenge, the native matcher marked the competing offset ambiguous; the compact worker returned confidence 0.99965 at an arbitrary -23-second offset and has no ambiguity status. Both methods left silence unresolved and unrelated aperiodic audio low-confidence/unmatched. This is an observed review-safety difference, not a forced compact success.
 
+## Default-path decision
+
+Keep the reused native path as the podcast default. Its persisted feature cache materially reduces subsequent preparation while preserving all tested split-source placements. The compact worker is faster on its first pass but fails five required late/split-source cases under its existing search limit and can express high confidence in an ambiguous repeated-content offset. Those measurements do not justify offering it as a trustworthy faster podcast mode. No new fast/accurate toggle is added merely to expose an unsafe alternative. Manual placement and visible review remain available; the existing compact workflow remains available in its original editor context.
+
 ## Reproduction and files
 
-The harness lives at [full-hour-benchmark.test.ts](../../apps/desktop/src/main/lickety/podcast/verification/full-hour-benchmark.test.ts), with the sequential fresh-fixture runner at [run-full-hour-benchmark.sh](../../scripts/takeover-verification/run-full-hour-benchmark.sh). Run one mode with absolute paths:
+The harness lives at [full-hour-benchmark.test.ts](../../apps/desktop/src/main/lickety/podcast/verification/full-hour-benchmark.test.ts), with the sequential fresh-fixture runner at [run-full-hour-benchmark.sh](../../scripts/takeover-verification/run-full-hour-benchmark.sh). Use Node 22 and pnpm (or set `TAKEOVER_PNPM` to an executable using Node 22 for the sequential runner). Run one mode with absolute paths:
 
 ```bash
 TAKEOVER_HOUR_FIXTURE="/absolute/path/to/full-hour-20261009" \
 TAKEOVER_HOUR_FFMPEG="/absolute/path/to/apps/desktop/resources/bin/darwin-arm64/ffmpeg" \
 TAKEOVER_HOUR_MODE="native-corrected" \
-  .superpowers/work/takeover/toolchain/pnpm22 --filter @openreel/desktop exec vitest run \
+  pnpm --filter @openreel/desktop exec vitest run \
   src/main/lickety/podcast/verification/full-hour-benchmark.test.ts --reporter=verbose
 ```
 

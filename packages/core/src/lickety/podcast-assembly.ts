@@ -302,11 +302,17 @@ export function buildPodcastAssembly(
         const participantId = binding.participantId ?? (group.audioParticipantIds?.length === 1 ? group.audioParticipantIds[0] : undefined);
         if (group.audioMode === "isolated" && !participantId) throw new Error(`Assign ${asset.name} to a participant before creating the timeline.`);
         const trackId = `podcast-${setup.setupId}-${group.id}-${asset.id}-audio-${bindingIndex}`;
+        const participantName = participantId
+          ? setup.participants.find((participant) => participant.id === participantId)?.name
+          : undefined;
+        const trackName = participantName && participantName !== group.name
+          ? `${group.name} · ${participantName}`
+          : group.name;
         generatedTracks.push({
           id: trackId,
           type: "audio",
           role: "dialogue",
-          name: participantId ? `${group.name} · ${participantId}` : group.name,
+          name: trackName,
           clips: slices.map((slice) => sourceClip(setup, group, asset, media, slice, originShiftSeconds, trackId, "dialogue", { ...binding, participantId })),
           transitions: [],
           locked: false,
