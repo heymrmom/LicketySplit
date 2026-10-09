@@ -176,6 +176,11 @@ declare global {
     openreel?: {
       platform: "desktop";
       lickety?: {
+        reconcileTranscription(jobId:string,providerJobId:string):Promise<void>;
+        assemblyKeyStatus():Promise<boolean>;
+        startTranscription(args:{audio:PreparedAudio;snapshot:AnalysisSnapshot;mode:"mixed"|"isolated-stereo";participants?:{channel:1|2;participantId:string}[];confirmationId:string}):Promise<{jobId:string}>;
+        cancelTranscription(jobId:string):Promise<void>;
+        resumeTranscription(jobId:string):Promise<void>;
         prepareAudio(args:{snapshot:AnalysisSnapshot;options:{mode:"mixed"|"isolated-stereo";participants?:{channel:1|2;participantId:string}[]};requestId:string}):Promise<PreparedAudio>;
         getTranscription(jobId:string):Promise<{state:JobState;providerJobId?:string;transcript?:TranscriptDocument;error?:string}>;
         audioWindow(args:{requestId?:string;assetId:string;trackIndex:number;startMs:number;durationMs:number;sampleRate:1000|16000|48000;channels:1|2}):Promise<{channels:Float32Array[];sampleRate:number}>;

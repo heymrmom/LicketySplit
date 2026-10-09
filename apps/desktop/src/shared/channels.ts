@@ -1,4 +1,10 @@
 export const CHANNELS = {
+  licketyReconcileTranscription:"openreel:lickety:reconcileTranscription",
+  licketyKeyStatus:"openreel:lickety:keyStatus",
+  licketyStartTranscription:"openreel:lickety:startTranscription",
+  licketyGetTranscription:"openreel:lickety:getTranscription",
+  licketyCancelTranscription:"openreel:lickety:cancelTranscription",
+  licketyResumeTranscription:"openreel:lickety:resumeTranscription",
   licketyPrepareAudio:"openreel:lickety:prepareAudio",
   licketyAudioWindow: "openreel:lickety:audioWindow",
   licketyResourceProfile: "openreel:lickety:resourceProfile",

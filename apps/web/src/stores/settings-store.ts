@@ -15,6 +15,7 @@ export interface ServiceConfig {
  * Add new services here as the app integrates more third-party APIs.
  */
 export const SERVICE_REGISTRY: readonly ServiceConfig[] = [
+  {id:"assemblyai",label:"AssemblyAI",description:"Desktop word/channel transcription; key stays in macOS protected storage",docsUrl:"https://www.assemblyai.com/docs"},
   {
     id: "elevenlabs",
     label: "ElevenLabs",

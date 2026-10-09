@@ -5,6 +5,12 @@ import type { McpBridgeRequest } from "../shared/mcp";
 contextBridge.exposeInMainWorld("openreel", {
   platform: "desktop",
   lickety: {
+    reconcileTranscription: (jobId:string,providerJobId:string) => ipcRenderer.invoke(CHANNELS.licketyReconcileTranscription,{jobId,providerJobId}),
+    assemblyKeyStatus: () => ipcRenderer.invoke(CHANNELS.licketyKeyStatus),
+    startTranscription: (args: unknown) => ipcRenderer.invoke(CHANNELS.licketyStartTranscription,args),
+    getTranscription: (jobId: string) => ipcRenderer.invoke(CHANNELS.licketyGetTranscription,{jobId}),
+    cancelTranscription: (jobId: string) => ipcRenderer.invoke(CHANNELS.licketyCancelTranscription,{jobId}),
+    resumeTranscription: (jobId: string) => ipcRenderer.invoke(CHANNELS.licketyResumeTranscription,{jobId}),
     prepareAudio: (args: unknown) => ipcRenderer.invoke(CHANNELS.licketyPrepareAudio,args),
     audioWindow: (args: unknown) => ipcRenderer.invoke(CHANNELS.licketyAudioWindow,args),
     resourceProfile: () => ipcRenderer.invoke(CHANNELS.licketyResourceProfile),

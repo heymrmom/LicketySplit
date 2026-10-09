@@ -1,16 +1,28 @@
+import {AssemblyAIClient} from "../lickety/assemblyai-client";
+import {JobStore,TranscriptionJobs} from "../lickety/job-store";
+import {getKeyStore} from "./keychain";
 import {PreparedAudioStore} from "../lickety/prepared-audio";
 import {NativeAudioAnalysis} from "../lickety/audio-analysis";
 import {randomUUID} from "node:crypto";
 import {app,protocol} from 'electron';import {createReadStream,promises as fs} from 'node:fs';import {Readable} from 'node:stream';import path from 'node:path';import os from 'node:os';import {z} from 'zod';
 import {handle} from './index';import {CHANNELS} from '../../shared/channels';
 import {ManagedAssetRegistry,boundedRange} from '../lickety/asset-registry';import {ManagedMediaJobs,HeavyJobQueue} from '../lickety/media-jobs';import {getResourceProfile} from '../lickety/resource-policy';
-import {analysisSnapshotSchema,audioPreparationOptionsSchema} from '../../shared/ipc-contract';
+import {analysisSnapshotSchema,audioPreparationOptionsSchema,preparedAudioSchema} from '../../shared/ipc-contract';
 export const heavyQueue=new HeavyJobQueue();let registry:ManagedAssetRegistry|undefined;let jobs:ManagedMediaJobs|undefined;const controllers=new Map<string,AbortController>();
 export function getAssetRegistry(){return registry??=new ManagedAssetRegistry(path.join(app.getPath('userData'),'managed-media'));}
 let preparedStore:PreparedAudioStore|undefined;
+let transcriptionJobs:TranscriptionJobs|undefined;
 export function getPreparedAudioStore(){if(!preparedStore)preparedStore=new PreparedAudioStore(path.join(getAssetRegistry().cacheDir,"prepared-audio"),new NativeAudioAnalysis(getAssetRegistry(),heavyQueue));return preparedStore;}
 export function installLicketyIpc(){const r=getAssetRegistry();jobs=new ManagedMediaJobs(r,heavyQueue);
  const audio=new NativeAudioAnalysis(r,heavyQueue);
+ transcriptionJobs=new TranscriptionJobs(new JobStore(path.join(app.getPath("userData"),"transcription-jobs")),getPreparedAudioStore(),new AssemblyAIClient(),()=>getKeyStore().get("assemblyai"));
+ handle(CHANNELS.licketyReconcileTranscription,z.object({jobId:z.string(),providerJobId:z.string().min(1)}),args=>transcriptionJobs!.reconcileTranscription(args.jobId,args.providerJobId));
+ handle(CHANNELS.licketyKeyStatus,z.undefined(),async()=>Boolean(await getKeyStore().get("assemblyai")));
+ handle(CHANNELS.licketyStartTranscription,z.object({audio:preparedAudioSchema,snapshot:analysisSnapshotSchema,mode:z.enum(["mixed","isolated-stereo"]),participants:audioPreparationOptionsSchema.shape.participants,confirmationId:z.string().uuid()}),args=>transcriptionJobs!.startTranscription(args));
+ handle(CHANNELS.licketyGetTranscription,z.object({jobId:z.string()}),args=>transcriptionJobs!.getTranscription(args.jobId));
+ handle(CHANNELS.licketyCancelTranscription,z.object({jobId:z.string()}),args=>transcriptionJobs!.cancelTranscription(args.jobId));
+ handle(CHANNELS.licketyResumeTranscription,z.object({jobId:z.string()}),args=>transcriptionJobs!.resumeTranscription(args.jobId));
+ void transcriptionJobs.resumeKnownJobs().catch(()=>{});
  handle(CHANNELS.licketyPrepareAudio,z.object({snapshot:analysisSnapshotSchema,options:audioPreparationOptionsSchema,requestId:z.string()}),async args=>{const c=new AbortController();controllers.set(args.requestId,c);try{return await getPreparedAudioStore().prepare(args.snapshot,args.options,c.signal);}finally{controllers.delete(args.requestId);}});
  handle(CHANNELS.licketyAudioWindow,z.object({assetId:z.string(),trackIndex:z.number().int().nonnegative(),startMs:z.number().nonnegative(),durationMs:z.number().positive().max(10000),sampleRate:z.union([z.literal(1000),z.literal(16000),z.literal(48000)]),channels:z.union([z.literal(1),z.literal(2)]),requestId:z.string().optional()}),async args=>{const id=args.requestId??randomUUID();const controller=new AbortController();controllers.set(id,controller);try{return await audio.getNativeAudioWindow(args.assetId,args.trackIndex,args.startMs,args.durationMs,controller.signal,args.sampleRate,args.channels);}finally{controllers.delete(id);}});
  handle(CHANNELS.licketyResourceProfile,z.undefined(),()=>getResourceProfile(os.totalmem()));

@@ -63,7 +63,7 @@ export const ApiKeysPanel: React.FC = () => {
           ? (
               await Promise.all(
                 SERVICE_REGISTRY.map(async (service) =>
-                  (await hasSecret(service.id))
+                  (service.id === "assemblyai" ? await window.openreel?.lickety?.assemblyKeyStatus() : await hasSecret(service.id))
                     ? {
                         id: service.id,
                         label: service.label,
@@ -160,6 +160,7 @@ export const ApiKeysPanel: React.FC = () => {
   );
 
   const handleRevealKey = useCallback(async (serviceId: string) => {
+    if(serviceId==="assemblyai"&&window.openreel?.platform==="desktop")return;
     if (revealedKeys[serviceId]) {
       setShowKey((prev) => ({ ...prev, [serviceId]: !prev[serviceId] }));
       return;
@@ -185,7 +186,7 @@ export const ApiKeysPanel: React.FC = () => {
   }, []);
 
   const availableServices = SERVICE_REGISTRY.filter(
-    (s) => !storedKeys.some((k) => k.id === s.id),
+    (s) => (s.id !== "assemblyai" || window.openreel?.platform === "desktop") && !storedKeys.some((k) => k.id === s.id),
   );
 
   // Not set up yet
@@ -316,6 +317,7 @@ export const ApiKeysPanel: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <IconButton
                     label={isRevealed ? "Hide key" : "Show key"}
+                    disabled={stored.id === "assemblyai" && window.openreel?.platform === "desktop"}
                     onClick={() => handleRevealKey(stored.id)}
                     variant="ghost"
                     size="sm"

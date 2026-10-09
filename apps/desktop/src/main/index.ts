@@ -214,7 +214,7 @@ app.whenReady().then(() => {
   handle(CHANNELS.riggingRigHumanoidModel, rigHumanoidModelArgsSchema, async (args) =>
     rigHumanoidModelResultSchema.parse(await rigHumanoidModel(args)),
   );
-  handle(CHANNELS.keychainGet, z.object({ id: z.string() }), ({ id }) => getKeyStore().get(id));
+  handle(CHANNELS.keychainGet, z.object({ id: z.string() }), ({ id }) => id === "assemblyai" ? null : getKeyStore().get(id));
   handle(CHANNELS.keychainSet, z.object({ id: z.string(), value: z.string() }), ({ id, value }) =>
     getKeyStore().set(id, value),
   );
