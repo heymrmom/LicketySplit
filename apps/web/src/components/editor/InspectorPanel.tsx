@@ -1,3 +1,4 @@
+import {PacingControls} from "./lickety/PacingControls";
 import {desktopMediaAvailable} from "../../services/lickety/desktop-media";
 import {TranscriptControls} from "./lickety/TranscriptControls";
 import {NarrativePanel} from "./lickety/NarrativePanel";
@@ -887,7 +888,7 @@ export const InspectorPanel: React.FC = () => {
             </React.Suspense>
           </InspectorTabErrorBoundary>
         </Section>
-        {desktopMediaAvailable()&&<><Section title="Transcript" sectionId="lickety-transcript"><TranscriptControls key={project.id}/></Section><Section title="AI Narrative" sectionId="lickety-narrative"><NarrativePanel/></Section></>}
+        {desktopMediaAvailable()&&<><Section title="Transcript" sectionId="lickety-transcript"><TranscriptControls key={project.id}/></Section><Section title="AI Narrative" sectionId="lickety-narrative"><NarrativePanel/></Section><Section title="Protected pacing" sectionId="lickety-pacing"><PacingControls key={project.id}/></Section></>}
         {selectedClipIds.length > 1 ? (
           <MultiClipInspector clipIds={selectedClipIds} />
         ) : selectedClip ? (

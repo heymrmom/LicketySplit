@@ -97,3 +97,6 @@ export {compileNarrative,sliceTimeline,deriveTimelineWords,projectTranscript,nar
 export {validateNarrativeProposal} from "./lickety/proposals";
 
 export {getOriginalFadePhase} from "./audio/clip-fade-envelope";
+
+export {planPauseCuts,applyPauseCuts} from "./lickety/pacing";
+export {scanProductionCues,associateCueMarkers} from "./lickety/cues";

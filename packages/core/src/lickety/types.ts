@@ -10,7 +10,7 @@ export interface TranscriptWord { id: string; text: string; startMs: number; end
 export interface TranscriptDocument { schemaVersion: 1; snapshotHash: string; preparedAudioSha256: string; provider: 'assemblyai'; providerJobId: string; words: TranscriptWord[]; derivedFromSnapshotHash?: string; }
 export interface TimelineWord { occurrenceId: string; sourceWordId: string; text: string; startMs: number; endMs: number; speaker?:string;channel?:number; }
 export interface NarrativeExcerpt { id: string; firstWordId: string; lastWordId: string; reason: string; }
-export interface NarrativeProposal { schemaVersion: 1; snapshotHash: string; excerpts: NarrativeExcerpt[]; protectedAfterWordIds: string[]; reviewNotes: string[]; }
+export interface NarrativeProposal { schemaVersion: 1; snapshotHash: string; excerpts: NarrativeExcerpt[]; protectedAfterWordIds: string[]; reviewNotes: string[]; brollSuggestions?:{firstWordId:string;lastWordId:string;action:string}[]; }
 export interface TimelineRange { id: string; inMs: number; outMs: number; }
 export interface NarrativeResult { project: import('../types/project').Project; words: TimelineWord[]; ranges: TimelineRange[]; }
 export interface GapEvidence { leftWordId: string; rightWordId: string; startMs: number; endMs: number; rms: number[]; speechRms: number; confidence: number; }
@@ -18,4 +18,4 @@ export interface PauseCut { startMs: number; endMs: number; reason: string; }
 export interface Cue { id: string; kind: 'onscreen'|'description'|'speech-cut'|'broll'|'short'; startMs: number; endMs: number; evidence: string; action: string; }
 export interface PublishingPackage { schemaVersion: 1; snapshotHash: string; titles: string[]; youtubeDescription: string; chapters: {startMs:number;title:string}[]; tags: string[]; spotifyNotes: string; thumbnailIdeas: string[]; pinnedComments: string[]; }
 export interface SemanticShort { candidateId: string; firstWordId: string; lastWordId: string; hookOptions: string[]; recommendedHook: string; rationale: string; captions: {youtube:string;facebook:string;instagram:string;tiktok:string}; tags: string[]; }
-export interface LicketyProjectState { schemaVersion: 1; snapshot?: AnalysisSnapshot; transcript?: TranscriptDocument; narrative?: NarrativeProposal; words?: TimelineWord[]; cues?: Cue[]; publishing?: PublishingPackage; }
+export interface LicketyProjectState { schemaVersion: 1; snapshot?: AnalysisSnapshot; transcript?: TranscriptDocument; narrative?: NarrativeProposal; words?: TimelineWord[]; protectedAfterWordIds?:string[]; pacing?:{style:"relaxed"|"natural"|"tight";cuts:PauseCut[];protectedAfterWordIds:string[]}; cues?: Cue[]; publishing?: PublishingPackage; }

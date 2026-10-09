@@ -1857,9 +1857,11 @@ export const useProjectStore = create<ProjectState>()(
           timestamp: Date.now(),
           params: { name },
         };
+        const beforeWorkflow=action.type.startsWith("lickety/")?cloneProjectForEdit(project):undefined;
         const result = await actionExecutor.execute(action, project);
         if (result.success) {
           set({ project: { ...project } });
+          if(beforeWorkflow){syncProjectEffectsBridge(get().project,beforeWorkflow);syncProjectTransitionsBridge(get().project,beforeWorkflow);helpers.syncOverlayEnginesFromProject();}
         }
         return result;
       },
@@ -1873,9 +1875,11 @@ export const useProjectStore = create<ProjectState>()(
           timestamp: Date.now(),
           params: settings,
         };
+        const beforeWorkflow=action.type.startsWith("lickety/")?cloneProjectForEdit(project):undefined;
         const result = await actionExecutor.execute(action, project);
         if (result.success) {
           set({ project: { ...project } });
+          if(beforeWorkflow){syncProjectEffectsBridge(get().project,beforeWorkflow);syncProjectTransitionsBridge(get().project,beforeWorkflow);helpers.syncOverlayEnginesFromProject();}
         }
         return result;
       },
@@ -1891,9 +1895,11 @@ export const useProjectStore = create<ProjectState>()(
             layoutBackgroundColor: color,
           },
         };
+        const beforeWorkflow=action.type.startsWith("lickety/")?cloneProjectForEdit(project):undefined;
         const result = await actionExecutor.execute(action, project);
         if (result.success) {
           set({ project: { ...project } });
+          if(beforeWorkflow){syncProjectEffectsBridge(get().project,beforeWorkflow);syncProjectTransitionsBridge(get().project,beforeWorkflow);helpers.syncOverlayEnginesFromProject();}
         }
         return result;
       },
@@ -2941,9 +2947,11 @@ export const useProjectStore = create<ProjectState>()(
             },
           };
         }
+        const beforeWorkflow=action.type.startsWith("lickety/")?cloneProjectForEdit(project):undefined;
         const result = await actionExecutor.execute(action, project);
         if (result.success) {
           set({ project: { ...project } });
+          if(beforeWorkflow){syncProjectEffectsBridge(get().project,beforeWorkflow);syncProjectTransitionsBridge(get().project,beforeWorkflow);helpers.syncOverlayEnginesFromProject();}
         }
         return result;
       },
