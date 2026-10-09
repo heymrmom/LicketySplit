@@ -89,7 +89,7 @@ export function DesktopStartScreen(): JSX.Element {
       <div className="mx-auto flex max-w-4xl flex-col gap-10 px-8 py-12">
         <section>
           <div className="flex items-center gap-3">
-            <OpenReelMark size={28} className="text-accent" />
+            <OpenReelMark size={40} />
             <Heading level={1}>New Project</Heading>
           </div>
           <Text type="supporting" display="block" className="mt-1">

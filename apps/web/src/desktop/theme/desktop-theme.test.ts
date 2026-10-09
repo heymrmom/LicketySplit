@@ -8,8 +8,10 @@ describe("desktop-theme.css", () => {
   it("scopes overrides under .openreel-desktop", () => {
     expect(css).toContain(".openreel-desktop");
   });
-  it("retints the accent to emerald and surfaces to charcoal", () => {
-    expect(css).toMatch(/--accent:\s*oklch\([^)]*16[0-9]/);
+  it("uses the LicketySplit purple accent and preserves green success states", () => {
+    expect(css).toContain("--accent: #8d63f7;");
+    expect(css).toContain("--accent-fg: #160c2b;");
+    expect(css).toContain("--success: #22c55e;");
     expect(css).toMatch(/--bg:\s*oklch\(0\.1[0-9]/);
   });
   it("defines the full surface ramp + border tokens it overrides", () => {

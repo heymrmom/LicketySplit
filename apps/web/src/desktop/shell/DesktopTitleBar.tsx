@@ -11,8 +11,8 @@ export function DesktopTitleBar({ platform, children }: { platform: string; chil
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       <div className="flex items-center gap-2" style={{ paddingLeft: isMac ? 76 : 12 }}>
-        <OpenReelMark size={16} className="text-accent" />
-        <span className="text-xs font-semibold tracking-wide text-fg-2">OpenReel</span>
+        <OpenReelMark size={34} />
+        <span className="text-xs font-semibold tracking-wide text-fg-2">LicketySplit</span>
       </div>
       <div className="flex items-center" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         {children}

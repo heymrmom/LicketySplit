@@ -1,10 +1,10 @@
 /* ============================================================
-   OpenReel Desktop — DaVinci-Resolve-style charcoal/emerald tokens
+   LicketySplit Desktop — charcoal surfaces with purple brand accents
    Scoped under .openreel-desktop. Overrides the same CSS variable
    names index.css defines so desktop components reuse the existing
    Tailwind utilities and inherit the Resolve look.
    Surfaces: charcoal-neutral (hue ~250, low chroma).
-   Accent: emerald (hue ~162).
+   Accent: LicketySplit purple (#8d63f7).
    ============================================================ */
 .openreel-desktop {
   color-scheme: dark;
@@ -23,17 +23,18 @@
   --fg-muted: oklch(0.46 0.006 250);
 
   --hover: oklch(0.27 0.004 250);
-  --selected: oklch(0.3 0.03 162);
+  --selected: oklch(0.3 0.04 295);
 
-  --accent: oklch(0.7 0.15 162);
-  --accent-strong: oklch(0.63 0.16 162);
-  --accent-soft: oklch(0.3 0.05 162);
-  --accent-fg: oklch(0.16 0.004 250);
-  --accent-glow: oklch(0.7 0.15 162 / 0.35);
+  --accent: #8d63f7;
+  --accent-strong: #7146d6;
+  --accent-soft: oklch(0.3 0.05 295);
+  --accent-fg: #160c2b;
+  --accent-glow: rgb(141 99 247 / 35%);
+  --success: #22c55e;
 
   --track-bg: oklch(0.2 0.004 250);
   --tl-bg: oklch(0.15 0.004 250);
-  --waveform: oklch(0.7 0.15 162 / 0.55);
+  --waveform: rgb(141 99 247 / 55%);
   --stage-bg: oklch(0.12 0.003 250);
   --screen-bg: oklch(0 0 0);
 
@@ -52,8 +53,8 @@
   --card-foreground: 0 0% 93%;
   --popover: 220 7% 14%;
   --popover-foreground: 0 0% 93%;
-  --primary: 158 64% 52%;
-  --primary-foreground: 220 8% 10%;
+  --primary: 255 89% 68%;
+  --primary-foreground: 266 70% 12%;
   --secondary: 220 6% 19%;
   --secondary-foreground: 0 0% 93%;
   --muted: 220 6% 19%;
@@ -63,5 +64,5 @@
   --destructive: 0 62% 50%;
   --destructive-foreground: 0 0% 95%;
   --input: 220 6% 25%;
-  --ring: 158 64% 52%;
+  --ring: 255 89% 68%;
 }

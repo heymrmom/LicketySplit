@@ -41,7 +41,7 @@ export function UpdateBanner(): JSX.Element | null {
             Update {status.version} available
           </Text>
           <Text type="supporting" color="secondary" display="block" className="mt-1 text-xs">
-            A new version of OpenReel is ready to download.
+            A new version of LicketySplit is ready to download.
           </Text>
           <div className="mt-3 flex gap-2">
             <Button

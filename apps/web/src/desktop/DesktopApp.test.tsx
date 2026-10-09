@@ -91,7 +91,7 @@ describe("DesktopApp", () => {
   it("renders the title bar and workspace when a project is open", () => {
     mockHasProject(true);
     const { getByText, getByTestId } = render(<DesktopApp />);
-    expect(getByText("OpenReel")).toBeTruthy();
+    expect(getByText("LicketySplit")).toBeTruthy();
     expect(getByTestId("desktop-workspace")).toBeTruthy();
   });
 
