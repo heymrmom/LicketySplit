@@ -1,31 +1,41 @@
 /* global WindowProxy */
 import { describe, expect, it } from "vitest";
-import { isLegacyReadyEvent, isLegacyStartEvent, isSequentialMigrationRequest } from "./transport-protocol";
+import { isNativeMigrationPortEvent, isSequentialMigrationRequest } from "./transport-protocol";
 
 const nonce = "fixture-run-29";
 const receiver = {} as WindowProxy;
 const source = {} as WindowProxy;
 
 describe("legacy storage migration transport", () => {
-  it("accepts readiness only from the exact old host and iframe window", () => {
-    const data = { type: "licketysplit-migration-ready", version: 1, nonce };
-    expect(isLegacyReadyEvent({ origin: "app://openreel", source, data }, "app://openreel", source, nonce)).toBe(true);
-    expect(isLegacyReadyEvent({ origin: "app://other", source, data }, "app://openreel", source, nonce)).toBe(false);
-    expect(isLegacyReadyEvent({ origin: "app://openreel", source: receiver, data }, "app://openreel", source, nonce)).toBe(false);
-    expect(isLegacyReadyEvent({ origin: "app://openreel", source, data: { ...data, nonce: "other" } }, "app://openreel", source, nonce)).toBe(false);
+  it("accepts a native source port only from the old-origin top-level window with exact role, nonce, and one port", () => {
+    const port = {} as MessagePort;
+    const event = {
+      origin: "app://openreel",
+      source,
+      data: { type: "licketysplit-native-migration-port", version: 1, nonce, role: "source" },
+      ports: [port],
+    };
+    expect(isNativeMigrationPortEvent(event, "app://openreel", source, nonce, "source")).toBe(true);
+    expect(isNativeMigrationPortEvent({ ...event, origin: "app://evil" }, "app://openreel", source, nonce, "source")).toBe(false);
+    expect(isNativeMigrationPortEvent({ ...event, source: receiver }, "app://openreel", source, nonce, "source")).toBe(false);
+    expect(isNativeMigrationPortEvent({ ...event, data: { ...event.data, nonce: "other" } }, "app://openreel", source, nonce, "source")).toBe(false);
+    expect(isNativeMigrationPortEvent({ ...event, data: { ...event.data, version: 2 } }, "app://openreel", source, nonce, "source")).toBe(false);
+    expect(isNativeMigrationPortEvent({ ...event, data: { ...event.data, role: "destination" } }, "app://openreel", source, nonce, "source")).toBe(false);
+    expect(isNativeMigrationPortEvent({ ...event, ports: [] }, "app://openreel", source, nonce, "source")).toBe(false);
+    expect(isNativeMigrationPortEvent({ ...event, ports: [port, port] }, "app://openreel", source, nonce, "source")).toBe(false);
   });
 
-  it("accepts the start port only from the exact new host parent", () => {
+  it("accepts a destination port only from the exact new-origin window", () => {
     const port = {} as MessagePort;
     const event = {
       origin: "app://licketysplit",
       source: receiver,
-      data: { type: "licketysplit-migration-start", version: 1, nonce },
+      data: { type: "licketysplit-native-migration-port", version: 1, nonce, role: "destination" },
       ports: [port],
     };
-    expect(isLegacyStartEvent(event, "app://licketysplit", receiver, nonce)).toBe(true);
-    expect(isLegacyStartEvent({ ...event, origin: "app://evil" }, "app://licketysplit", receiver, nonce)).toBe(false);
-    expect(isLegacyStartEvent({ ...event, ports: [] }, "app://licketysplit", receiver, nonce)).toBe(false);
+    expect(isNativeMigrationPortEvent(event, "app://licketysplit", receiver, nonce, "destination")).toBe(true);
+    expect(isNativeMigrationPortEvent({ ...event, source }, "app://licketysplit", receiver, nonce, "destination")).toBe(false);
+    expect(isNativeMigrationPortEvent({ ...event, data: { ...event.data, role: "source" } }, "app://licketysplit", receiver, nonce, "destination")).toBe(false);
   });
 
   it("rejects duplicate or out-of-order operations and requires record acknowledgement", () => {

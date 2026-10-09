@@ -1,8 +1,9 @@
 import {inspectOriginal} from "./lickety/import-inspection";
 import { installLicketyIpc } from "./ipc/lickety";
 import { installPodcastIpc } from "./ipc/podcast";
+import { installIdentityMigrationBridge } from "./identity-migration-bridge";
 import { getDesktopProfilePath } from "./lickety/resource-policy";
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, MessageChannelMain, shell } from "electron";
 import { dialog } from "electron";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -174,6 +175,12 @@ async function prepareProtectedKeyStore(): Promise<void> {
 }
 
 function installDesktopServices(): void {
+  installIdentityMigrationBridge({
+    ipcMain,
+    createReaderWindow: (options) => new BrowserWindow(options),
+    createMessageChannel: () => new MessageChannelMain(),
+    sourcePreloadPath: path.join(__dirname, "../preload/migration-reader.js"),
+  });
   installLicketyIpc();
   installPodcastIpc();
   handle(CHANNELS.probeHardware, z.undefined(), () => collectHardwareInfo());

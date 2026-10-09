@@ -8,15 +8,19 @@ import {
 } from "./storage-copy";
 import {
   IDENTITY_MIGRATION_PROTOCOL_VERSION,
-  isLegacyReadyEvent,
+  isNativeMigrationPortEvent,
   type MigrationRequestOperation,
-  LEGACY_APP_ORIGIN,
+  NEW_APP_ORIGIN,
 } from "./transport-protocol";
 
 const HANDSHAKE_TIMEOUT_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 120_000;
 
 type RpcPayload = Record<string, unknown>;
+type IdentityMigrationControl = {
+  start(nonce: string): Promise<void>;
+  stop(nonce: string): Promise<void>;
+};
 type PendingRequest = {
   requestId: number;
   operation: MigrationRequestOperation;
@@ -42,7 +46,11 @@ export class LegacyMigrationReader implements IndexedDatabaseReader, LocalStorag
   private awaitingRecord: { databaseName: string; storeName: string; key: IDBValidKey } | undefined;
   private closed = false;
 
-  constructor(private readonly port: MessagePort, private readonly nonce: string) {
+  constructor(
+    private readonly port: MessagePort,
+    private readonly nonce: string,
+    private stopNativeSession?: () => Promise<void>,
+  ) {
     port.onmessage = (event: MessageEvent<unknown>) => this.receive(event.data);
     port.onmessageerror = () => this.receiveMessageError();
     port.start();
@@ -86,13 +94,20 @@ export class LegacyMigrationReader implements IndexedDatabaseReader, LocalStorag
     return Promise.reject(new IdentityStorageMigrationError("The legacy migration reader requires bounded keys-first reads."));
   }
 
-  close(): void {
+  async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
     const error = new IdentityStorageMigrationError("The legacy migration connection was closed.");
-    this.pending?.reject(error);
+    const pending = this.pending;
+    if (pending) {
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
     this.pending = undefined;
     this.port.close();
+    const stop = this.stopNativeSession;
+    this.stopNativeSession = undefined;
+    await stop?.();
   }
 
   private request<T>(operation: MigrationRequestOperation, payload: RpcPayload): Promise<T> {
@@ -166,43 +181,35 @@ export class LegacyMigrationReader implements IndexedDatabaseReader, LocalStorag
 }
 
 export async function connectLegacyMigrationReader(
-  iframe: HTMLIFrameElement,
   nonce: string,
   targetWindow: Window = window,
+  suppliedControl?: IdentityMigrationControl,
 ): Promise<LegacyMigrationReader> {
+  const control = suppliedControl ?? (targetWindow as Window & { openreel?: { identityMigration?: IdentityMigrationControl } }).openreel?.identityMigration;
+  if (!control) throw new IdentityStorageMigrationError("The desktop migration bridge is unavailable. The original profile remains available; restart the app and retry.");
   return new Promise((resolve, reject) => {
-    const legacyWindow = iframe.contentWindow;
-    if (!legacyWindow) {
-      reject(new IdentityStorageMigrationError("The legacy migration frame could not be created."));
-      return;
-    }
+    let settled = false;
     const timeout = setTimeout(() => finish(new IdentityStorageMigrationError("The legacy profile did not open its migration reader; retry without closing the app.")), HANDSHAKE_TIMEOUT_MS);
     const finish = (error?: Error, reader?: LegacyMigrationReader): void => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
-      targetWindow.removeEventListener("message", onReady);
-      iframe.removeEventListener("error", onFrameError);
-      if (error) reject(error);
+      targetWindow.removeEventListener("message", onPort);
+      if (error) {
+        void control.stop(nonce).catch(() => undefined);
+        reject(error);
+      }
       else if (reader) resolve(reader);
     };
-    const onFrameError = (): void => finish(new IdentityStorageMigrationError("The legacy migration page could not be loaded; the original profile was not changed."));
-    const onReady = (event: MessageEvent<unknown>): void => {
-      if (!isLegacyReadyEvent(event, LEGACY_APP_ORIGIN, legacyWindow, nonce)) return;
-      const channel = new MessageChannel();
-      try {
-        legacyWindow.postMessage({ type: "licketysplit-migration-start", version: IDENTITY_MIGRATION_PROTOCOL_VERSION, nonce }, LEGACY_APP_ORIGIN, [channel.port2]);
-      } catch (error) {
-        channel.port1.close();
-        channel.port2.close();
-        finish(new IdentityStorageMigrationError("Could not securely start the legacy migration reader.", { cause: error }));
-        return;
-      }
-      finish(undefined, new LegacyMigrationReader(channel.port1, nonce));
+    const onPort = (event: MessageEvent<unknown>): void => {
+      if (!isNativeMigrationPortEvent(event, NEW_APP_ORIGIN, targetWindow, nonce, "destination")) return;
+      const port = event.ports[0];
+      if (!port) return;
+      finish(undefined, new LegacyMigrationReader(port, nonce, () => control.stop(nonce)));
     };
-    targetWindow.addEventListener("message", onReady);
-    iframe.addEventListener("error", onFrameError, { once: true });
-    iframe.referrerPolicy = "no-referrer";
-    iframe.title = "Legacy profile migration reader";
-    iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
-    iframe.src = `${LEGACY_APP_ORIGIN}/migration.html?nonce=${encodeURIComponent(nonce)}`;
+    targetWindow.addEventListener("message", onPort);
+    void Promise.resolve().then(() => control.start(nonce)).catch((error: unknown) => {
+      finish(new IdentityStorageMigrationError("Could not securely start the legacy migration reader.", { cause: error }));
+    });
   });
 }

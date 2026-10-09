@@ -2,9 +2,9 @@
 import { BrowserIndexedDatabaseReader, IdentityStorageMigrationError } from "./storage-copy";
 import {
   IDENTITY_MIGRATION_PROTOCOL_VERSION,
-  isLegacyStartEvent,
+  isNativeMigrationPortEvent,
   isSequentialMigrationRequest,
-  NEW_APP_ORIGIN,
+  LEGACY_APP_ORIGIN,
   type MigrationRequestOperation,
 } from "./transport-protocol";
 
@@ -29,18 +29,20 @@ function send(port: MessagePort, nonce: string, requestId: number, response: Rec
   port.postMessage({ version: IDENTITY_MIGRATION_PROTOCOL_VERSION, nonce, requestId, ...response });
 }
 
-function startLegacyReader(): void {
-  const nonce = new URLSearchParams(window.location.search).get("nonce");
-  if (!nonce || nonce.length > 128) return;
-  const reader = new BrowserIndexedDatabaseReader(indexedDB);
+export function installLegacyMigrationSource(targetWindow: Window = window, requestedNonce?: string | null): () => void {
+  const nonce = requestedNonce ?? new URLSearchParams(targetWindow.location.search).get("nonce");
+  if (targetWindow.location.origin !== LEGACY_APP_ORIGIN || targetWindow.parent !== targetWindow || !nonce || nonce.length > 128) return () => undefined;
+  const reader = new BrowserIndexedDatabaseReader(targetWindow.indexedDB);
   let port: MessagePort | undefined;
   let nextRequestId = 1;
   let pendingRecord: { name: string; storeName: string; key: IDBValidKey } | undefined;
 
-  const onStart = (event: MessageEvent<unknown>): void => {
-    if (!isLegacyStartEvent(event, NEW_APP_ORIGIN, window.parent, nonce)) return;
-    window.removeEventListener("message", onStart);
-    port = event.ports[0];
+  const onPort = (event: MessageEvent<unknown>): void => {
+    if (!isNativeMigrationPortEvent(event, LEGACY_APP_ORIGIN, targetWindow, nonce, "source")) return;
+    const sourcePort = event.ports[0];
+    if (!sourcePort) return;
+    targetWindow.removeEventListener("message", onPort);
+    port = sourcePort;
     port.onmessage = (message: MessageEvent<unknown>) => {
       let request: SourceRequest;
       try {
@@ -62,8 +64,8 @@ function startLegacyReader(): void {
           switch (request.operation) {
             case "localStorage.listKeys": {
               const keys: string[] = [];
-              for (let index = 0; index < localStorage.length; index += 1) {
-                const key = localStorage.key(index);
+              for (let index = 0; index < targetWindow.localStorage.length; index += 1) {
+                const key = targetWindow.localStorage.key(index);
                 if (key === null) throw new IdentityStorageMigrationError("Legacy local storage changed during inventory.");
                 keys.push(key);
               }
@@ -72,7 +74,7 @@ function startLegacyReader(): void {
             }
             case "localStorage.readValue": {
               if (!validString(args.key)) throw new IdentityStorageMigrationError("The requested local storage key was invalid.");
-              result = localStorage.getItem(args.key);
+              result = targetWindow.localStorage.getItem(args.key);
               break;
             }
             case "database.list":
@@ -110,7 +112,7 @@ function startLegacyReader(): void {
                 throw new IdentityStorageMigrationError("The source record acknowledgement did not match a pending record.");
               }
               let sameKey = false;
-              try { sameKey = indexedDB.cmp(pendingRecord.key, args.key as IDBValidKey) === 0; }
+              try { sameKey = targetWindow.indexedDB.cmp(pendingRecord.key, args.key as IDBValidKey) === 0; }
               catch { sameKey = false; }
               if (pendingRecord.name !== args.name || pendingRecord.storeName !== args.storeName || !sameKey) {
                 throw new IdentityStorageMigrationError("The source record acknowledgement did not match a pending record.");
@@ -136,8 +138,11 @@ function startLegacyReader(): void {
     port.start();
   };
 
-  window.addEventListener("message", onStart);
-  window.parent.postMessage({ type: "licketysplit-migration-ready", version: IDENTITY_MIGRATION_PROTOCOL_VERSION, nonce }, NEW_APP_ORIGIN);
+  targetWindow.addEventListener("message", onPort);
+  return () => {
+    targetWindow.removeEventListener("message", onPort);
+    port?.close();
+  };
 }
 
-if (window.location.origin === "app://openreel" && window.parent !== window) startLegacyReader();
+installLegacyMigrationSource();

@@ -107,7 +107,7 @@ describe("renderer origin migration startup", () => {
     const result = await migrateLegacyStorage(source, destination, database, journal, { completedAt: 987 });
 
     expect(result.status).toBe("complete");
-    expect(JSON.parse(destination.getItem(IDENTITY_MIGRATION_STATUS_KEY) ?? "{}")).toEqual({ status: "complete", version: 1, completedAt: 987 });
+    expect(JSON.parse(destination.getItem(IDENTITY_MIGRATION_STATUS_KEY) ?? "{}")).toEqual({ status: "complete", version: 2, completedAt: 987 });
   });
 
   it("preserves the old completion state if the destination cannot verify its new marker", async () => {

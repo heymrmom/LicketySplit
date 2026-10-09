@@ -9,7 +9,7 @@ export function readMigrationStatus(storage: Pick<Storage, "getItem">) {
 
 export function recordMigrationComplete(storage: LocalStoragePort, unavailable: UnavailableMigrationRecords, completedAt = Date.now()): void {
   if (unavailable.length) throw new IdentityStorageMigrationError("Migration cannot be marked complete while source records are still unavailable.");
-  writeAndVerify(storage, { status: "complete", version: 1, completedAt });
+  writeAndVerify(storage, { status: "complete", version: 2, completedAt });
 }
 
 export function acceptIncompleteMigration(storage: LocalStoragePort, unavailable: UnavailableMigrationRecords, acceptedAt = Date.now()): void {
@@ -17,7 +17,7 @@ export function acceptIncompleteMigration(storage: LocalStoragePort, unavailable
     throw new IdentityStorageMigrationError("Relink acceptance requires the list of unavailable source records.");
   }
   const unique = [...new Map(unavailable.map((entry) => [`${entry.databaseName}\0${entry.storeName}`, entry])).values()];
-  writeAndVerify(storage, { status: "accepted-incomplete", version: 1, acceptedAt, unavailable: unique });
+  writeAndVerify(storage, { status: "accepted-incomplete", version: 2, acceptedAt, unavailable: unique });
 }
 
 function writeAndVerify(storage: LocalStoragePort, value: Record<string, unknown>): void {

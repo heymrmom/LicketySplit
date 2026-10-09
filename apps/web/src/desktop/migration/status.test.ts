@@ -20,7 +20,7 @@ describe("origin migration completion marker", () => {
     expect(storage.length).toBe(0);
 
     recordMigrationComplete(storage, [], 5678);
-    expect(readMigrationStatus(storage)).toEqual({ status: "complete", version: 1, completedAt: 5678 });
+    expect(readMigrationStatus(storage)).toEqual({ status: "complete", version: 2, completedAt: 5678 });
   });
 
   it("persists accepted relink details without changing the state to complete", () => {
@@ -29,12 +29,18 @@ describe("origin migration completion marker", () => {
 
     acceptIncompleteMigration(storage, unavailable, 9876);
 
-    expect(readMigrationStatus(storage)).toEqual({ status: "accepted-incomplete", version: 1, acceptedAt: 9876, unavailable });
+    expect(readMigrationStatus(storage)).toEqual({ status: "accepted-incomplete", version: 2, acceptedAt: 9876, unavailable });
   });
 
   it("treats malformed state as incomplete instead of assuming success", () => {
     const storage = new MemoryStorage();
-    storage.setItem("__licketysplit_identity_migration_control_v1__", "{broken");
+    storage.setItem("__licketysplit_identity_migration_control_v2__", "{broken");
+    expect(readMigrationStatus(storage)).toBeUndefined();
+  });
+
+  it("retries profiles whose earlier iframe migration wrote a false complete marker", () => {
+    const storage = new MemoryStorage();
+    storage.setItem("__licketysplit_identity_migration_control_v1__", JSON.stringify({ status: "complete", version: 1, completedAt: 1234 }));
     expect(readMigrationStatus(storage)).toBeUndefined();
   });
 });

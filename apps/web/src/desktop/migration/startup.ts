@@ -13,7 +13,7 @@ import {
 import { IDENTITY_MIGRATION_STATUS_KEY } from "./transport-protocol";
 import { recordMigrationComplete, type UnavailableMigrationRecords } from "./status";
 
-const RUN_ID = "origin-migration-v1";
+const RUN_ID = "origin-migration-v2";
 
 export type OriginMigrationResult =
   | {

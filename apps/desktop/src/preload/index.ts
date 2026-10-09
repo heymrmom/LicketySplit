@@ -1,10 +1,55 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { CHANNELS } from "../shared/channels";
+import {
+  forwardIdentityMigrationPort,
+  IDENTITY_MIGRATION_CHANNELS,
+  NEW_APP_ORIGIN,
+} from "../shared/identity-migration";
 import type { McpBridgeRequest } from "../shared/mcp";
 import type {
   PodcastAnalyzeRequest, PodcastApprovalRequest, PodcastBridge, PodcastCancelRequest, PodcastInspectRequest,
   PodcastProgressEvent, PodcastReviseRequest, PodcastSetupRequest, PodcastUpdateRequest, PodcastWaveformRequest,
 } from "../../../../packages/core/src/lickety/podcast-types";
+
+const MIGRATION_UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+let migrationNonce: string | undefined;
+let migrationPortForwarded = false;
+
+ipcRenderer.on(IDENTITY_MIGRATION_CHANNELS.port, (event, payload: unknown) => {
+  if (!migrationNonce || migrationPortForwarded) {
+    for (const port of event.ports ?? []) { try { port.close(); } catch { /* already detached */ } }
+    return;
+  }
+  if (forwardIdentityMigrationPort(event, payload, window, NEW_APP_ORIGIN, migrationNonce, "destination")) {
+    migrationPortForwarded = true;
+  }
+});
+
+const identityMigration = {
+  start: async (nonce: string): Promise<void> => {
+    if (!MIGRATION_UUID_V4.test(nonce)) throw new Error("A valid UUID migration nonce is required.");
+    if (migrationNonce) throw new Error("This app window already has an identity migration session.");
+    migrationNonce = nonce;
+    migrationPortForwarded = false;
+    try {
+      await ipcRenderer.invoke(IDENTITY_MIGRATION_CHANNELS.start, nonce);
+    } catch (error) {
+      if (migrationNonce === nonce) migrationNonce = undefined;
+      migrationPortForwarded = false;
+      throw error;
+    }
+  },
+  stop: async (nonce: string): Promise<void> => {
+    if (!MIGRATION_UUID_V4.test(nonce)) throw new Error("A valid UUID migration nonce is required.");
+    if (migrationNonce && migrationNonce !== nonce) throw new Error("The migration stop nonce does not match this app window's active session.");
+    try {
+      await ipcRenderer.invoke(IDENTITY_MIGRATION_CHANNELS.stop, nonce);
+    } finally {
+      if (migrationNonce === nonce) migrationNonce = undefined;
+      migrationPortForwarded = false;
+    }
+  },
+};
 
 contextBridge.exposeInMainWorld("openreel", {
   platform: "desktop",
@@ -44,6 +89,7 @@ contextBridge.exposeInMainWorld("openreel", {
       return () => ipcRenderer.removeListener(CHANNELS.podcastProgress, handler);
     },
   } satisfies PodcastBridge,
+  identityMigration,
   publicOrigin: "https://app.openreel.video",
   probeHardware: () => ipcRenderer.invoke(CHANNELS.probeHardware, undefined),
   onMenuAction: (cb: (id: string) => void) => {

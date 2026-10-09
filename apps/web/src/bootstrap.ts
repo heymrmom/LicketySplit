@@ -83,13 +83,9 @@ async function attemptMigration(gate: ReturnType<typeof createGate>): Promise<Mi
   gate.details.replaceChildren();
   gate.actions.replaceChildren();
 
-  const iframe = document.createElement("iframe");
-  iframe.hidden = true;
-  iframe.setAttribute("aria-hidden", "true");
-  document.body.append(iframe);
   let source: Awaited<ReturnType<typeof connectLegacyMigrationReader>> | undefined;
   try {
-    source = await connectLegacyMigrationReader(iframe, crypto.randomUUID());
+    source = await connectLegacyMigrationReader(crypto.randomUUID());
     const result = await migrateLegacyStorageInBrowser(source, localStorage, indexedDB, {
       onLocalStorageProgress: ({ copied, preserved, total }) => {
         gate.status.textContent = `Copying saved preferences… ${copied + preserved} of ${total}`;
@@ -104,8 +100,7 @@ async function attemptMigration(gate: ReturnType<typeof createGate>): Promise<Mi
     }
     return { ...result, copiedRecords: result.localStorage.copied + result.indexedDB.copied };
   } finally {
-    source?.close();
-    iframe.remove();
+    await source?.close();
   }
 }
 
