@@ -1,6 +1,6 @@
-# OpenReel AI Agent — User Guide
+# LicketySplit AI Agent — User Guide
 
-OpenReel can be edited by an AI agent of your choice. The same tool layer powers
+LicketySplit can be edited by an AI agent of your choice. The same tool layer powers
 three surfaces:
 
 - **Web BYOK chat** — chat with a model inside the browser editor.
@@ -8,10 +8,10 @@ three surfaces:
   Cline) to the running desktop app.
 - **Headless runner** — edit a stored project from a server/CLI with no app open.
 
-All three drive the same [capability set](./AGENT-CAPABILITIES.md) (228 tools +
-`execute_action`/`batch_actions` escape hatches), so an agent can perform the
-full set of project-backed edits the web editor exposes: import media, build the
-timeline, trim, crop, transform, color-grade, mix audio, add
+All three drive the same current [capability set](./AGENT-CAPABILITIES.md),
+including `execute_action`/`batch_actions` escape hatches, so an agent can
+perform the full set of project-backed edits the web editor exposes: import
+media, build the timeline, trim, crop, transform, color-grade, mix audio, add
 text/shapes/subtitles, keyframe, manage transitions, build Motion Creator
 compositions and editable 3D scenes, and export the result.
 
@@ -20,7 +20,7 @@ compositions and editable 3D scenes, and export the result.
 1. Open **Settings → API Keys**. In the browser, create a master password and
    unlock the session; the password is not stored.
 2. Add an **OpenAI** or **Anthropic** API key. Browser keys are encrypted locally
-   with AES-256-GCM; desktop keys use the operating system keychain. OpenReel
+   with AES-256-GCM; desktop keys use the protected native credential store. LicketySplit
    does not persist keys on its servers. In the hosted web build, the key is
    forwarded through the same-origin API proxy for that request; in local
    development the browser calls the provider directly; on desktop the native
@@ -46,8 +46,8 @@ local runtime that implements the OpenAI Chat Completions tool-calling format.
    **Settings → API Keys**. Keyless endpoints work without secure-storage setup.
 
 Compatible requests go directly from the browser to the configured endpoint;
-they are never relayed through OpenReel's hosted proxy. The endpoint must allow
-CORS for the OpenReel origin. Use the desktop app for local HTTP endpoints or
+they are never relayed through the app's hosted proxy. The endpoint must allow
+CORS for the app's origin. Use the desktop app for local HTTP endpoints or
 servers that do not expose browser CORS headers—the native process performs the
 request there. URL credentials and query strings are rejected; store bearer
 credentials in the encrypted API-key field instead.
@@ -65,8 +65,8 @@ A text-only OpenAI-compatible model can chat, but cannot control the editor.
 - **Stop** — aborts the in-flight turn and rolls back any partial edits.
 - **Token meter** — shows cumulative input/output tokens for the conversation.
 
-The chat automatically sends only the relevant portion of OpenReel's complete
-tool registry on each turn. This keeps requests within provider function limits
+The chat automatically sends only the relevant portion of the complete tool
+registry on each turn. This keeps requests within provider function limits
 while retaining access to every editor domain across requests. Follow-up turns
 also keep tools used earlier in the conversation available.
 
@@ -93,12 +93,15 @@ can drive your open project.
 1. Open **Settings → MCP** (desktop only).
 2. The panel shows the loopback URL and a bearer token (rotate it any time).
 3. Copy the client config snippet into your MCP client. It points at the bundled
-   `openreel-mcp` stdio shim, which bridges your client to the running app:
+   `licketysplit-mcp` stdio shim, which bridges your client to the running app:
 
    ```json
    {
      "mcpServers": {
-       "openreel": { "command": "node", "args": ["<path to openreel-mcp>"] }
+       "licketysplit": {
+         "command": "node",
+         "args": ["<path to licketysplit-mcp shim>"]
+       }
      }
    }
    ```
@@ -113,18 +116,18 @@ bearer token.
 
 ## Headless / automated edits (CLI)
 
-The `@openreel/agent-runner` package edits a stored project with no app open —
+The `@licketysplit/agent-runner` package edits a stored project with no app open —
 useful for batch edits, "apply this recipe to N projects", and scheduled jobs.
 
 ```bash
-openreel-agent \
+licketysplit-agent \
   --project ./reel.json \
   --prompt "Add a title that says Welcome for the first 3 seconds" \
   --provider anthropic --model claude-sonnet-5 \
   --out ./reel.edited.json
 ```
 
-- The API key is read from `OPENREEL_API_KEY` (or `ANTHROPIC_API_KEY` /
+- The API key is read from `LICKETYSPLIT_API_KEY` (or `ANTHROPIC_API_KEY` /
   `OPENAI_API_KEY`) and is used per-request only — never stored or logged.
 - `--dry-run` plans without applying mutations.
 - In-app render/export jobs use the local web or desktop export engine. The

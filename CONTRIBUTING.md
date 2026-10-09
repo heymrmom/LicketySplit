@@ -1,6 +1,6 @@
-# Contributing to OpenReel
+# Contributing to LicketySplit
 
-Thank you for your interest in contributing to OpenReel! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to LicketySplit! This document provides guidelines and instructions for contributing.
 
 ## Table of Contents
 - [Code of Conduct](#code-of-conduct)
@@ -28,8 +28,8 @@ Be respectful, constructive, and professional. We're building something great to
 
 ```bash
 # 1. Fork and clone the repository
-git clone https://github.com/Augani/openreel-video.git
-cd openreel-video
+git clone https://github.com/heymrmom/LicketySplit.git
+cd LicketySplit
 
 # 2. Install dependencies
 pnpm install
@@ -43,7 +43,7 @@ pnpm dev
 ## Project Structure
 
 ```
-openreel/
+LicketySplit/
 ├── apps/
 │   └── web/               # Main web application
 │       ├── public/        # Static assets
@@ -298,14 +298,14 @@ Brief description of changes
 ## Areas to Contribute
 
 ### 🐛 Bug Fixes
-- Check [Issues](https://github.com/Augani/openreel-video/issues?q=is%3Aissue+is%3Aopen+label%3Abug)
+- Check [open issues](https://github.com/heymrmom/LicketySplit/issues)
 - Reproduce the bug
 - Write a failing test
 - Fix the bug
 - Verify the test passes
 
 ### ✨ New Features
-- Discuss in [Discussions](https://github.com/Augani/openreel-video/discussions) first
+- Open an issue to discuss large changes before starting work
 - Get approval before large changes
 - Break into smaller PRs if possible
 - Update documentation
@@ -373,9 +373,7 @@ Changes to React components hot reload automatically. For core engine changes, y
 
 ## Questions?
 
-- **Discord**: [Join our Discord](https://discord.gg/openreeel)
-- **Discussions**: [GitHub Discussions](https://github.com/Augani/openreel-video/discussions)
-- **Email**: contribute@openreeel.video
+Open an [issue in the LicketySplit repository](https://github.com/heymrmom/LicketySplit/issues).
 
 ## Recognition
 
@@ -384,4 +382,4 @@ Contributors are recognized in:
 - GitHub contributors page
 - Release notes for significant contributions
 
-Thank you for contributing to OpenReel! 🎬
+Thank you for contributing to LicketySplit! 🎬
