@@ -75,8 +75,12 @@ export function revisePodcastSources(previous: PodcastSetup, analysisInput: Podc
   next.analysis = analysis; next.groups = groups; next.participants = participants; next.analysis.groups = structuredClone(groups);
   next.channels = next.channels.filter((channel) => unchanged.has(channel.assetId) && !affected.has(channel.assetId));
   next.edges = next.edges.filter((edge) => unchanged.has(edge.a) && unchanged.has(edge.b) && !affected.has(edge.a) && !affected.has(edge.b));
-  next.reviewChecks = next.reviewChecks?.filter((check) => unchanged.has(check.assetId) && !affected.has(check.assetId) && next.channels.some((channel) => channel.id === check.referenceChannelId));
-  next.regionEvidence = next.regionEvidence?.filter((evidence) => unchanged.has(evidence.assetId) && !affected.has(evidence.assetId) && next.channels.some((channel) => channel.id === evidence.referenceChannelId));
+  const retainedChannelIds = new Set(next.channels.map((channel) => channel.id));
+  next.reviewChecks = next.reviewChecks?.filter((check) => unchanged.has(check.assetId) && !affected.has(check.assetId)
+    && retainedChannelIds.has(check.channelId) && retainedChannelIds.has(check.referenceChannelId)
+    && (check.candidates ?? []).every((candidate) => retainedChannelIds.has(candidate.channelId) && retainedChannelIds.has(candidate.referenceChannelId)));
+  next.regionEvidence = next.regionEvidence?.filter((evidence) => unchanged.has(evidence.assetId) && !affected.has(evidence.assetId)
+    && retainedChannelIds.has(evidence.channelId) && retainedChannelIds.has(evidence.referenceChannelId));
   next.validationReservations = next.validationReservations?.filter((row) => unchanged.has(row.assetId) && !affected.has(row.assetId));
   for (const id of [...affected].filter((assetId) => !changedIds.includes(assetId))) {
     const placement = previous.placements.find((item) => item.assetId === id), asset = previous.analysis.assets.find((item) => item.id === id);

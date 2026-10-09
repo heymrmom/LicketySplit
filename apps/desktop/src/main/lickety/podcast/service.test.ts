@@ -259,6 +259,35 @@ describe("native podcast setup revision and live analysis", () => {
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
 
+  it("drops review checks whose nested channel alternatives were invalidated by a binding edit", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-review-candidate-revision-"));
+    try {
+      const harness = makeHarness(), service = harness.serviceWith(directory, {} as NativeAudioAnalysis);
+      const setup = await service.inspect({ projectId, mediaIds: ["media-a", "media-b"] });
+      const [a, b] = setup.analysis.assets;
+      setup.channels = [
+        { id: "channel-a", assetId: a.id, sourceId: a.sourceId, streamIndex: 0, channel: 0, cacheKey: "cache-a", usable: true, rms: 0.2, sampleRate: 8000, frames: 240_000, firstPTSSeconds: 0, timestampStatus: "continuous" },
+        { id: "channel-b", assetId: b.id, sourceId: b.sourceId, streamIndex: 0, channel: 0, cacheKey: "cache-b", usable: true, rms: 0.2, sampleRate: 8000, frames: 240_000, firstPTSSeconds: 0, timestampStatus: "continuous" },
+      ];
+      setup.reviewChecks = [{
+        assetId: a.id, channelId: "channel-a", referenceChannelId: "channel-a", projectSeconds: 10, sourceSeconds: 10, referenceSeconds: 10,
+        windowSeconds: 6, fitOverlap: false, score: 0.9, competingScore: 0.2, residualMs: 1, status: "pass",
+        candidates: [{ channelId: "channel-a", referenceChannelId: "channel-b", sourceSeconds: 10, referenceSeconds: 10, fitOverlap: false, usable: true, score: 0.9, competingScore: 0.2, residualMs: 1, subwindows: [] }],
+      }];
+      setup.regionEvidence = [{ assetId: a.id, role: "validation", channelId: "channel-a", referenceChannelId: "channel-b", sourceSeconds: 10, referenceSeconds: 10,
+        projectSeconds: 10, observedProjectSeconds: 10, windowSeconds: 6, fitOverlap: false, usable: true, score: 0.9, competingScore: 0.2, residualMs: 1, subwindows: [] }];
+      await mkdir(path.join(directory, "setups"), { recursive: true });
+      await writeFile(path.join(directory, "setups", `${setup.setupId}.json`), JSON.stringify(setup));
+      const groupB = setup.groups.find((group) => group.assetIds.includes(b.id))!;
+
+      const revised = await service.revise({ setupId: setup.setupId, groups: setup.groups.map((group) => group.id === groupB.id ? { ...group, audioBindings: [{ assetId: b.id, streamIndex: 0, channel: 0 }] } : group), participants: [] });
+
+      expect(revised.channels.some((channel) => channel.id === "channel-b")).toBe(false);
+      expect(revised.reviewChecks).toEqual([]);
+      expect(revised.regionEvidence).toEqual([]);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   it("does not let a human acceptance waive unknown source timing during approval", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-approval-blocker-"));
     try {
