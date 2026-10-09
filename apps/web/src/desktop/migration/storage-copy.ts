@@ -41,6 +41,9 @@ export interface IndexedDatabaseReader {
   listDatabases(): Promise<Array<{ name: string; version: number }>>;
   readSchema(name: string): Promise<IndexedDatabaseSchema>;
   readBatch(name: string, storeName: string, afterKey: IDBValidKey | undefined, limit: number): Promise<IndexedDatabaseRecord[]>;
+  readKeysBatch?(name: string, storeName: string, afterKey: IDBValidKey | undefined, limit: number): Promise<IDBValidKey[]>;
+  readRecord?(name: string, storeName: string, key: IDBValidKey): Promise<unknown>;
+  finishRecordTransfer?(name: string, storeName: string, key: IDBValidKey, outcome: "verified" | "unavailable"): Promise<void>;
 }
 
 export interface IndexedDatabaseWriter {
@@ -54,6 +57,13 @@ export class IdentityStorageMigrationError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "IdentityStorageMigrationError";
+  }
+}
+
+export class UncopyableIndexedDatabaseRecordError extends IdentityStorageMigrationError {
+  constructor(readonly databaseName: string, readonly storeName: string, readonly key: IDBValidKey, options?: ErrorOptions) {
+    super(`The stored value in ${databaseName}/${storeName} could not cross the migration boundary.`, options);
+    this.name = "UncopyableIndexedDatabaseRecordError";
   }
 }
 
@@ -157,6 +167,93 @@ export async function copyLocalStorage(
   return { copied, preserved, total: sourceEntries.length };
 }
 
+export interface LocalStorageReader {
+  listKeys(): Promise<string[]>;
+  readValue(key: string): Promise<string | null>;
+}
+
+/** Sequential counterpart for a legacy-origin reader; destination values are checked before requesting source values. */
+export async function copyLocalStorageFromReader(
+  source: LocalStorageReader,
+  destination: LocalStoragePort,
+  journal: IdentityMigrationJournal,
+  options: {
+    runId: string;
+    excludeKeys?: string[];
+    mapKey?: (sourceKey: string) => string;
+    mapValue?: (sourceKey: string, sourceValue: string) => string;
+    signal?: AbortSignal;
+    onProgress?: (progress: { copied: number; preserved: number; total: number; key: string }) => void;
+  },
+): Promise<{ copied: number; preserved: number; total: number }> {
+  const excluded = new Set(options.excludeKeys ?? []);
+  const sourceKeys = (await source.listKeys()).filter((key) => !excluded.has(key));
+  const destinationKeys = new Set<string>();
+  const entries = sourceKeys.map((sourceKey) => {
+    const destinationKey = options.mapKey?.(sourceKey) ?? sourceKey;
+    if (!destinationKey) throw new IdentityStorageMigrationError(`No destination key was provided for ${sourceKey}.`);
+    if (destinationKeys.has(destinationKey)) throw new IdentityStorageMigrationError(`Multiple source keys map to the same destination key: ${destinationKey}.`);
+    destinationKeys.add(destinationKey);
+    return { sourceKey, destinationKey };
+  });
+
+  let copied = 0;
+  let preserved = 0;
+  for (const { sourceKey, destinationKey } of entries) {
+    ensureNotAborted(options.signal);
+    const id = journalKey([options.runId, "localStorage", sourceKey, destinationKey]);
+    const state = await journal.get(id);
+    if (state === "conflict") throw new IdentityStorageMigrationError(`A previous migration attempt found a conflicting destination value for ${destinationKey}.`);
+    let sourceValue: string | null | undefined;
+    const readValue = async (): Promise<string> => {
+      sourceValue ??= await source.readValue(sourceKey);
+      if (sourceValue === null) throw new IdentityStorageMigrationError(`Source local storage key disappeared during migration: ${sourceKey}`);
+      if (sourceValue === undefined) throw new IdentityStorageMigrationError(`Source local storage returned no value for ${sourceKey}.`);
+      return options.mapValue?.(sourceKey, sourceValue) ?? sourceValue;
+    };
+
+    if (state === "pending") {
+      const value = await readValue();
+      const current = destination.getItem(destinationKey);
+      if (current === value) {
+        await journal.delete(id);
+        copied += 1;
+        options.onProgress?.({ copied, preserved, total: entries.length, key: sourceKey });
+        continue;
+      }
+      if (current !== null) {
+        await journal.set(id, "conflict");
+        throw new IdentityStorageMigrationError(`A destination value changed while migration was interrupted: ${destinationKey}; it was preserved.`);
+      }
+    } else if (destination.getItem(destinationKey) !== null) {
+      preserved += 1;
+      options.onProgress?.({ copied, preserved, total: entries.length, key: sourceKey });
+      continue;
+    }
+
+    if (!state) {
+      await journal.set(id, "pending");
+      if (destination.getItem(destinationKey) !== null) {
+        await journal.set(id, "conflict");
+        throw new IdentityStorageMigrationError(`Destination local storage changed during migration: ${destinationKey}`);
+      }
+    }
+
+    try {
+      const value = await readValue();
+      destination.setItem(destinationKey, value);
+      if (destination.getItem(destinationKey) !== value) throw new IdentityStorageMigrationError(`Destination local storage readback did not match ${destinationKey}.`);
+      await journal.delete(id);
+      copied += 1;
+      options.onProgress?.({ copied, preserved, total: entries.length, key: sourceKey });
+    } catch (error) {
+      if (error instanceof IdentityStorageMigrationError) throw error;
+      throw new IdentityStorageMigrationError(`Could not copy local storage key ${sourceKey}; the source remains available for retry.`, { cause: error });
+    }
+  }
+  return { copied, preserved, total: entries.length };
+}
+
 export type IndexedDatabaseCopyProgress = {
   databaseName: string;
   storeName: string;
@@ -176,6 +273,7 @@ export async function copyIndexedDatabase(
     runId: string;
     batchSize?: number;
     signal?: AbortSignal;
+    onUncopyableRecord?: (record: { databaseName: string; storeName: string; key: IDBValidKey }) => void;
     onProgress?: (progress: IndexedDatabaseCopyProgress) => void;
   },
 ): Promise<{ databaseName: string; destinationName: string; copied: number; preserved: number }> {
@@ -195,30 +293,47 @@ export async function copyIndexedDatabase(
 
   let copied = 0;
   let preserved = 0;
+  const keysOnly = Boolean(source.readKeysBatch && source.readRecord);
   for (const store of schema.stores) {
     let afterKey: IDBValidKey | undefined;
     while (true) {
       ensureNotAborted(options.signal);
-      let records: IndexedDatabaseRecord[];
+      let records: IndexedDatabaseRecord[] = [];
+      let keys: IDBValidKey[] = [];
       try {
-        records = await source.readBatch(options.sourceName, store.name, afterKey, batchSize);
+        if (keysOnly) keys = await source.readKeysBatch!(options.sourceName, store.name, afterKey, batchSize);
+        else records = await source.readBatch(options.sourceName, store.name, afterKey, batchSize);
       } catch (error) {
         throw copyReadError(`${options.sourceName}/${store.name}`, error);
       }
-      if (!records.length) break;
-      for (const record of records) {
+      const batchKeys = keysOnly ? keys : records.map((record) => record.key);
+      if (!batchKeys.length) break;
+      for (let index = 0; index < batchKeys.length; index += 1) {
+        const key = batchKeys[index]!;
         ensureNotAborted(options.signal);
-        const id = journalKey([options.runId, "indexedDB", options.sourceName, destinationName, store.name, encodeIndexedDbKey(record.key)]);
+        const id = journalKey([options.runId, "indexedDB", options.sourceName, destinationName, store.name, encodeIndexedDbKey(key)]);
         const state = await journal.get(id);
         if (state === "conflict") throw new IdentityStorageMigrationError(`A previous migration attempt found a conflicting row in ${destinationName}/${store.name}.`);
 
-        if (!state && await destination.hasRecord(destinationName, store.name, record.key)) {
+        if (!state && await destination.hasRecord(destinationName, store.name, key)) {
           preserved += 1;
           continue;
         }
-        if (state === "pending" && await destination.hasRecord(destinationName, store.name, record.key)) {
-          const current = await destination.readRecord(destinationName, store.name, record.key);
-          if (await sameStructuredValue(record.value, current)) {
+        if (state === "pending" && await destination.hasRecord(destinationName, store.name, key)) {
+          let sourceValue: unknown;
+          try {
+            sourceValue = keysOnly ? await source.readRecord!(options.sourceName, store.name, key) : records[index]!.value;
+          } catch (error) {
+            if (error instanceof UncopyableIndexedDatabaseRecordError && options.onUncopyableRecord) {
+              await source.finishRecordTransfer?.(options.sourceName, store.name, key, "unavailable");
+              options.onUncopyableRecord({ databaseName: options.sourceName, storeName: store.name, key });
+              continue;
+            }
+            throw copyReadError(`${options.sourceName}/${store.name}/${encodeIndexedDbKey(key)}`, error);
+          }
+          const current = await destination.readRecord(destinationName, store.name, key);
+          if (await sameStructuredValue(sourceValue, current)) {
+            await source.finishRecordTransfer?.(options.sourceName, store.name, key, "verified");
             await journal.delete(id);
             copied += 1;
             continue;
@@ -227,6 +342,20 @@ export async function copyIndexedDatabase(
           throw new IdentityStorageMigrationError(`A destination row changed while migration was interrupted in ${destinationName}/${store.name}; it was preserved.`);
         }
         if (!state) await journal.set(id, "pending");
+
+        let value: unknown;
+        try {
+          value = keysOnly ? await source.readRecord!(options.sourceName, store.name, key) : records[index]!.value;
+        } catch (error) {
+          if (error instanceof UncopyableIndexedDatabaseRecordError && options.onUncopyableRecord) {
+            await journal.delete(id);
+            await source.finishRecordTransfer?.(options.sourceName, store.name, key, "unavailable");
+            options.onUncopyableRecord({ databaseName: options.sourceName, storeName: store.name, key });
+            continue;
+          }
+          throw copyReadError(`${options.sourceName}/${store.name}/${encodeIndexedDbKey(key)}`, error);
+        }
+        const record = { key, value };
 
         let written: boolean;
         try {
@@ -240,19 +369,20 @@ export async function copyIndexedDatabase(
         }
         let readback: unknown;
         try {
-          readback = await destination.readRecord(destinationName, store.name, record.key);
+          readback = await destination.readRecord(destinationName, store.name, key);
         } catch (error) {
           throw copyReadError(`${destinationName}/${store.name} readback`, error);
         }
         if (!await sameStructuredValue(record.value, readback)) {
           throw new IdentityStorageMigrationError(`IndexedDB readback did not match ${destinationName}/${store.name}; the row remains marked for retry.`);
         }
+        await source.finishRecordTransfer?.(options.sourceName, store.name, key, "verified");
         await journal.delete(id);
         copied += 1;
       }
-      afterKey = records[records.length - 1]!.key;
-      options.onProgress?.({ databaseName: destinationName, storeName: store.name, copied, preserved, batchRecords: records.length });
-      if (records.length < batchSize) break;
+      afterKey = batchKeys[batchKeys.length - 1]!;
+      options.onProgress?.({ databaseName: destinationName, storeName: store.name, copied, preserved, batchRecords: batchKeys.length });
+      if (batchKeys.length < batchSize) break;
     }
   }
   return { databaseName: options.sourceName, destinationName, copied, preserved };
@@ -269,6 +399,7 @@ export async function copyIndexedDatabases(
     excludeSourceDatabaseNames?: string[];
     batchSize?: number;
     signal?: AbortSignal;
+    onUncopyableRecord?: (record: { databaseName: string; storeName: string; key: IDBValidKey }) => void;
     onProgress?: (progress: IndexedDatabaseCopyProgress) => void;
   },
 ): Promise<{ databases: number; copied: number; preserved: number }> {
@@ -284,6 +415,7 @@ export async function copyIndexedDatabases(
       runId: options.runId,
       batchSize: options.batchSize,
       signal: options.signal,
+      onUncopyableRecord: options.onUncopyableRecord,
       onProgress: options.onProgress,
     });
     copied += result.copied;
@@ -496,6 +628,42 @@ export class BrowserIndexedDatabaseReader implements IndexedDatabaseReader {
         transaction.onerror = () => reject(transaction.error ?? new Error(`Read transaction failed for ${name}/${storeName}.`));
         transaction.oncomplete = () => resolve(records);
       });
+    } finally { database.close(); }
+  }
+
+  async readKeysBatch(name: string, storeName: string, afterKey: IDBValidKey | undefined, limit: number): Promise<IDBValidKey[]> {
+    if (!this.versions.has(name)) await this.listDatabases();
+    const version = this.versions.get(name);
+    if (!version) throw new IdentityStorageMigrationError(`IndexedDB source database ${name} no longer exists.`);
+    const database = await openExistingDatabase(this.factory, name, version);
+    try {
+      return await new Promise((resolve, reject) => {
+        const transaction = database.transaction(storeName, "readonly");
+        const range = afterKey === undefined ? undefined : IDBKeyRange.lowerBound(afterKey, true);
+        const request = transaction.objectStore(storeName).openKeyCursor(range);
+        const keys: IDBValidKey[] = [];
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) return;
+          keys.push(cursor.primaryKey);
+          if (keys.length < limit) cursor.continue();
+        };
+        request.onerror = () => reject(request.error ?? new Error(`Could not read keys in ${name}/${storeName}.`));
+        transaction.onabort = () => reject(transaction.error ?? new Error(`Key read transaction aborted for ${name}/${storeName}.`));
+        transaction.onerror = () => reject(transaction.error ?? new Error(`Key read transaction failed for ${name}/${storeName}.`));
+        transaction.oncomplete = () => resolve(keys);
+      });
+    } finally { database.close(); }
+  }
+
+  async readRecord(name: string, storeName: string, key: IDBValidKey): Promise<unknown> {
+    if (!this.versions.has(name)) await this.listDatabases();
+    const version = this.versions.get(name);
+    if (!version) throw new IdentityStorageMigrationError(`IndexedDB source database ${name} no longer exists.`);
+    const database = await openExistingDatabase(this.factory, name, version);
+    try {
+      const transaction = database.transaction(storeName, "readonly");
+      return await requestResult(transaction.objectStore(storeName).get(key));
     } finally { database.close(); }
   }
 }

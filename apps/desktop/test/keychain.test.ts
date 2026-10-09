@@ -47,4 +47,14 @@ describe("KeyStore", () => {
     expect(await ks.get("openai")).toBeNull();
     expect(await ks.get("elevenlabs")).toBe("b");
   });
+
+  it("does not turn corrupt key storage into an empty store or overwrite its bytes", async () => {
+    const corrupt = Buffer.from('{"assemblyai":false}\n');
+    await fs.writeFile(file, corrupt, { mode: 0o600 });
+    const ks = new KeyStore(file, fakeSafe());
+
+    await expect(ks.get("assemblyai")).rejects.toThrow("valid encrypted-key object");
+    await expect(ks.set("another", "value")).rejects.toThrow("valid encrypted-key object");
+    await expect(fs.readFile(file)).resolves.toEqual(corrupt);
+  });
 });

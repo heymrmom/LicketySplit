@@ -3,6 +3,8 @@ import { installLicketyIpc } from "./ipc/lickety";
 import { installPodcastIpc } from "./ipc/podcast";
 import { getDesktopProfilePath } from "./lickety/resource-policy";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { dialog } from "electron";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { registerAppSchemePrivileges, handleAppScheme, APP_INDEX } from "./protocol";
@@ -33,6 +35,7 @@ import { attachUnsavedGuard, markQuitting } from "./lifecycle";
 import { initAutoUpdater } from "./updater";
 import { initCrashReporter, reportError } from "./crash-reporter";
 import { migrateGpuCacheOnUpgrade } from "./gpu-cache-migration";
+import { copyProtectedKeyFile } from "./identity-migration";
 import {
   startMcpServer,
   stopMcpServer,
@@ -94,8 +97,7 @@ app.setName("LicketySplit");
 app.setPath("userData", getDesktopProfilePath(app.getPath("appData"), process.env.LICKETYSPLIT_DATA_DIR, !app.isPackaged || process.env.LICKETYSPLIT_TEST_MODE === "1"));
 registerAppSchemePrivileges();
 
-// Register crash/error reporting as early as possible so main-process faults and
-// process-gone events during startup are captured (POST to the cloud worker).
+// Register local crash logging as early as possible; remote sending is opt-in.
 initCrashReporter();
 
 // Drop regenerable GPU/shader/code caches when the app version changes — before
@@ -146,7 +148,32 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   if (!hasSingleInstanceLock) return;
-  handleAppScheme(rendererRoot());
+  void prepareProtectedKeyStore().then(() => {
+    handleAppScheme(rendererRoot());
+    installDesktopServices();
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[identity-migration] startup blocked:", message);
+    dialog.showErrorBox(
+      "Saved credentials need attention",
+      `${message}\n\nThe original protected key file was left in place. Correct or restore the file, then reopen LicketySplit. No editor window was opened.`,
+    );
+    app.quit();
+  });
+});
+
+async function prepareProtectedKeyStore(): Promise<void> {
+  const userData = app.getPath("userData");
+  await mkdir(userData, { recursive: true });
+  const result = await copyProtectedKeyFile(
+    path.join(userData, "openreel-keys.json"),
+    path.join(userData, "licketysplit-keys.json"),
+  );
+  const legacySource = result.status === "destination-wins" ? `; legacy source ${result.sourceState}` : "";
+  console.info(`[identity-migration] protected key store: ${result.status}${legacySource}; ${result.bytesCopied} bytes copied`);
+}
+
+function installDesktopServices(): void {
   installLicketyIpc();
   installPodcastIpc();
   handle(CHANNELS.probeHardware, z.undefined(), () => collectHardwareInfo());
@@ -290,7 +317,7 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
-});
+}
 
 // A second launch (blocked by the single-instance lock) surfaces the running
 // window rather than starting a duplicate process.

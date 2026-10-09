@@ -29,13 +29,28 @@ describe("protected identity file migration", () => {
   });
 
   it("keeps an existing destination value and identifies identical prior copies", async () => {
-    const newerBytes = Buffer.from("new destination key material");
+    const newerBytes = Buffer.from('{"other":"encrypted-v2"}\n');
     await writeFile(destinationPath, newerBytes, { mode: 0o600 });
-    await expect(copyProtectedKeyFile(sourcePath, destinationPath)).resolves.toEqual({ status: "destination-wins", bytesCopied: 0 });
+    await expect(copyProtectedKeyFile(sourcePath, destinationPath)).resolves.toEqual({ status: "destination-wins", bytesCopied: 0, sourceState: "different" });
     await expect(readFile(destinationPath)).resolves.toEqual(newerBytes);
 
     await writeFile(destinationPath, sourceBytes, { mode: 0o600 });
     await expect(copyProtectedKeyFile(sourcePath, destinationPath)).resolves.toEqual({ status: "already-present", bytesCopied: 0 });
+  });
+
+  it("uses a valid destination when stale legacy key bytes are unreadable", async () => {
+    const currentBytes = Buffer.from('{"apiKey":"destination-encrypted-value"}\n');
+    const staleBytes = Buffer.from("not valid protected key JSON\n");
+    await writeFile(destinationPath, currentBytes, { mode: 0o600 });
+    await writeFile(sourcePath, staleBytes, { mode: 0o600 });
+
+    await expect(copyProtectedKeyFile(sourcePath, destinationPath)).resolves.toEqual({
+      status: "destination-wins",
+      bytesCopied: 0,
+      sourceState: "unreadable",
+    });
+    await expect(readFile(sourcePath)).resolves.toEqual(staleBytes);
+    await expect(readFile(destinationPath)).resolves.toEqual(currentBytes);
   });
 
   it("reports an absent legacy file without touching the destination", async () => {
@@ -50,5 +65,23 @@ describe("protected identity file migration", () => {
     await expect(copyProtectedKeyFile(sourcePath, impossibleDestination)).rejects.toBeInstanceOf(Error);
     await expect(readFile(sourcePath)).resolves.toEqual(sourceBytes);
     await expect(readdir(missingDirectory)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("refuses an unreadable legacy key object and preserves its exact bytes", async () => {
+    const corruptBytes = Buffer.from('{"assemblyai":7}\n');
+    await writeFile(sourcePath, corruptBytes, { mode: 0o600 });
+
+    await expect(copyProtectedKeyFile(sourcePath, destinationPath)).rejects.toThrow("valid encrypted-key object");
+    await expect(readFile(sourcePath)).resolves.toEqual(corruptBytes);
+    await expect(readFile(destinationPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("does not accept or replace an unreadable destination key object", async () => {
+    const corruptBytes = Buffer.from("[]\n");
+    await writeFile(destinationPath, corruptBytes, { mode: 0o600 });
+
+    await expect(copyProtectedKeyFile(sourcePath, destinationPath)).rejects.toThrow("valid encrypted-key object");
+    await expect(readFile(sourcePath)).resolves.toEqual(sourceBytes);
+    await expect(readFile(destinationPath)).resolves.toEqual(corruptBytes);
   });
 });

@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Blob as NodeBlob } from "node:buffer";
 import { webcrypto } from "node:crypto";
-import { IDENTITY_MIGRATION_JOURNAL_DB } from "./storage-copy";
+import { IDENTITY_MIGRATION_JOURNAL_DB, UncopyableIndexedDatabaseRecordError } from "./storage-copy";
 import type {
   IdentityMigrationJournal,
   IndexedDatabaseReader,
@@ -13,7 +13,7 @@ import type {
   LocalStoragePort,
   MigrationJournalState,
 } from "./storage-copy";
-import { copyIndexedDatabase, copyIndexedDatabases, copyLocalStorage } from "./storage-copy";
+import { copyIndexedDatabase, copyIndexedDatabases, copyLocalStorage, copyLocalStorageFromReader } from "./storage-copy";
 
 class MemoryStorage implements LocalStoragePort {
   private readonly values = new Map<string, string>();
@@ -226,6 +226,22 @@ describe("same-origin storage copy primitives", () => {
     expect(destination.length).toBe(0);
   });
 
+  it("checks existing destination localStorage before requesting the remote value", async () => {
+    const destination = new MemoryStorage();
+    destination.seed("theme", "new destination setting");
+    const requested: string[] = [];
+
+    const result = await copyLocalStorageFromReader({
+      listKeys: async () => ["theme", "panel-state"],
+      readValue: async (key) => { requested.push(key); return key === "panel-state" ? "collapsed" : "old theme"; },
+    }, destination, journal, { runId: "remote-storage-v1" });
+
+    expect(result).toEqual({ copied: 1, preserved: 1, total: 2 });
+    expect(requested).toEqual(["panel-state"]);
+    expect(destination.getItem("theme")).toBe("new destination setting");
+    expect(destination.getItem("panel-state")).toBe("collapsed");
+  });
+
   it("copies bounded IndexedDB cursor pages and preserves schema, structured values, and newer destination rows", async () => {
     const source = new MemoryDatabase();
     const destination = new MemoryDatabase();
@@ -328,6 +344,37 @@ describe("same-origin storage copy primitives", () => {
     expect(await source.readRecord("openreel-db", "projects", 1)).toEqual({ id: 1, assetHandle: "fixture-only-handle" });
     expect(await destination.readRecord("licketysplit-db", "projects", 1)).toBeUndefined();
     expect(journal.entries.size).toBe(0);
+  });
+
+  it("skips one known uncloneable source row and still copies later cloneable records", async () => {
+    const destination = new MemoryDatabase();
+    const schema: IndexedDatabaseSchema = { name: "legacy-media", version: 1, stores: [{ name: "media", keyPath: "id", autoIncrement: false, indexes: [] }] };
+    const requested: IDBValidKey[] = [];
+    const source = {
+      listDatabases: async () => [{ name: "legacy-media", version: 1 }],
+      readSchema: async () => schema,
+      readBatch: async () => { throw new Error("keys-first reader must not request a full batch"); },
+      readKeysBatch: async (_name: string, _store: string, afterKey: IDBValidKey | undefined) => afterKey === undefined ? [1, 2] : [3],
+      readRecord: async (_name: string, _store: string, key: IDBValidKey) => {
+        requested.push(key);
+        if (key === 1) throw new UncopyableIndexedDatabaseRecordError("legacy-media", "media", key);
+        if (key === 2) return { id: 2, label: "source row that destination already has" };
+        return { id: 3, label: "cloneable row" };
+      },
+    } as unknown as IndexedDatabaseReader;
+    destination.seed("legacy-media", schema, { media: [{ key: 2, value: { id: 2, label: "new destination row" } }] });
+    const unavailable: Array<{ databaseName: string; storeName: string; key: IDBValidKey }> = [];
+
+    const result = await copyIndexedDatabase(source, destination, journal, {
+      sourceName: "legacy-media", runId: "skip-handle-v1", batchSize: 2,
+      onUncopyableRecord: (record) => unavailable.push(record),
+    });
+
+    expect(result).toEqual({ databaseName: "legacy-media", destinationName: "legacy-media", copied: 1, preserved: 1 });
+    expect(requested).toEqual([1, 3]);
+    expect(unavailable).toEqual([{ databaseName: "legacy-media", storeName: "media", key: 1 }]);
+    expect(await destination.readRecord("legacy-media", "media", 2)).toEqual({ id: 2, label: "new destination row" });
+    expect(await destination.readRecord("legacy-media", "media", 3)).toEqual({ id: 3, label: "cloneable row" });
   });
 
   it("detects same-size Blob content changes in bounded readback slices", async () => {

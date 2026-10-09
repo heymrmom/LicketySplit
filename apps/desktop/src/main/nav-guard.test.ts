@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { isAllowedNavigation } from "./nav-guard";
 
-const APP_INDEX = "app://openreel/index.html";
+const APP_INDEX = "app://licketysplit/index.html";
 
 describe("isAllowedNavigation", () => {
   it("allows same-origin app navigation", () => {
-    expect(isAllowedNavigation("app://openreel/editor", APP_INDEX)).toBe(true);
-    expect(isAllowedNavigation("app://openreel/index.html#x", APP_INDEX)).toBe(true);
+    expect(isAllowedNavigation("app://licketysplit/editor", APP_INDEX)).toBe(true);
+    expect(isAllowedNavigation("app://licketysplit/index.html#x", APP_INDEX)).toBe(true);
   });
 
   it("denies external http(s) sites", () => {
@@ -17,6 +17,7 @@ describe("isAllowedNavigation", () => {
   it("denies other schemes and hosts", () => {
     expect(isAllowedNavigation("file:///etc/passwd", APP_INDEX)).toBe(false);
     expect(isAllowedNavigation("app://other/index.html", APP_INDEX)).toBe(false);
+    expect(isAllowedNavigation("app://openreel/migration.html", APP_INDEX)).toBe(false);
     expect(isAllowedNavigation("javascript:alert(1)", APP_INDEX)).toBe(false);
   });
 
