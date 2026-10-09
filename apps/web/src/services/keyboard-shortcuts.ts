@@ -445,7 +445,7 @@ const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   {
     id: "timeline.fitTimeline",
     name: "Fit Timeline",
-    description: "Fit timeline to view",
+    description: "Toggle full extent zoom and restore the previous detail zoom",
     category: "timeline",
     defaultKey: "cmd+0",
     currentKey: "cmd+0",
@@ -547,11 +547,34 @@ const PRESETS: ShortcutPreset[] = [
   {
     id: "davinci",
     name: "DaVinci Resolve",
-    description: "DaVinci Resolve-style shortcuts",
+    description: "Resolve-compatible bindings where supported; other commands keep OpenReel defaults",
     shortcuts: {
       "editing.split": "cmd+\\",
+      "editing.trimStart": "shift+[",
+      "editing.trimEnd": "shift+]",
+      "editing.cut": "cmd+x",
+      "editing.copy": "cmd+c",
+      "editing.paste": "cmd+v",
+      "selection.selectAll": "cmd+a",
+      "selection.deselect": "cmd+shift+a",
+      "playback.prevClip": "arrowup",
+      "playback.nextClip": "arrowdown",
       "playback.playPause": "space",
-      "editing.rippleDelete": "shift+backspace",
+      "playback.frameBack": "arrowleft",
+      "playback.frameForward": "arrowright",
+      "playback.secondBack": "shift+arrowleft",
+      "playback.secondForward": "shift+arrowright",
+      "playback.goToStart": "home",
+      "playback.goToEnd": "end",
+      "editing.undo": "cmd+z",
+      "editing.redo": "cmd+shift+z",
+      "editing.delete": "delete",
+      "timeline.toggleSnap": "n",
+      "timeline.zoomIn": "cmd+=",
+      "timeline.zoomOut": "cmd+-",
+      "timeline.fitTimeline": "shift+z",
+      "tools.addMarker": "m",
+      "file.save": "cmd+s",
     },
   },
 ];
@@ -559,6 +582,7 @@ const PRESETS: ShortcutPreset[] = [
 class KeyboardShortcutsManager {
   private shortcuts: Map<string, ShortcutDefinition> = new Map();
   private handlers: Map<string, Set<ShortcutHandler>> = new Map();
+  private changeListeners: Set<() => void> = new Set();
   private activePreset: string = "openreel";
   private isListening: boolean = false;
 
@@ -615,6 +639,15 @@ class KeyboardShortcutsManager {
     } catch { /* Keep the preset active for this session. */ }
   }
 
+  private notifyShortcutsChanged(): void {
+    this.changeListeners.forEach((listener) => listener());
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.changeListeners.add(listener);
+    return () => this.changeListeners.delete(listener);
+  }
+
   startListening(): void {
     if (this.isListening) return;
     this.isListening = true;
@@ -652,7 +685,7 @@ class KeyboardShortcutsManager {
       const eventKey = normalizeKey(e.key);
       const keyMatches =
         eventKey === combo.key || e.code.toLowerCase() === combo.key ||
-        (e.altKey && PHYSICAL_PUNCTUATION[e.code] === combo.key) ||
+        PHYSICAL_PUNCTUATION[e.code] === combo.key ||
         (eventKey === "backspace" && combo.key === "delete");
       const metaMatches = (combo.meta || combo.ctrl) === isMeta;
       const shiftMatches = combo.shift === e.shiftKey ||
@@ -706,6 +739,7 @@ class KeyboardShortcutsManager {
 
     this.shortcuts.set(id, { ...shortcut, currentKey: key });
     this.saveShortcuts();
+    this.notifyShortcutsChanged();
     return true;
   }
 
@@ -715,6 +749,7 @@ class KeyboardShortcutsManager {
       if (this.findConflict(shortcut.defaultKey, id)) return false;
       this.shortcuts.set(id, { ...shortcut, currentKey: shortcut.defaultKey });
       this.saveShortcuts();
+      this.notifyShortcutsChanged();
       return true;
     }
     return false;
@@ -727,6 +762,7 @@ class KeyboardShortcutsManager {
     this.saveShortcuts();
     this.activePreset = "openreel";
     this.savePreset();
+    this.notifyShortcutsChanged();
   }
 
   findConflict(key: string, excludeId?: string): ShortcutDefinition | null {
@@ -774,6 +810,7 @@ class KeyboardShortcutsManager {
     this.activePreset = presetId;
     this.saveShortcuts();
     this.savePreset();
+    this.notifyShortcutsChanged();
   }
 
   formatShortcut(id: string): string {

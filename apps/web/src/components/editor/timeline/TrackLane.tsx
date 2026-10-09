@@ -17,6 +17,7 @@ import { KeyframeTrack } from "./KeyframeTrack";
 import { TransitionHandle } from "./TransitionHandle";
 import { AdjustmentLayerTimelineItem } from "./AdjustmentLayerTimelineItem";
 import { resolveTransitionHandles } from "./transition-handles";
+import { findNearestShortClipHitTarget } from "./clip-hit-target";
 import { calculateSnap } from "./utils";
 import { useTimelineStore } from "../../../stores/timeline-store";
 import { useUIStore } from "../../../stores/ui-store";
@@ -116,6 +117,35 @@ export const TrackLane: React.FC<TrackLaneProps> = React.memo(function TrackLane
   );
   const frameRate = useProjectStore((state) => state.project.settings.frameRate);
   const mediaItems = useProjectStore((state) => state.project.mediaLibrary.items);
+  const visibleMediaClips = useMemo(
+    () => track.clips
+      .filter((clip) => !textClips.some((textClip) => textClip.id === clip.id))
+      .filter((clip) => !shapeClips.some((shapeClip) => shapeClip.id === clip.id)),
+    [shapeClips, textClips, track.clips],
+  );
+
+  const findShortClipHit = useCallback((event: React.MouseEvent) => {
+    if (track.locked) return null;
+    const rect = laneRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    // laneRef is inside the horizontally scrolling content, so its rect has
+    // already moved left by scrollX; subtracting left yields content space.
+    const contentX = event.clientX - rect.left;
+    return findNearestShortClipHitTarget(visibleMediaClips, contentX, pixelsPerSecond);
+  }, [pixelsPerSecond, track.locked, visibleMediaClips]);
+
+  const handleLaneMouseDown = useCallback((event: React.MouseEvent) => {
+    if (event.button !== 0 || event.target !== laneRef.current) return;
+    if (findShortClipHit(event)) event.stopPropagation();
+  }, [findShortClipHit]);
+
+  const handleLaneClick = useCallback((event: React.MouseEvent) => {
+    if (event.button !== 0 || event.target !== laneRef.current) return;
+    const clip = findShortClipHit(event);
+    if (!clip) return;
+    event.stopPropagation();
+    onSelectClip(clip.id, event.shiftKey || event.metaKey || event.ctrlKey);
+  }, [findShortClipHit, onSelectClip]);
 
   const clipsWithKeyframes = useMemo(() => {
     return track.clips.filter((clip) => clip.keyframes && clip.keyframes.length > 0);
@@ -305,20 +335,20 @@ export const TrackLane: React.FC<TrackLaneProps> = React.memo(function TrackLane
     <div className="relative">
       <div
         ref={laneRef}
+        data-track-lane={track.id}
         style={{ height: trackHeight }}
         className={`border-b border-border/50 relative transition-colors ${
           isDragOver
             ? "bg-primary/10 border-primary/30"
             : "bg-background-secondary/20"
         }`}
+        onMouseDown={handleLaneMouseDown}
+        onClick={handleLaneClick}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {track.clips
-          .filter((clip) => !textClips.some((tc) => tc.id === clip.id))
-          .filter((clip) => !shapeClips.some((sc) => sc.id === clip.id))
-          .map((clip) => (
+        {visibleMediaClips.map((clip) => (
             <ClipComponent
               key={clip.id}
               clip={clip}

@@ -133,6 +133,40 @@ describe("editor keyboard shortcut dispatch", () => {
     expect(keyboardShortcuts.getActivePreset()).toBe("openreel");
   });
 
+  it("keeps OpenReel fit on Cmd+0 and applies only verified Resolve bindings", () => {
+    expect(keyboardShortcuts.getShortcut("timeline.fitTimeline")?.currentKey).toBe("cmd+0");
+
+    keyboardShortcuts.applyPreset("davinci");
+
+    expect(keyboardShortcuts.getShortcut("timeline.fitTimeline")?.currentKey).toBe("shift+z");
+    expect(keyboardShortcuts.getShortcut("editing.split")?.currentKey).toBe("cmd+\\");
+    expect(keyboardShortcuts.getShortcut("editing.rippleDelete")?.currentKey).toBe("shift+delete");
+    expect(keyboardShortcuts.getShortcut("playback.prevClip")?.currentKey).toBe("arrowup");
+    expect(keyboardShortcuts.getShortcut("playback.nextClip")?.currentKey).toBe("arrowdown");
+    const fit = listen("timeline.fitTimeline");
+    const split = listen("editing.split");
+    const trimStart = listen("editing.trimStart");
+    press("z", { shiftKey: true });
+    press("\\", { metaKey: true });
+    press("{", { code: "BracketLeft", shiftKey: true });
+    expect(fit).toHaveBeenCalledOnce();
+    expect(split).toHaveBeenCalledOnce();
+    expect(trimStart).toHaveBeenCalledOnce();
+  });
+
+  it("notifies toolbar subscribers when custom bindings and presets change", () => {
+    const changed = vi.fn();
+    const unsubscribe = keyboardShortcuts.subscribe(changed);
+
+    expect(keyboardShortcuts.setShortcut("timeline.fitTimeline", "x")).toBe(true);
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(keyboardShortcuts.setShortcut("timeline.fitTimeline", "")).toBe(true);
+    expect(changed).toHaveBeenCalledTimes(2);
+    unsubscribe();
+    keyboardShortcuts.applyPreset("davinci");
+    expect(changed).toHaveBeenCalledTimes(2);
+  });
+
   it("captures physical Option punctuation consistently on macOS", () => {
     expect(captureKeyCombo({ key: "“", code: "BracketLeft", altKey: true, metaKey: false, ctrlKey: false, shiftKey: false })).toBe("alt+[");
   });

@@ -18,6 +18,10 @@ import {
   type ShortcutCategory,
   type ShortcutDefinition,
 } from "../../services/keyboard-shortcuts";
+import {
+  buildResolveShortcutComparisonRows,
+  searchResolveShortcutComparison,
+} from "../../services/resolve-shortcut-comparison";
 
 interface KeyboardShortcutsOverlayProps {
   isOpen: boolean;
@@ -35,6 +39,7 @@ export const KeyboardShortcutsOverlay: React.FC<
   const [editingId, setEditingId] = useState<string | null>(null);
   const [shortcutError, setShortcutError] = useState<string | null>(null);
   const [showPresets, setShowPresets] = useState(false);
+  const [activeView, setActiveView] = useState<"shortcuts" | "comparison">("shortcuts");
   const [activePreset, setActivePreset] = useState(
     keyboardShortcuts.getActivePreset(),
   );
@@ -47,6 +52,15 @@ export const KeyboardShortcutsOverlay: React.FC<
     } else {
       setEditingId(null);
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const refresh = () => {
+      setShortcuts(keyboardShortcuts.getAllShortcuts());
+      setActivePreset(keyboardShortcuts.getActivePreset());
+    };
+    return keyboardShortcuts.subscribe(refresh);
   }, [isOpen]);
 
   useEffect(() => {
@@ -70,7 +84,8 @@ export const KeyboardShortcutsOverlay: React.FC<
     const matchesSearch =
       searchQuery === "" ||
       shortcut.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      shortcut.description.toLowerCase().includes(searchQuery.toLowerCase());
+      shortcut.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      shortcut.currentKey.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -151,6 +166,14 @@ export const KeyboardShortcutsOverlay: React.FC<
     })),
   ];
   const presets = keyboardShortcuts.getPresets();
+  const viewOptions = [
+    { value: "shortcuts", label: "Shortcuts" },
+    { value: "comparison", label: "Resolve 21.1 comparison" },
+  ] as const;
+  const comparisonRows = searchResolveShortcutComparison(
+    buildResolveShortcutComparisonRows(shortcuts),
+    searchQuery,
+  );
 
   if (!isOpen) return null;
 
@@ -174,15 +197,24 @@ export const KeyboardShortcutsOverlay: React.FC<
           <LayoutContent className="max-h-[65vh] overflow-y-auto">
         <div className="space-y-4">
         {shortcutError && <p role="status" className="text-sm text-red-400">{shortcutError}</p>}
+        <div className="overflow-x-auto">
+          <ToolcraftSegmentedControl<"shortcuts" | "comparison">
+            ariaLabel="Shortcut view"
+            className="min-w-[360px]"
+            value={activeView}
+            onChange={setActiveView}
+            options={viewOptions}
+          />
+        </div>
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
             <ToolcraftTextInputControl
-              label="Search shortcuts"
+              label={activeView === "comparison" ? "Search shortcut comparison" : "Search shortcuts"}
               isLabelHidden
               type="text"
               value={searchQuery}
               onChange={setSearchQuery}
-              placeholder="Search shortcuts..."
+              placeholder={activeView === "comparison" ? "Search actions, keys, or behavior..." : "Search shortcuts..."}
               startIcon={<Search size={16} aria-hidden />}
               width="100%"
             />
@@ -229,7 +261,7 @@ export const KeyboardShortcutsOverlay: React.FC<
           />
         </div>
 
-        <div className="overflow-x-auto">
+        {activeView === "shortcuts" && <div className="overflow-x-auto">
           <ToolcraftSegmentedControl<ShortcutCategory | "all">
             ariaLabel="Shortcut category"
             className="min-w-[640px]"
@@ -237,9 +269,9 @@ export const KeyboardShortcutsOverlay: React.FC<
             onChange={setActiveCategory}
             options={categoryOptions}
           />
-        </div>
+        </div>}
 
-        <div className="space-y-6">
+        {activeView === "shortcuts" ? <div className="space-y-6">
           {Object.entries(groupedShortcuts).map(
             ([category, categoryShortcuts]) => (
               <div key={category}>
@@ -287,7 +319,7 @@ export const KeyboardShortcutsOverlay: React.FC<
                           />
                         ) : (
                           <Button
-                            label={formatKeyComboDisplay(shortcut.currentKey)}
+                            label={shortcut.currentKey ? formatKeyComboDisplay(shortcut.currentKey) : "Unassigned"}
                             onClick={() => { setEditingId(shortcut.id); setShortcutError(null); }}
                             variant="secondary"
                             size="sm"
@@ -319,7 +351,45 @@ export const KeyboardShortcutsOverlay: React.FC<
               isCompact
             />
           )}
-        </div>
+        </div> : <div className="space-y-3">
+          <Text type="supporting" color="secondary" display="block" className="text-xs">
+            LicketySplit bindings reflect the current app keymap. Resolve bindings are 21.1 macOS defaults; a customized Resolve keymap may differ.
+          </Text>
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="min-w-[980px] w-full border-collapse text-left text-xs">
+              <thead className="sticky top-0 bg-background-secondary text-fg-muted">
+                <tr>
+                  <th scope="col" className="px-3 py-2">Action</th>
+                  <th scope="col" className="px-3 py-2">LicketySplit binding</th>
+                  <th scope="col" className="px-3 py-2">Resolve default</th>
+                  <th scope="col" className="px-3 py-2">Compatibility</th>
+                  <th scope="col" className="px-3 py-2">Behavior notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonRows.map((row) => (
+                  <tr key={row.id} data-testid={`shortcut-comparison-${row.id}`} className="border-t border-border align-top">
+                    <th scope="row" className="px-3 py-2 font-medium text-fg-1">{row.action}</th>
+                    <td className="px-3 py-2 font-mono text-fg-1">
+                      {row.licketySplitBinding === "Not implemented"
+                        ? "Not implemented"
+                        : row.licketySplitBinding === "Unassigned"
+                          ? "Unassigned"
+                          : formatKeyComboDisplay(row.licketySplitBinding)}
+                      {row.bindingSource === "native menu" && <span className="ml-1 text-fg-muted">(native menu)</span>}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-fg-1">{row.resolveDefault}</td>
+                    <td className="px-3 py-2 text-fg-2">{row.compatibility}</td>
+                    <td className="px-3 py-2 text-fg-muted">{row.behaviorNotes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {comparisonRows.length === 0 && (
+              <EmptyState title="No matching comparison rows" icon={<Search size={32} aria-hidden />} isCompact />
+            )}
+          </div>
+        </div>}
         </div>
           </LayoutContent>
         }

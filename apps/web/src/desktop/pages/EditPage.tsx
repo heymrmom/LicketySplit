@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 import type React from "react";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ToolcraftText as Text } from "@openreel/ui";
 
 import { AssetsPanel } from "../../components/editor/AssetsPanel";
@@ -9,6 +9,25 @@ import { PanelErrorBoundary } from "../../components/ErrorBoundary";
 import { Icon } from "@/icons/Icon";
 import { useUIStore } from "../../stores/ui-store";
 import { useResizable } from "../editor/useResizable";
+
+const MIN_VIEWER_HEIGHT = 240;
+const MIN_TIMELINE_HEIGHT = 160;
+const GRID_GAP = 1;
+const COMPACT_WIDTH = 1080;
+const FULL_PANEL_WIDTH = 1360;
+
+export function getResponsiveTimelineHeight(
+  preferredHeight: number,
+  availableHeight: number,
+): number {
+  const preferred = Math.max(MIN_TIMELINE_HEIGHT, Math.min(640, preferredHeight));
+  if (!Number.isFinite(availableHeight) || availableHeight <= 0) return preferred;
+  const maxForAvailableSpace = Math.max(
+    MIN_TIMELINE_HEIGHT,
+    availableHeight - MIN_VIEWER_HEIGHT - GRID_GAP,
+  );
+  return Math.min(preferred, maxForAvailableSpace);
+}
 
 const Preview = lazy(() =>
   import("../../components/editor/Preview").then((m) => ({ default: m.Preview })),
@@ -99,6 +118,8 @@ function RowHandle({
 }
 
 export function EditPage(): JSX.Element {
+  const editPageRef = useRef<HTMLDivElement>(null);
+  const [availableSize, setAvailableSize] = useState({ width: 0, height: 0 });
   const chatVisible = useUIStore(
     (state) => state.panels.agentChat?.visible ?? false,
   );
@@ -136,22 +157,57 @@ export function EditPage(): JSX.Element {
     storageKey: "openreel-desktop-timeline-h",
   });
 
+  useEffect(() => {
+    const element = editPageRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const next = {
+        width: entry.contentRect.width,
+        height: entry.contentRect.height,
+      };
+      setAvailableSize((current) =>
+        current.width === next.width && current.height === next.height
+          ? current
+          : next,
+      );
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const compactProgress = Math.max(
+    0,
+    Math.min(1, (availableSize.width - COMPACT_WIDTH) / (FULL_PANEL_WIDTH - COMPACT_WIDTH)),
+  );
+  const responsiveWidth = (preferred: number, minimum: number) =>
+    Math.round(minimum + (preferred - minimum) * compactProgress);
+  const mediaWidth = responsiveWidth(mediaW.value, 220);
+  const inspectorWidth = responsiveWidth(inspectorW.value, 260);
+  const chatWidth = responsiveWidth(chatW.value, 320);
+  const responsiveTimelineHeight = getResponsiveTimelineHeight(
+    timelineH.value,
+    availableSize.height,
+  );
+
   const gridStyle: React.CSSProperties = chatVisible
     ? {
-        gridTemplateColumns: `${mediaW.value}px 1fr ${inspectorW.value}px ${chatW.value}px`,
-        gridTemplateRows: `1fr ${timelineH.value}px`,
+        gridTemplateColumns: `${mediaWidth}px minmax(0, 1fr) ${inspectorWidth}px ${chatWidth}px`,
+        gridTemplateRows: `minmax(0, 1fr) ${responsiveTimelineHeight}px`,
         gridTemplateAreas:
           "'media stage inspector chat' 'timeline timeline timeline timeline'",
       }
     : {
-        gridTemplateColumns: `${mediaW.value}px 1fr ${inspectorW.value}px`,
-        gridTemplateRows: `1fr ${timelineH.value}px`,
+        gridTemplateColumns: `${mediaWidth}px minmax(0, 1fr) ${inspectorWidth}px`,
+        gridTemplateRows: `minmax(0, 1fr) ${responsiveTimelineHeight}px`,
         gridTemplateAreas:
           "'media stage inspector' 'timeline timeline timeline'",
       };
 
   return (
     <div
+      ref={editPageRef}
       className="grid h-full min-h-0 w-full gap-px overflow-hidden bg-border"
       style={gridStyle}
       data-testid="desktop-edit-page"
