@@ -185,6 +185,9 @@ declare global {
         getTranscription(jobId:string):Promise<{state:JobState;providerJobId?:string;transcript?:TranscriptDocument;error?:string}>;
         audioWindow(args:{requestId?:string;assetId:string;trackIndex:number;startMs:number;durationMs:number;sampleRate:1000|16000|48000;channels:1|2}):Promise<{channels:Float32Array[];sampleRate:number}>;
         resourceProfile():Promise<ResourceProfile>;
+        referenceFile(mediaId:string,file:File):Promise<{originalUri:string}|null>;
+        referencePath(mediaId:string,path:string):Promise<{originalUri:string}>;
+        originalUri(mediaId:string):Promise<string|undefined>;
         registerFile(mediaId:string,file:Blob):Promise<RegisteredAsset>;
         registerPath(mediaId:string,path:string):Promise<RegisteredAsset>;
         findAsset(mediaId:string):Promise<RegisteredAsset|undefined>;
@@ -302,6 +305,9 @@ declare global {
           audioBitrateKbps?: number;
         }): Promise<{ outPath: string }>;
         extractAudioWav(args: { srcPath: string; streamIndex?: number }): Promise<{ outPath: string }>;
+        inspectFile(file:File):Promise<import("@openreel/core/media/types").MediaTrackInfo|null>;
+        inspectPath(args:{srcPath:string}):Promise<import("@openreel/core/media/types").MediaTrackInfo>;
+        probeFile(file:File):Promise<{streams:{index:number;codec:string;channels:number;sampleRate:number}[]}|null>;
         probeAudioStreams(args: { srcPath: string }): Promise<{
           streams: { index: number; codec: string; channels: number; sampleRate: number; language?: string }[];
         }>;

@@ -21,6 +21,8 @@ import {
   type TranscodeOptions,
 } from "./ffmpeg-fallback";
 import {
+  getBridge,
+  materializeToTemp,
   bindNativeOriginalFile,
   nativeMediaAvailable,
   proxyViaNative,
@@ -99,7 +101,21 @@ export class MediaImportService {
     file: File,
     options: MediaImportOptions = {},
   ): Promise<MediaImportResult> {
+    const desktop=(globalThis as unknown as {openreel?:{platform?:string}}).openreel?.platform==='desktop';
     const opts = { ...DEFAULT_OPTIONS, ...options };
+    if(desktop){opts.useFallback=false;opts.quickMode=true;}
+    if(desktop&&!file.type.startsWith("image/")&&getBridge()?.media.inspectFile){
+      try {
+        const bridge=getBridge()!;
+        let metadata=await bridge.media.inspectFile!(file);
+        if(!metadata&&bridge.media.inspectPath)metadata=await bridge.media.inspectPath({srcPath:await materializeToTemp(bridge,file)});
+        if(metadata){
+          const type=metadata.hasVideo?'video':metadata.hasAudio?'audio':inferMediaType(file.type);
+          if(!type)return {success:false,error:'Could not determine the original media type. No conversion was performed.'};
+          return {success:true,media:{id:uuidv4(),name:file.name,type,blob:file,metadata,thumbnails:[],waveformData:null},warnings:metadata.canDecode?undefined:['Original imported unchanged. Preview preparation may be needed for this codec.']};
+        }
+      }catch(error){return {success:false,error:`Could not inspect the original: ${error instanceof Error?error.message:'Unknown inspection error'}. No conversion was performed.`};}
+    }
     const warnings: string[] = [];
     const validation = await this.validateFormat(file);
     if (!validation.supported) {
@@ -124,7 +140,7 @@ export class MediaImportService {
 
       return {
         success: false,
-        error: validation.error || "Unsupported format",
+        error: desktop?`${validation.error || "Unsupported format"}. Original unchanged; format conversion requires your approval.`:validation.error || "Unsupported format",
       };
     }
 
@@ -155,10 +171,11 @@ export class MediaImportService {
 
       const needsTranscode =
         !metadata.canDecode ||
-        (file.type === "video/quicktime" &&
+        (!desktop && file.type === "video/quicktime" &&
           !(await this.canBrowserPlay(file)));
 
       if (needsTranscode) {
+        if(desktop)warnings.push("Original imported unchanged. This codec may need separately approved conversion or automatic preview preparation.");
         if (!metadata.canDecode) {
           warnings.push(
             "Codec may not be fully supported. Playback might be limited.",
@@ -296,9 +313,7 @@ export class MediaImportService {
 
       return {
         success: false,
-        error: `Import failed: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
+        error: `${desktop?"Could not inspect the original":"Import failed"}: ${error instanceof Error ? error.message : "Unknown error"}${desktop?". No conversion was performed.":""}`,
       };
     }
   }

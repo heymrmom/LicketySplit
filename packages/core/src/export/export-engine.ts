@@ -161,7 +161,7 @@ export class ExportEngine {
     }
 
     if(getManagedBridge()) {
-      try {const items=[];for(const item of project.mediaLibrary.items)items.push(item.type==="image"?item:await prepareNativeOriginal(item));project={...project,mediaLibrary:{items}};}
+      try {const referenced=new Set(project.timeline.tracks.flatMap(track=>track.clips.map(clip=>clip.mediaId)));const items=[];for(const item of project.mediaLibrary.items)items.push(!referenced.has(item.id)||item.type==="image"?item:await prepareNativeOriginal(item));project={...project,mediaLibrary:{items}};}
       catch(error){return {success:false,error:this.createError("INVALID_SETTINGS",error instanceof Error?error.message:"Relink original media","preparing")};}
     }
     const { timeline } = project;

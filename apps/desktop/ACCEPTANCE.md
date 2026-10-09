@@ -42,3 +42,24 @@ fresh-download Gatekeeper acceptance. Missing evidence blocks draft creation.
 After those prerequisites, attach the matching DMG, ZIP, manifest, checksums and
 third-party notices to a **draft** GitHub release targeting that exact commit.
 Publishing remains a separate user action.
+
+## Native import reference follow-up
+
+Desktop disk-file intake reads basic metadata directly from the selected original.
+It does not automatically transcode the import or copy video/audio bytes into
+IndexedDB. Pending references contain no verified digest; identity is calculated
+when a demanded proxy, analysis or export needs it. Original disks and paths must
+remain available; missing or changed sources require relinking. Generated media
+without a real source path is streamed in bounded chunks to managed disk storage.
+Images retain reference-only persistence and hydrate image bytes when needed.
+
+Basic media entries appear before optional thumbnails. Automatic preview
+preparation is retained for selected/current clips; unused library recordings
+are deferred. Unsupported codecs require a preview proxy even below540p.
+General waveform/sync scheduling and batch format-conversion UI are separate
+proposals, not part of this follow-up. Import conversion still requires separate
+user approval. Existing source copies, databases and installed apps are preserved.
+
+Keep the original12477c5 candidate in `release`. The native-import test candidate
+uses a separate `release-native-import` output with `native-import` artifact names;
+building it does not install or alter an application currently importing media.

@@ -1,3 +1,4 @@
+import {inspectOriginal} from "./lickety/import-inspection";
 import { installLicketyIpc } from "./ipc/lickety";
 import { getDesktopProfilePath } from "./lickety/resource-policy";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
@@ -173,6 +174,7 @@ app.whenReady().then(() => {
   handle(CHANNELS.mediaGenerateProxy, proxyArgsSchema, generateProxy);
   handle(CHANNELS.mediaTranscode, transcodeArgsSchema, transcode);
   handle(CHANNELS.mediaExtractAudioWav, extractAudioArgsSchema, extractAudioWav);
+  handle(CHANNELS.mediaInspectOriginal,probeAudioArgsSchema,({srcPath})=>inspectOriginal(srcPath));
   handle(CHANNELS.mediaProbeAudioStreams, probeAudioArgsSchema, probeAudioStreams);
   handle(CHANNELS.mediaFetchUrl, fetchUrlArgsSchema, fetchUrl);
   handle(CHANNELS.auroraRenderPreview, auroraRenderPreviewArgsSchema, async (args) =>

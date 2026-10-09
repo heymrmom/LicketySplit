@@ -31,7 +31,10 @@ export interface ProjectSummary {
 export interface MediaRecord {
   readonly id: string;
   readonly projectId: string;
-  readonly blob: Blob;
+  readonly blob: Blob | null;
+  /** Desktop-only opaque reference; source bytes remain on disk. */
+  readonly nativeOriginalUri?: string;
+  readonly nativeMediaType?: "image" | "video" | "audio";
   readonly metadata: MediaMetadata;
 }
 

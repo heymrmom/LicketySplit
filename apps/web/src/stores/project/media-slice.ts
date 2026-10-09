@@ -24,6 +24,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
   return {
     importMedia: async (file: File) => {
       const { project } = get();
+      const desktop=typeof window!=="undefined"&&window.openreel?.platform==="desktop";
 
       try {
         const mediaBridge = getMediaBridge();
@@ -32,7 +33,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
         }
 
         const isLargeFile = file.size > 50 * 1024 * 1024;
-        const importResult = await mediaBridge.importFile(file, true, isLargeFile);
+        const importResult = await mediaBridge.importFile(file, true, desktop||isLargeFile);
 
         if (!importResult.success || !importResult.media) {
           return {
@@ -92,7 +93,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           mediaType = "image";
         }
 
-        if (mediaType === "video" && !thumbnailUrl) {
+        if (!desktop && mediaType === "video" && !thumbnailUrl) {
           try {
             const thumbs = await mediaBridge.generateThumbnailsForMedia(
               processedMedia.blob ?? file,
@@ -129,6 +130,9 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
             fileSize: file.size,
             hasVideo: processedMedia.metadata.hasVideo,
             hasAudio: processedMedia.metadata.hasAudio,
+            audioTrackCount:processedMedia.metadata.audioTrackCount,
+            canDecode:processedMedia.metadata.canDecode,
+            canDecodeVideo:processedMedia.metadata.canDecodeVideo,
           },
           thumbnailUrl,
           waveformData: processedMedia.waveformData?.peaks || null,
@@ -141,6 +145,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           },
         };
 
+        if(desktop)await saveMediaBlob(project.id,newMediaItem.id,file,newMediaItem.metadata);
         const currentProject = get().project;
         if (currentProject.id !== project.id) {
           return {
@@ -163,7 +168,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
 
         set({ project: updatedProject });
 
-        try {
+        if(!desktop)try {
           await saveMediaBlob(
             updatedProject.id,
             newMediaItem.id,
@@ -178,7 +183,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           );
         }
 
-        if (mediaType === "video" && !thumbnailUrl) {
+        if (!desktop && mediaType === "video" && !thumbnailUrl) {
           setTimeout(async () => {
             try {
               const thumbs = await mediaBridge.generateThumbnailsForMedia(
@@ -259,6 +264,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
       const replacementKey = `${project.id}:${mediaId}`;
       const replacementRequest = Symbol();
       replacementRequests.set(replacementKey, replacementRequest);
+      const desktop=typeof window!=="undefined"&&window.openreel?.platform==="desktop";
 
       try {
         const mediaBridge = getMediaBridge();
@@ -266,7 +272,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           await initializeMediaBridge();
         }
 
-        const importResult = await mediaBridge.importFile(file, true);
+        const importResult = await mediaBridge.importFile(file, true,desktop);
 
         if (!importResult.success || !importResult.media) {
           return {
@@ -321,7 +327,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
             ? "audio"
             : "image";
 
-        if (mediaType === "video" && !thumbnailUrl) {
+        if (!desktop && mediaType === "video" && !thumbnailUrl) {
           try {
             const thumbs = await mediaBridge.generateThumbnailsForMedia(
               processedMedia.blob ?? file,
@@ -358,6 +364,9 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
             fileSize: file.size,
             hasVideo: processedMedia.metadata.hasVideo,
             hasAudio: processedMedia.metadata.hasAudio,
+            audioTrackCount:processedMedia.metadata.audioTrackCount,
+            canDecode:processedMedia.metadata.canDecode,
+            canDecodeVideo:processedMedia.metadata.canDecodeVideo,
           },
           thumbnailUrl,
           waveformData: processedMedia.waveformData?.peaks || null,
@@ -387,19 +396,21 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           };
         }
 
-        const updatedItems = currentProject.mediaLibrary.items.map((item) =>
+        if(desktop){await saveMediaBlob(currentProject.id,updatedItem.id,file,updatedItem.metadata);if(get().project.id!==project.id||replacementRequests.get(replacementKey)!==replacementRequest)return {success:false,error:{code:'INVALID_PARAMS',message:'The media changed while relinking; try again'}};}
+        const updatedItems = get().project.mediaLibrary.items.map((item) =>
           item.id === mediaId ? updatedItem : item,
         );
 
+        const projectAfterReference=get().project;
         set({
           project: {
-            ...currentProject,
-            mediaLibrary: { ...currentProject.mediaLibrary, items: updatedItems },
+            ...projectAfterReference,
+            mediaLibrary: { ...projectAfterReference.mediaLibrary, items: updatedItems },
             modifiedAt: Date.now(),
           },
         });
 
-        try {
+        if(!desktop)try {
           await saveMediaBlob(
             currentProject.id,
             updatedItem.id,
@@ -414,7 +425,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           );
         }
 
-        if (updatedItem.type === "video" && !updatedItem.thumbnailUrl) {
+        if (!desktop && updatedItem.type === "video" && !updatedItem.thumbnailUrl) {
           setTimeout(async () => {
             try {
               const thumbs = await mediaBridge.generateThumbnailsForMedia(

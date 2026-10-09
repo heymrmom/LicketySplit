@@ -1,3 +1,4 @@
+import {restoreNativeMediaReferences} from "./media-storage";
 import type { Project, ProjectSettings } from "@openreel/core";
 import { serializeProjectFile,assertReaderCompatibility, normalizeProjectStoredFields } from "@openreel/core";
 import { v4 as uuidv4 } from "uuid";
@@ -439,6 +440,7 @@ class ProjectManager {
         console.error("[ProjectManager] Open (native) failed:", error);
         return null;
       }
+      project=await restoreNativeMediaReferences(project);
       this.adoptVerifiedNativeFile(project.id,filePath);
       await this.addToRecent(project, this.currentFileHandle!);
       this.emit("projectOpened", { project });
@@ -518,7 +520,7 @@ class ProjectManager {
           const content = await window.openreel!.fs.readFile(
             recentProject.fileHandle.path,
           );
-          const project = this.parseProjectContent(content);
+          const project = await restoreNativeMediaReferences(this.parseProjectContent(content));
           this.currentFileHandle = recentProject.fileHandle;
           this.projectFileHandles.set(project.id,recentProject.fileHandle);
           await this.updateRecentTimestamp(recentProject.id);

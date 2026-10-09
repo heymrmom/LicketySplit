@@ -12,6 +12,9 @@ export interface NativeMediaBridge {
     readFileBytes(path: string): Promise<ArrayBuffer>;
   };
   media: {
+    inspectFile?(file:File):Promise<import("./types").MediaTrackInfo|null>;
+    inspectPath?(args:{srcPath:string}):Promise<import("./types").MediaTrackInfo>;
+    probeFile?(file:File):Promise<{streams:{index:number;codec:string;channels:number;sampleRate:number}[]}|null>;
     generateProxy(args: { srcPath: string; preset: "low" | "medium" | "high" }): Promise<{ outPath: string }>;
     transcode(args: {
       srcPath: string;
@@ -51,6 +54,9 @@ function extensionFor(file: File | Blob): string {
   return "bin";
 }
 
+const materializedOriginals=new WeakMap<Blob,string>();
+export function getMaterializedOriginal(file:Blob):string|undefined{return materializedOriginals.get(file);}
+
 // Stream a File/Blob to a temp file on disk (chunked — bounded peak memory) and return its path.
 export async function materializeToTemp(bridge: NativeMediaBridge, file: File | Blob): Promise<string> {
   const tmpPath = await bridge.fs.tempFilePath(extensionFor(file));
@@ -69,6 +75,7 @@ export async function materializeToTemp(bridge: NativeMediaBridge, file: File | 
     await bridge.fs.closeWrite(handleId).catch(() => {});
     throw err;
   }
+  materializedOriginals.set(file,tmpPath);
   return tmpPath;
 }
 
@@ -119,6 +126,8 @@ export async function extractAudioWavViaNative(file: File | Blob, streamIndex?: 
 export async function probeAudioStreamCountViaNative(file: File | Blob): Promise<number> {
   const bridge = getBridge();
   if (!bridge) throw new Error("native media bridge unavailable");
+  const direct=typeof File!=="undefined"&&file instanceof File?await bridge.media.probeFile?.(file):undefined;
+  if(direct)return direct.streams.length;
   const srcPath = await materializeToTemp(bridge, file);
   const { streams } = await bridge.media.probeAudioStreams({ srcPath });
   return streams.length;
@@ -139,6 +148,9 @@ export function getNativeMediaSource(blob:Blob,purpose:'preview'|'export'='previ
 }
 export async function nativeVideoUrl(blob:Blob,purpose:'preview'|'export'='preview'):Promise<string>{return (await getNativeMediaSource(blob,purpose))??URL.createObjectURL(blob);}
 export interface ManagedRendererBridge {
+ referenceFile?(mediaId:string,file:File):Promise<{originalUri:string}|null>;
+ referencePath?(mediaId:string,path:string):Promise<{originalUri:string}>;
+ originalUri?(mediaId:string):Promise<string|undefined>;
  ensureAudioStream?(assetId:string,trackIndex:number):Promise<string>;
  cancelMedia?(assetId:string):Promise<void>;
  audioWindow?(args:{requestId?:string;assetId:string;trackIndex:number;startMs:number;durationMs:number;sampleRate:1000|16000|48000;channels:1|2}):Promise<{channels:Float32Array[];sampleRate:number}>;

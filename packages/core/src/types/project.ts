@@ -100,4 +100,6 @@ export interface MediaMetadata {
   /** Optional source-stream flags preserved by modern importers. */
   readonly hasVideo?: boolean;
   readonly hasAudio?: boolean;
+  readonly canDecode?: boolean;
+  readonly canDecodeVideo?: boolean;
 }

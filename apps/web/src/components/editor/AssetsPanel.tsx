@@ -645,6 +645,7 @@ export const AssetsPanel: React.FC = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState("");
+  const [importFailures,setImportFailures]=useState<string[]>([]);
   const [showOnlyMissing, setShowOnlyMissing] = useState(false);
   const [showAspectRatioDialog, setShowAspectRatioDialog] = useState(false);
   const [aspectRatioDialogData, setAspectRatioDialogData] = useState<{
@@ -705,24 +706,14 @@ export const AssetsPanel: React.FC = () => {
       setIsImporting(true);
       const fileArray = Array.from(files);
 
+      const failures:string[]=[];setImportFailures([]);
       try {
-        for (let i = 0; i < fileArray.length; i++) {
-          const file = fileArray[i];
-          setImportProgress(
-            `Importing ${file.name} (${i + 1}/${fileArray.length})...`,
-          );
-
-          const result = await importMedia(file);
-
-          // If it's a video with audio, extract audio to separate track
-          if (result.success && file.type.startsWith("video/")) {
-            setImportProgress(`Extracting audio from ${file.name}...`);
-            // Audio extraction is handled by the importMedia function
-            // The audio track is created automatically when adding to timeline
-          }
+        for (let i=0;i<fileArray.length;i++) {
+          const file=fileArray[i];setImportProgress(`Inspecting ${file.name} (${i+1}/${fileArray.length})...`);
+          try{const result=await importMedia(file);if(!result.success)failures.push(`${file.name}: ${result.error?.message??'Unable to inspect this file'}`);}
+          catch(error){failures.push(`${file.name}: ${error instanceof Error?error.message:'Unable to inspect this file'}`);}
         }
-      } catch (error) {
-        console.error("Import failed:", error);
+        setImportFailures(failures);
       } finally {
         setIsImporting(false);
         setImportProgress("");
@@ -1558,9 +1549,8 @@ export const AssetsPanel: React.FC = () => {
 
       {/* ── Body: section content fills the remaining space ──── */}
       <div className="flex-1 flex flex-col min-w-0 h-full bg-bg-1 relative">
-        {isImporting && (
-          <LoadingIndicator message={importProgress || "Importing media..."} />
-        )}
+        {isImporting && (window.openreel?.platform==='desktop'?<p role="status" className="px-3 py-2 text-xs text-fg-2">{importProgress}</p>:<LoadingIndicator message={importProgress || "Importing media..."} />)}
+        {importFailures.length>0&&<section role="alert" className="border-b border-border px-3 py-2 text-xs text-fg-2"><details><summary>{importFailures.length} files could not be imported</summary><ul className="max-h-40 overflow-auto">{importFailures.map((failure,index)=><li key={index} className="py-1">{failure}</li>)}</ul></details></section>}
 
         <input
           ref={fileInputRef}

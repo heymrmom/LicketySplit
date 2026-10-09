@@ -3050,7 +3050,7 @@ export const useProjectStore = create<ProjectState>()(
           const restoredItems = await Promise.all(
             recoveredProject.mediaLibrary.items.map(async (item) => {
               try {
-                return await restoreMediaItem(item, blobMap.get(item.id));
+                return await restoreMediaItem(item, blobMap.get(item.id)??undefined);
               } catch (error) {
                 console.warn(
                   `[ProjectStore] Failed to restore media ${item.name}; marking it missing:`,

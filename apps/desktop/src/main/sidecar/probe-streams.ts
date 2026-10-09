@@ -46,15 +46,8 @@ export function parseAudioStreams(stderr: string): AudioStreamInfo[] {
   return streams;
 }
 
-export function probeAudioStreams(srcPath: string): Promise<AudioStreamInfo[]> {
-  return new Promise((resolve) => {
-    let stderr = "";
-    const proc = spawn(resolveFfmpegPath(), ["-hide_banner", "-i", srcPath]);
-    proc.stderr.on("data", (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    // ffmpeg with no output exits non-zero but prints stream info to stderr; parse regardless.
-    proc.on("error", () => resolve([]));
-    proc.on("close", () => resolve(parseAudioStreams(stderr)));
-  });
+export function probeInputHeader(srcPath:string,signal?:AbortSignal):Promise<string>{
+ signal?.throwIfAborted();return new Promise((resolve,reject)=>{let stderr='';const proc=spawn(resolveFfmpegPath(),['-hide_banner','-i',srcPath]);const abort=()=>proc.kill('SIGKILL');signal?.addEventListener('abort',abort,{once:true});const cleanup=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);};const timer=setTimeout(()=>{proc.kill('SIGKILL');reject(new Error('Original inspection timed out'));},15000);proc.stderr.on('data',(chunk:Buffer)=>{if(stderr.length<65536)stderr+=(chunk.toString()).slice(0,65536-stderr.length);});proc.once('error',error=>{cleanup();reject(error);});proc.once('close',()=>{cleanup();if(signal?.aborted)reject(signal.reason);else resolve(stderr);});});
 }
+
+export async function probeAudioStreams(srcPath:string):Promise<AudioStreamInfo[]>{try{return parseAudioStreams(await probeInputHeader(srcPath));}catch{return [];}}

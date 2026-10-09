@@ -58,3 +58,6 @@ describe("asset selection and insertion", () => {
     expect(view.getByRole("img", { name: media[1].name })).toBe(second);
   });
 });
+it('reports rejected filenames while continuing the selected batch',async()=>{const importMedia=vi.spyOn(useProjectStore.getState(),'importMedia').mockResolvedValueOnce({success:false,error:{code:'DECODE_ERROR',message:'Original unchanged; conversion needs approval'}}).mockResolvedValueOnce({success:true});const view=render(<AssetsPanel/>);fireEvent.change(view.container.querySelector('input[aria-label="Import media"]')!,{target:{files:[new File(['x'],'unsupported.mov',{type:'video/quicktime'}),new File(['y'],'ready.mp4',{type:'video/mp4'})]}});await vi.waitFor(()=>expect(importMedia).toHaveBeenCalledTimes(2));await vi.waitFor(()=>expect(view.getByRole('alert').textContent).toContain('unsupported.mov'));expect(view.getByRole('alert').textContent).toContain('conversion needs approval');});
+
+afterEach(()=>{cleanup();vi.restoreAllMocks();});
