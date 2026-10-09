@@ -8,13 +8,13 @@ import {
   Square,
   FolderOpen,
 } from "@/icons/lucide-compat";
-import { ToolcraftSwitchControl } from "@openreel/ui";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftSwitchControl } from "@licketysplit/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { useProjectStore } from "../../stores/project-store";
 import { useUIStore } from "../../stores/ui-store";
-import { SOCIAL_MEDIA_PRESETS, type SocialMediaCategory } from "@openreel/core";
+import { SOCIAL_MEDIA_PRESETS, type SocialMediaCategory } from "@licketysplit/core";
 import { useRouter } from "../../hooks/use-router";
 import { useEditorPreload } from "../../hooks/useEditorPreload";
 import { useAnalytics, AnalyticsEvents } from "../../hooks/useAnalytics";
@@ -68,7 +68,7 @@ const FORMAT_OPTIONS: FormatOption[] = [
   },
 ];
 
-const OpenReelLogo: React.FC<{ className?: string }> = ({ className = "" }) => (
+const LicketySplitLogo: React.FC<{ className?: string }> = ({ className = "" }) => (
   <svg
     viewBox="0 0 490 490"
     fill="none"
@@ -263,7 +263,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ initialTab }) => {
           <div className="flex flex-col items-center text-center mb-12">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 text-primary">
-                <OpenReelLogo className="w-full h-full" />
+                <LicketySplitLogo className="w-full h-full" />
               </div>
               <Text type="body" color="primary" weight="semibold" className="text-xl text-text-primary tracking-tight">
                 Open Reel Video

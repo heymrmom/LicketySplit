@@ -5,7 +5,7 @@ import { multicamPlanToOtio } from "./otio";
 describe("multicam OTIO export", () => {
   it("emits one OTIO track for each simultaneous panel", () => {
     const manifest = {
-      spec: "openreel-multicam/v1" as const,
+      spec: "licketysplit-multicam/v1" as const,
       fps: 25,
       sync: { method: "audio-crosscorr" as const, reference: "wide" },
       participants: [
@@ -20,7 +20,7 @@ describe("multicam OTIO export", () => {
       constraints: DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
     };
     const otio = multicamPlanToOtio({
-      spec: "openreel-multicam-edit/v1",
+      spec: "licketysplit-multicam-edit/v1",
       durationMs: 2_000,
       shots: [{
         startMs: 0,
@@ -36,9 +36,19 @@ describe("multicam OTIO export", () => {
           ],
         },
       }],
-    }, manifest) as unknown as { tracks: { children: Array<{ children: unknown[] }> } };
+    }, manifest) as unknown as {
+      tracks: { children: Array<{ children: Array<{ media_reference: { metadata: Record<string, unknown> } }> }> };
+      metadata: { licketysplit: { spec: string; manifest_spec: string } };
+    };
 
     expect(otio.tracks.children).toHaveLength(2);
     expect(otio.tracks.children.every((track) => track.children.length === 1)).toBe(true);
+    expect(otio.tracks.children[0]?.children[0]?.media_reference.metadata).toEqual({
+      licketysplit_camera_id: "a",
+    });
+    expect(otio.metadata.licketysplit).toMatchObject({
+      spec: "licketysplit-multicam-edit/v1",
+      manifest_spec: "licketysplit-multicam/v1",
+    });
   });
 });

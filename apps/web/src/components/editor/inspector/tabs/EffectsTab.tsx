@@ -1,16 +1,16 @@
 import React from "react";
 import { Sparkles, Trash2, Zap } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextInputControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextInputControl } from "@licketysplit/ui";
 import type {
   AppliedEditingTemplate,
   Clip,
   EditingTemplate,
   EditingTemplatePrimitive,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   VideoEffectsSection,
   GreenScreenSection,

@@ -27,8 +27,8 @@ export interface ShortcutPreset {
 
 export type ShortcutHandler = (e: KeyboardEvent) => void;
 
-const STORAGE_KEY = "openreel_shortcuts";
-const PRESET_KEY = "openreel_shortcut_preset";
+const STORAGE_KEY = "licketysplit_shortcuts";
+const PRESET_KEY = "licketysplit_shortcut_preset";
 
 function parseKeyCombo(key: string): {
   key: string;
@@ -506,9 +506,9 @@ const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
 
 const PRESETS: ShortcutPreset[] = [
   {
-    id: "openreel",
-    name: "OpenReel Default",
-    description: "Default OpenReel shortcuts",
+    id: "licketysplit",
+    name: "LicketySplit Default",
+    description: "Default LicketySplit shortcuts",
     shortcuts: {},
   },
   {
@@ -547,7 +547,7 @@ const PRESETS: ShortcutPreset[] = [
   {
     id: "davinci",
     name: "DaVinci Resolve",
-    description: "Resolve-compatible bindings where supported; other commands keep OpenReel defaults",
+    description: "Resolve-compatible bindings where supported; other commands keep LicketySplit defaults",
     shortcuts: {
       "editing.split": "cmd+\\",
       "editing.trimStart": "shift+[",
@@ -583,7 +583,7 @@ class KeyboardShortcutsManager {
   private shortcuts: Map<string, ShortcutDefinition> = new Map();
   private handlers: Map<string, Set<ShortcutHandler>> = new Map();
   private changeListeners: Set<() => void> = new Set();
-  private activePreset: string = "openreel";
+  private activePreset: string = "licketysplit";
   private isListening: boolean = false;
 
   constructor() {
@@ -760,7 +760,7 @@ class KeyboardShortcutsManager {
       this.shortcuts.set(id, { ...shortcut, currentKey: shortcut.defaultKey });
     });
     this.saveShortcuts();
-    this.activePreset = "openreel";
+    this.activePreset = "licketysplit";
     this.savePreset();
     this.notifyShortcutsChanged();
   }
@@ -792,7 +792,7 @@ class KeyboardShortcutsManager {
     Object.entries(preset.shortcuts).forEach(([id, key]) => {
       // A preset override takes precedence over the default binding it replaces.
       // Relocate that command so both remain accessible (Final Cut uses [ / ]
-      // for trimming, while OpenReel uses those keys for clip navigation).
+      // for trimming, while LicketySplit uses those keys for clip navigation).
       const conflict = this.findConflict(key, id);
       if (conflict) {
         const alternative = `alt+${conflict.defaultKey}`;

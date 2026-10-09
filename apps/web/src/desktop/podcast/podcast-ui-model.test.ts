@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Project } from "@openreel/core";
-import type { PodcastSetup } from "@openreel/core/lickety/podcast-types";
+import type { Project } from "@licketysplit/core";
+import type { PodcastSetup } from "@licketysplit/core/lickety/podcast-types";
 import { buildPodcastReviewPoints, getTimelineMediaIds, readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia } from "./podcast-ui-model";
 import { createEmptyProject } from "../../stores/project/project-helpers";
 

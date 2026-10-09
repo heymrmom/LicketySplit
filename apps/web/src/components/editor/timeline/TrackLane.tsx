@@ -5,11 +5,11 @@ import type {
   ShapeClip,
   SVGClip,
   StickerClip,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   getMediaItemCapabilities,
   resolveTimelinePlacement,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { ClipComponent } from "./ClipComponent";
 import { TextClipComponent } from "./TextClipComponent";
 import { ShapeClipComponent } from "./ShapeClipComponent";

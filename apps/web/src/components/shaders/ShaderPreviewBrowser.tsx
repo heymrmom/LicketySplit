@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 import {
   defaultMotionShaderParams,
   type MotionShaderDef,
-} from "@openreel/core";
-import { MotionShaderRenderer } from "@openreel/core/motion/motion-shader-renderer";
+} from "@licketysplit/core";
+import { MotionShaderRenderer } from "@licketysplit/core/motion/motion-shader-renderer";
 
 type ShaderPreviewSample = "text" | "shape" | "effect";
 

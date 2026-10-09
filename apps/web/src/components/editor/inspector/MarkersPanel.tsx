@@ -1,16 +1,16 @@
 import {CueDetails} from "../lickety/CueDetails";
-import {associateCueMarkers,scanProductionCues} from "@openreel/core";
+import {associateCueMarkers,scanProductionCues} from "@licketysplit/core";
 import React, { useState } from "react";
 import { Flag, Plus, Trash2, Edit2, Check, X } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextInputControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextInputControl } from "@licketysplit/ui";
 import { useProjectStore } from "../../../stores/project-store";
 import { getPlaybackBridge } from "../../../bridges/playback-bridge";
-import type { Marker } from "@openreel/core";
+import type { Marker } from "@licketysplit/core";
 
 export const MarkersPanel: React.FC = () => {
   const { project, addMarker, removeMarker, updateMarker } = useProjectStore();

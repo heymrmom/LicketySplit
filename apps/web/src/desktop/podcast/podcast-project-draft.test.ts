@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { PodcastSetup } from "@openreel/core/lickety/podcast-types";
+import type { PodcastSetup } from "@licketysplit/core/lickety/podcast-types";
 import { useProjectStore } from "../../stores/project-store";
 import { createEmptyProject } from "../../stores/project/project-helpers";
 import { loadPodcastCheckpoint, savePodcastCheckpoint } from "./podcast-project-draft";

@@ -10,18 +10,18 @@ beforeEach(() => {
     headers: { "content-type": "application/json" },
     body: new TextEncoder().encode('{"ok":true}').buffer,
   });
-  (window as unknown as { openreel: unknown }).openreel = {
+  (window as unknown as { licketysplit: unknown }).licketysplit = {
     platform: "desktop",
     cloud: { fetch: cloudFetch },
   };
 });
 
 afterEach(() => {
-  delete (window as unknown as { openreel?: unknown }).openreel;
+  delete (window as unknown as { licketysplit?: unknown }).licketysplit;
 });
 
 describe("apiFetch desktop branch", () => {
-  it("routes through window.openreel.cloud.fetch and ignores the passed key", async () => {
+  it("routes through window.licketysplit.cloud.fetch and ignores the passed key", async () => {
     const res = await apiFetch("openai", "/chat/completions", "IGNORED", {
       method: "POST",
       body: "{}",

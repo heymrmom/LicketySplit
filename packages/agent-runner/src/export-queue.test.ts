@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import type { JobKind, JobResult } from "@openreel/agent";
+import type { JobKind, JobResult } from "@licketysplit/agent";
 import { runExportQueue, type ExportJobSpec } from "./export-queue";
 
 function specs(n: number): ExportJobSpec[] {

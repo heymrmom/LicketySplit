@@ -1,12 +1,12 @@
 import React, { useCallback, useRef, useState } from "react";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftFileDropControl as FileInput } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftFileDropControl as FileInput } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { PropertySlider } from "./shell/PropertySlider";
 import { Upload, X, AlertCircle } from "@/icons/lucide-compat";
-import type { LUTData } from "@openreel/core";
+import type { LUTData } from "@licketysplit/core";
 
 interface LUTLoaderProps {
   lutData: LUTData | null;

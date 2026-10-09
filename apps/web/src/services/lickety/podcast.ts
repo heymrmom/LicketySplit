@@ -5,7 +5,7 @@ import {
   type PodcastBridge,
   type PodcastSetup,
   type Project,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { useProjectStore } from "../../stores/project-store";
 
 export interface PodcastApplyOptions {
@@ -51,7 +51,7 @@ export async function applyPodcastSetup(
   options: PodcastApplyOptions,
   dependencies?: PodcastApplyDependencies,
 ): Promise<{ project: Project; originShiftSeconds: number; coverageGaps: ReturnType<typeof buildPodcastAssembly>["coverageGaps"] }> {
-  const bridge = dependencies?.bridge ?? window.openreel?.podcast;
+  const bridge = dependencies?.bridge ?? window.licketysplit?.podcast;
   if (!bridge) throw new Error("Podcast timeline apply is available in the desktop app.");
   const initialProject = dependencies?.getProject() ?? useProjectStore.getState().project;
   const expectedProjectId = initialProject.id;

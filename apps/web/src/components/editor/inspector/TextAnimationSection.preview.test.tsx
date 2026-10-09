@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { TextClip } from "@openreel/core";
+import type { TextClip } from "@licketysplit/core";
 import { createEmptyProject } from "../../../stores/project/project-helpers";
 import { useEngineStore } from "../../../stores/engine-store";
 import { useProjectStore } from "../../../stores/project-store";
@@ -14,7 +14,7 @@ function textClip(): TextClip {
     trackId: "title-track",
     startTime: 0,
     duration: 5,
-    text: "OpenReel",
+    text: "LicketySplit",
     style: {
       fontFamily: "Inter",
       fontSize: 72,

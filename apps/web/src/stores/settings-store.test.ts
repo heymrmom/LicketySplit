@@ -14,7 +14,7 @@ describe("settings store migrations", () => {
 
   it("removes legacy preset selections without discarding other preferences", async () => {
     localStorage.setItem(
-      "openreel-settings",
+      "licketysplit-settings",
       JSON.stringify({
         version: 5,
         state: {
@@ -37,7 +37,7 @@ describe("settings store migrations", () => {
 
   it("migrates an explicitly configured compatible endpoint", async () => {
     localStorage.setItem(
-      "openreel-settings",
+      "licketysplit-settings",
       JSON.stringify({
         version: 6,
         state: {

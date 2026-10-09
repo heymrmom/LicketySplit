@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PodcastGroup } from "@openreel/core/lickety/podcast-types";
+import type { PodcastGroup } from "@licketysplit/core/lickety/podcast-types";
 import { excludePodcastAsset, mergePodcastGroups, moveGroupAsset, podcastRecorderTimingLinked, setPodcastRecorderTimingLinked, simultaneousPodcastSuggestions, splitPodcastGroup } from "./podcast-group-edits";
 
 const group = (id: string, assetIds: string[]): PodcastGroup => ({ id, name: id, kind: "video", role: "camera", confidence: "high", assetIds, warnings: [], recordingLink: { id: `link:${id}`, kind: "continuous" } });

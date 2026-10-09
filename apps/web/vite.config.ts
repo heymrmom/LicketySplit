@@ -4,11 +4,11 @@ import path from "path";
 import { stripFfmpegPlugin } from "./vite-plugins/strip-ffmpeg";
 import { pruneFontsPlugin } from "./vite-plugins/prune-fonts";
 
-const isDesktop = process.env.OPENREEL_DESKTOP === "1";
+const isDesktop = process.env.LICKETYSPLIT_DESKTOP === "1";
 
 function desktopHtmlPlugin() {
   return {
-    name: "openreel-desktop-html",
+    name: "licketysplit-desktop-html",
     transformIndexHtml(html: string) {
       if (!isDesktop) return html;
       let out = html
@@ -38,9 +38,9 @@ export default defineConfig({
       react: path.resolve(__dirname, "./node_modules/react"),
       "react-dom": path.resolve(__dirname, "./node_modules/react-dom"),
       "@": path.resolve(__dirname, "./src"),
-      "@openreel/core": path.resolve(__dirname, "../../packages/core/src"),
-      "@openreel/agent": path.resolve(__dirname, "../../packages/agent/src"),
-      "@openreel/ui": path.resolve(__dirname, "../../packages/ui/src"),
+      "@licketysplit/core": path.resolve(__dirname, "../../packages/core/src"),
+      "@licketysplit/agent": path.resolve(__dirname, "../../packages/agent/src"),
+      "@licketysplit/ui": path.resolve(__dirname, "../../packages/ui/src"),
     },
   },
   worker: { format: "es" },

@@ -14,8 +14,8 @@ describe("crash reporter endpoint policy", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    delete process.env.LICKETYSPLIT_CRASH_ENDPOINT;
     delete process.env.OPENREEL_CRASH_ENDPOINT;
+    delete process.env.LICKETYSPLIT_CRASH_ENDPOINT;
     fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
     vi.stubGlobal("fetch", fetchMock);
   });

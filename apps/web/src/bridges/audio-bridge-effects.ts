@@ -1,6 +1,6 @@
-import type { Effect } from "@openreel/core";
-import { AudioEffectsEngine, getAudioEffectsEngine } from "@openreel/core";
-import type { EQBand } from "@openreel/core";
+import type { Effect } from "@licketysplit/core";
+import { AudioEffectsEngine, getAudioEffectsEngine } from "@licketysplit/core";
+import type { EQBand } from "@licketysplit/core";
 import { useProjectStore } from "../stores/project-store";
 
 /**

@@ -9,14 +9,14 @@ import { useProjectStore } from "../../stores/project-store";
 import { useTimelineStore } from "../../stores/timeline-store";
 import { useUIStore } from "../../stores/ui-store";
 import { useEngineStore } from "../../stores/engine-store";
-import type { Transform, EditingTemplatePrimitive } from "@openreel/core";
+import type { Transform, EditingTemplatePrimitive } from "@licketysplit/core";
 import {
   ChromaKeyEngine,
   getMediaItemCapabilities,
   type CaptionAnimationStyle,
   CAPTION_ANIMATION_STYLES,
   getAnimationStyleDisplayName,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { mergeEditingTemplateControlValues } from "./panels/EditingTemplateControls";
 import {
   getAudioBridgeEffects,
@@ -31,14 +31,14 @@ import {
   useCustomFonts,
 } from "./inspector/font-options";
 import { getNoiseReductionPreset } from "./inspector/noise-reduction-presets";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftFileDropControl as FileInput } from "@openreel/ui";
-import { ToolcraftNumberInputControl } from "@openreel/ui";
-import { ToolcraftSelectableCard as SelectableCard } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextAreaControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftFileDropControl as FileInput } from "@licketysplit/ui";
+import { ToolcraftNumberInputControl } from "@licketysplit/ui";
+import { ToolcraftSelectableCard as SelectableCard } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextAreaControl } from "@licketysplit/ui";
 import { ColorSelector } from "../../motion/components/primitives";
 import {
   getTabIdsForClipType,
@@ -461,7 +461,7 @@ export const InspectorPanel: React.FC = () => {
         await waitForEffectApplicationPaint();
         if (useProjectStore.getState().project.id !== projectId) return;
         await apply();
-        window.dispatchEvent(new CustomEvent("openreel:preview-invalidate"));
+        window.dispatchEvent(new CustomEvent("licketysplit:preview-invalidate"));
         await waitForEffectApplicationPaint();
       } finally {
         if (useUIStore.getState().effectApplicationClipId === clipId) {

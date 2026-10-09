@@ -36,13 +36,13 @@ import {
   VolumeX,
   Pencil,
 } from "@/icons/lucide-compat";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
 import {
   ToolcraftDropdownMenu as DropdownMenu,
   type ToolcraftDropdownMenuOption as DropdownMenuOption,
   ToolcraftPopover as Popover,
   ToolcraftText as Text,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import { useProjectStore } from "../../stores/project-store";
 import {
   getZoomFromSliderPosition,
@@ -59,7 +59,7 @@ import {
   calculateProjectDuration,
   trackHasAudioItems,
   trackHasVisualItems,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { formatKeyComboDisplay, keyboardShortcuts } from "../../services/keyboard-shortcuts";
 import {
   deleteTimelineItem,
@@ -1013,7 +1013,7 @@ export const Timeline: React.FC = () => {
       data-tour="timeline"
       className="h-full bg-tl-bg flex flex-col min-h-0 relative overflow-hidden"
     >
-      {/* ── Timeline toolbar (mock: 48px line-icon tools + emerald zoom slider) ── */}
+      {/* ── Timeline toolbar (mock: 48px line-icon tools + purple zoom slider) ── */}
       <div className="flex items-center h-12 px-4 gap-4 bg-bg-1 border-b border-border shrink-0 relative z-50">
         <TLTool onClick={undo} disabled={!canUndo()} title="Undo (⌘Z)">
           <Undo2 size={16} aria-hidden />
@@ -1360,7 +1360,7 @@ export const Timeline: React.FC = () => {
         <CaptionBatchSelectButton />
 
         <div className="ml-auto flex items-center gap-3">
-          {/* Zoom control (mock: minus / emerald slider track + knob / plus) */}
+          {/* Zoom control (mock: minus / purple slider track + knob / plus) */}
           <div className="flex items-center gap-2.5">
             <TLTool onClick={zoomOut} title="Zoom out">
               <ZoomOut size={16} aria-hidden />

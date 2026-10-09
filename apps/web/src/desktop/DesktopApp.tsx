@@ -21,9 +21,9 @@ import { createExportJobRunner } from "../services/agent/export-job-runner";
 import { useUIStore } from "../stores/ui-store";
 import { useSettingsStore } from "../stores/settings-store";
 import { SettingsDialog } from "../components/editor/settings/SettingsDialog";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from "@openreel/ui";
-import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent, ToolcraftLayoutFooter as LayoutFooter } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from "@licketysplit/ui";
+import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent, ToolcraftLayoutFooter as LayoutFooter } from "@licketysplit/ui";
 import { Settings, Sparkles, Keyboard } from "@/icons/lucide-compat";
 import { deleteTimelineItem } from "../utils/timeline-item-actions";
 import { DESKTOP_FORMATS, startNewProject } from "./start/desktop-project-actions";
@@ -91,7 +91,7 @@ function NewProjectMenuDialog({ isOpen, onClose }: { isOpen: boolean; onClose: (
       const format = DESKTOP_FORMATS[1];
       startNewProject(format);
       useUIStore.getState().setDesktopPage("edit");
-      if (mode === "podcast") window.dispatchEvent(new CustomEvent("openreel:podcast:open"));
+      if (mode === "podcast") window.dispatchEvent(new CustomEvent("licketysplit:podcast:open"));
       if (mode === "narrative") useUIStore.getState().setInspectorActiveTab("lickety-narrative");
       onClose();
     } catch (error) {
@@ -129,7 +129,7 @@ export function DesktopApp(): JSX.Element {
   // directly; new/open/export are broadcast as events for the relevant UI to
   // pick up (e.g. the export button opens its dialog on "export").
   useEffect(() => {
-    const bridge = window.openreel;
+    const bridge = window.licketysplit;
     if (!bridge?.onMenuAction) return;
     return bridge.onMenuAction((id) => {
       switch (id) {
@@ -156,7 +156,7 @@ export function DesktopApp(): JSX.Element {
           break;
         case "export":
           if (hasBlockingDialog()) return;
-          window.dispatchEvent(new CustomEvent("openreel:menu:export"));
+          window.dispatchEvent(new CustomEvent("licketysplit:menu:export"));
           break;
         case "settings":
           if (hasBlockingDialog()) return;
@@ -171,8 +171,8 @@ export function DesktopApp(): JSX.Element {
       useTimelineStore.getState().pause();
       setPodcastSetupOpen(true);
     };
-    window.addEventListener("openreel:podcast:open", open);
-    return () => window.removeEventListener("openreel:podcast:open", open);
+    window.addEventListener("licketysplit:podcast:open", open);
+    return () => window.removeEventListener("licketysplit:podcast:open", open);
   }, []);
 
   // Forward uncaught renderer errors + unhandled rejections to the native crash
@@ -191,7 +191,7 @@ export function DesktopApp(): JSX.Element {
   // Answer the native unsaved-changes guard on window close / quit: report
   // dirty state and flush pending changes on request.
   useEffect(() => {
-    const lifecycle = window.openreel?.lifecycle;
+    const lifecycle = window.licketysplit?.lifecycle;
     if (!lifecycle) return;
     const offQuery = lifecycle.onQueryUnsaved(() =>
       autoSaveManager.hasUnsavedChanges(useProjectStore.getState().getFullProject()),
@@ -206,7 +206,7 @@ export function DesktopApp(): JSX.Element {
   }, []);
 
   return (
-    <div className="openreel-desktop isolate flex h-screen w-screen flex-col overflow-hidden bg-bg text-fg">
+    <div className="licketysplit-desktop isolate flex h-screen w-screen flex-col overflow-hidden bg-bg text-fg">
       <DesktopTitleBar platform={platform}>
         {hasProject ? (
           <Button

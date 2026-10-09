@@ -30,7 +30,7 @@ vi.mock("@/icons/lucide-compat", () => ({
   ChevronDown: () => null,
 }));
 
-vi.mock("@openreel/ui", async () => {
+vi.mock("@licketysplit/ui", async () => {
   const React = await import("react");
   const Button = ({ label, onClick }: MockProps) => React.createElement("button", { onClick }, label);
   return {

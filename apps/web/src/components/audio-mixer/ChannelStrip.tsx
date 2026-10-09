@@ -1,9 +1,9 @@
 import React, { useCallback, useMemo } from "react";
 import type { ChannelStripState } from "./types";
 import { volumeToDb, formatDb, formatPan } from "./types";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftSlider as Slider } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftSlider as Slider } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 
 export interface ChannelStripProps {
   channel: ChannelStripState;

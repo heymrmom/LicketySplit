@@ -2,7 +2,7 @@ import "../../../test/install-local-storage-mock";
 import { fireEvent, render, cleanup } from "@testing-library/react";
 import type { RefObject } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Clip, Track } from "@openreel/core";
+import type { Clip, Track } from "@licketysplit/core";
 import { createEmptyProject } from "../../../stores/project/project-helpers";
 import { useProjectStore } from "../../../stores/project-store";
 import { TrackLane } from "./TrackLane";

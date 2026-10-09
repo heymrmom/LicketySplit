@@ -1,4 +1,4 @@
-/** OpenReel brand mark (shared with the main app). Uses currentColor so it
+/** LicketySplit brand mark (shared with the main app). Uses currentColor so it
  *  tints to the surrounding text color — set the parent to the brand green. */
 export function Logo({ className = "", size }: { className?: string; size?: number }) {
   return (

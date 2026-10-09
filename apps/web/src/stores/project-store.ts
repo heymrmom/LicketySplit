@@ -35,7 +35,7 @@ import type {
   ClipColorGrading,
   MotionComposition,
   MotionCompositionInstance,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   ActionExecutor,
   ActionHistory,
@@ -51,7 +51,7 @@ import {
   resolveTimelinePlacement,
   resolveEditingTemplate,
   withUniversalTracksCapability,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { createMarkerSlice } from "./project/marker-slice";
 import { createSubtitleSlice } from "./project/subtitle-slice";
 import { createTrackSlice } from "./project/track-slice";
@@ -264,7 +264,7 @@ export interface ProjectState {
   ) => Promise<ActionResult>;
   updateClipBlendMode: (
     clipId: string,
-    blendMode: import("@openreel/core").BlendMode,
+    blendMode: import("@licketysplit/core").BlendMode,
   ) => Promise<ActionResult>;
   updateClipBlendOpacity: (
     clipId: string,
@@ -281,7 +281,7 @@ export interface ProjectState {
   ) => boolean;
   updateClipEmphasisAnimation: (
     clipId: string,
-    emphasisAnimation: import("@openreel/core").EmphasisAnimation,
+    emphasisAnimation: import("@licketysplit/core").EmphasisAnimation,
   ) => Promise<ActionResult>;
 
   // Clipboard actions
@@ -357,7 +357,7 @@ export interface ProjectState {
     text: string,
     duration?: number,
     style?: Partial<TextStyle>,
-    metadata?: import("@openreel/core").ClipMetadata,
+    metadata?: import("@licketysplit/core").ClipMetadata,
   ) => TextClip | null;
   updateTextContent: (clipId: string, text: string) => TextClip | null;
   updateTextStyle: (
@@ -378,7 +378,7 @@ export interface ProjectState {
   ) => TextClip | null;
   updateText3D: (
     clipId: string,
-    text3d: import("@openreel/core").Text3DSettings | undefined,
+    text3d: import("@licketysplit/core").Text3DSettings | undefined,
   ) => TextClip | null;
   getTextClip: (clipId: string) => TextClip | undefined;
   getAllTextClips: () => TextClip[];
@@ -399,17 +399,17 @@ export interface ProjectState {
 
   // Subtitle actions - subtitles are created as text clips on a Captions track
   addSubtitle: (
-    subtitle: import("@openreel/core").Subtitle,
-    metadata?: import("@openreel/core").ClipMetadata,
+    subtitle: import("@licketysplit/core").Subtitle,
+    metadata?: import("@licketysplit/core").ClipMetadata,
   ) => Promise<void>;
   removeSubtitle: (subtitleId: string) => void;
   updateSubtitle: (
     subtitleId: string,
-    updates: Partial<import("@openreel/core").Subtitle>,
+    updates: Partial<import("@licketysplit/core").Subtitle>,
   ) => void;
   getSubtitle: (
     subtitleId: string,
-  ) => import("@openreel/core").Subtitle | undefined;
+  ) => import("@licketysplit/core").Subtitle | undefined;
   importSRT: (
     srtContent: string,
     options?: { sourceClipId?: string; maxWordsPerLine?: number },
@@ -427,10 +427,10 @@ export interface ProjectState {
   removeMarker: (markerId: string) => Promise<ActionResult>;
   updateMarker: (
     markerId: string,
-    updates: Partial<import("@openreel/core").Marker>,
+    updates: Partial<import("@licketysplit/core").Marker>,
   ) => Promise<ActionResult>;
-  getMarker: (markerId: string) => import("@openreel/core").Marker | undefined;
-  getMarkers: () => import("@openreel/core").Marker[];
+  getMarker: (markerId: string) => import("@licketysplit/core").Marker | undefined;
+  getMarkers: () => import("@licketysplit/core").Marker[];
 
   // Graphics actions
   createShapeClip: (
@@ -464,9 +464,9 @@ export interface ProjectState {
       startTime?: number;
       duration?: number;
       transform?: Partial<Transform>;
-      entryAnimation?: import("@openreel/core").GraphicAnimation;
-      exitAnimation?: import("@openreel/core").GraphicAnimation;
-      colorStyle?: import("@openreel/core").SVGColorStyle;
+      entryAnimation?: import("@licketysplit/core").GraphicAnimation;
+      exitAnimation?: import("@licketysplit/core").GraphicAnimation;
+      colorStyle?: import("@licketysplit/core").SVGColorStyle;
     },
   ) => SVGClip | null;
   deleteSVGClip: (clipId: string) => boolean;

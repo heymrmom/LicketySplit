@@ -5,7 +5,7 @@ import {
   type AudioExportSettings,
   type ExportResult,
   type Project,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 export interface ExportRunnerState {
   isExporting: boolean;
@@ -151,7 +151,7 @@ function triggerAnchorDownload(data: Blob, filename: string, onRelease?: () => v
   }
 }
 
-const OPFS_TMP_PREFIX = ".openreel-export-";
+const OPFS_TMP_PREFIX = ".licketysplit-export-";
 const OPFS_TMP_TTL_MS = 60 * 60 * 1000;
 
 type OpfsWriteHandle = FileSystemFileHandle & {
@@ -321,16 +321,16 @@ export async function createDownloadWritable(
   const ext = filename.split(".").pop() || "mp4";
   if (options?.delivery === "download") return createFallbackWritable(filename, mime);
 
-  if (typeof window.openreel?.fs?.showSaveDialog === "function") {
-    const chosen = await window.openreel.fs.showSaveDialog({
+  if (typeof window.licketysplit?.fs?.showSaveDialog === "function") {
+    const chosen = await window.licketysplit.fs.showSaveDialog({
       defaultPath: filename,
       filters: [{ name: "Media file", extensions: [ext] }],
     });
     if (!chosen) {
       throw new DOMException("User cancelled", "AbortError");
     }
-    (window as { __openreelExportPath?: string }).__openreelExportPath = chosen;
-    const handleId = await window.openreel.fs.openWrite(chosen);
+    (window as { __licketysplitExportPath?: string }).__licketysplitExportPath = chosen;
+    const handleId = await window.licketysplit.fs.openWrite(chosen);
     let cursor = 0;
     return {
       async seek(position: number) {
@@ -351,14 +351,14 @@ export async function createDownloadWritable(
         } else {
           return;
         }
-        await window.openreel!.fs.writeChunk(handleId, bytes, cursor);
+        await window.licketysplit!.fs.writeChunk(handleId, bytes, cursor);
         cursor += bytes.byteLength;
       },
       async close() {
-        await window.openreel!.fs.closeWrite(handleId);
+        await window.licketysplit!.fs.closeWrite(handleId);
       },
       async abort() {
-        await window.openreel!.fs.abortWrite(handleId);
+        await window.licketysplit!.fs.abortWrite(handleId);
       },
       async truncate() {},
     } as unknown as FileSystemWritableFileStream;
@@ -532,7 +532,7 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
       let generator: ReturnType<typeof engine.exportVideo> | undefined;
       try {
         let exportProject=project;
-        if(options?.generatePublishing){const {cloneProjectForWorkflow}=await import("@openreel/core/lickety/clone-project");exportProject=cloneProjectForWorkflow(project);setState(prev=>({...prev,publishingState:"generating",publishingError:undefined,phase:"Generating publishing files…"}));publishingAbort.current=new AbortController();try{const {preparePublishingForExport}=await import("./lickety/publishing");if(!options.exportPath)throw new Error("Select a native video destination for publishing files");await preparePublishingForExport(exportProject,{generatePublishing:true,exportPath:options.exportPath,signal:publishingAbort.current.signal});setState(prev=>({...prev,publishingState:"files-ready"}));}catch(error){setState(prev=>({...prev,publishingState:"failed",publishingError:error instanceof Error?error.message:"Publishing failed"}));}finally{publishingAbort.current=null;}checkCurrent();}
+        if(options?.generatePublishing){const {cloneProjectForWorkflow}=await import("@licketysplit/core/lickety/clone-project");exportProject=cloneProjectForWorkflow(project);setState(prev=>({...prev,publishingState:"generating",publishingError:undefined,phase:"Generating publishing files…"}));publishingAbort.current=new AbortController();try{const {preparePublishingForExport}=await import("./lickety/publishing");if(!options.exportPath)throw new Error("Select a native video destination for publishing files");await preparePublishingForExport(exportProject,{generatePublishing:true,exportPath:options.exportPath,signal:publishingAbort.current.signal});setState(prev=>({...prev,publishingState:"files-ready"}));}catch(error){setState(prev=>({...prev,publishingState:"failed",publishingError:error instanceof Error?error.message:"Publishing failed"}));}finally{publishingAbort.current=null;}checkCurrent();}
         await engine.initialize();
         checkCurrent();
         generator = engine.exportVideo(exportProject, videoSettings, writableStream);
@@ -605,21 +605,21 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
     ): Promise<FileSystemWritableFileStream> => {
       const mime = mimeForExt(ext);
 
-      if (typeof window.openreel?.fs?.showSaveDialog === "function") {
-        const chosen = await window.openreel.fs.showSaveDialog({
+      if (typeof window.licketysplit?.fs?.showSaveDialog === "function") {
+        const chosen = await window.licketysplit.fs.showSaveDialog({
           defaultPath: filename,
           filters: [{ name: "Media file", extensions: [ext] }],
         });
         if (!chosen) {
           throw new DOMException("User cancelled", "AbortError");
         }
-        (window as { __openreelExportPath?: string }).__openreelExportPath = chosen;
+        (window as { __licketysplitExportPath?: string }).__licketysplitExportPath = chosen;
 
         // The WAV path and any WebCodecs export (streamToFile) mux directly to
         // disk through the fs bridge. The native ffmpeg video path writes the
-        // file itself via __openreelExportPath, so it gets the no-op stub below.
+        // file itself via __licketysplitExportPath, so it gets the no-op stub below.
         if (ext === "wav" || opts?.streamToFile === true) {
-          const handleId = await window.openreel.fs.openWrite(chosen);
+          const handleId = await window.licketysplit.fs.openWrite(chosen);
           let cursor = 0;
           return {
             async seek(position: number) {
@@ -636,14 +636,14 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
               } else {
                 return;
               }
-              await window.openreel!.fs.writeChunk(handleId, bytes, cursor);
+              await window.licketysplit!.fs.writeChunk(handleId, bytes, cursor);
               cursor += bytes.byteLength;
             },
             async close() {
-              await window.openreel!.fs.closeWrite(handleId);
+              await window.licketysplit!.fs.closeWrite(handleId);
             },
             async abort() {
-              await window.openreel!.fs.abortWrite(handleId);
+              await window.licketysplit!.fs.abortWrite(handleId);
             },
             async truncate() {},
           } as unknown as FileSystemWritableFileStream;

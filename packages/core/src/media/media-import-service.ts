@@ -101,7 +101,7 @@ export class MediaImportService {
     file: File,
     options: MediaImportOptions = {},
   ): Promise<MediaImportResult> {
-    const desktop=(globalThis as unknown as {openreel?:{platform?:string}}).openreel?.platform==='desktop';
+    const desktop=(globalThis as unknown as {licketysplit?:{platform?:string}}).licketysplit?.platform==='desktop';
     const opts = { ...DEFAULT_OPTIONS, ...options };
     if(desktop){opts.useFallback=false;opts.quickMode=true;}
     if(desktop&&!file.type.startsWith("image/")&&getBridge()?.media.inspectFile){

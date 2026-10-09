@@ -1,4 +1,4 @@
-import type { Clip } from "@openreel/core";
+import type { Clip } from "@licketysplit/core";
 
 /** Avoid splitting or trimming away fractions of a single project frame. */
 export function canQuickEditAtPlayhead(

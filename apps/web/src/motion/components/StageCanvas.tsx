@@ -43,7 +43,7 @@ import type {
   MotionLayer,
   MotionRendererAssetResolver,
   MotionTransform,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   addMotionCompositionGuide,
   addMotionLayerMask,
@@ -126,7 +126,7 @@ import {
   type MotionPuppetPin,
   type MotionShapePathPoint,
   type MotionSnapGuide,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { useProjectStore } from "../../stores/project-store";
 import {
   useMotionStore,

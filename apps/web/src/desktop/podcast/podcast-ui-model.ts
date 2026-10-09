@@ -1,5 +1,5 @@
-import type { MediaItem, Project } from "@openreel/core";
-import type { PodcastGroup, PodcastSetup, PodcastSetupStep } from "@openreel/core/lickety/podcast-types";
+import type { MediaItem, Project } from "@licketysplit/core";
+import type { PodcastGroup, PodcastSetup, PodcastSetupStep } from "@licketysplit/core/lickety/podcast-types";
 import { podcastTimelineModel } from "./podcast-review-model";
 
 export type PodcastPictureGapPolicy = "keep-picture-gaps" | "available-camera-fallback";

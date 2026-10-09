@@ -1,23 +1,23 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Plug, Eye, EyeOff, Copy, RefreshCw, Wifi } from "@/icons/lucide-compat";
-import { ToolcraftSwitchControl } from "@openreel/ui";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftSwitchControl } from "@licketysplit/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { useSettingsStore } from "../../../stores/settings-store";
 import { toast } from "../../../stores/notification-store";
-import type { OpenReelMcpStatus } from "../../../types/global";
+import type { LicketySplitMcpStatus } from "../../../types/global";
 
 const isDesktop = (): boolean =>
-  typeof window !== "undefined" && window.openreel?.platform === "desktop";
+  typeof window !== "undefined" && window.licketysplit?.platform === "desktop";
 
 function clientConfigSnippet(shimPath: string): string {
   return JSON.stringify(
     {
       mcpServers: {
-        openreel: {
+        licketysplit: {
           command: "node",
-          args: [shimPath || "<path to openreel-mcp shim>"],
+          args: [shimPath || "<path to licketysplit-mcp shim>"],
         },
       },
     },
@@ -39,13 +39,13 @@ export const McpPanel: React.FC = () => {
   const mcpAutoAllow = useSettingsStore((s) => s.mcpAutoAllowTrustedLocal);
   const setMcpAutoAllow = useSettingsStore((s) => s.setMcpAutoAllowTrustedLocal);
 
-  const [status, setStatus] = useState<OpenReelMcpStatus | null>(null);
+  const [status, setStatus] = useState<LicketySplitMcpStatus | null>(null);
   const [toolCount, setToolCount] = useState<number | null>(null);
   const [revealToken, setRevealToken] = useState(false);
   const [testing, setTesting] = useState(false);
 
   const refresh = useCallback(async () => {
-    const bridge = window.openreel?.mcp;
+    const bridge = window.licketysplit?.mcp;
     if (!bridge) return;
     try {
       const nextStatus = await bridge.getStatus();
@@ -67,7 +67,7 @@ export const McpPanel: React.FC = () => {
   }, [refresh]);
 
   const handleRotate = useCallback(async () => {
-    const bridge = window.openreel?.mcp;
+    const bridge = window.licketysplit?.mcp;
     if (!bridge) return;
     try {
       setStatus(await bridge.rotateToken());
@@ -78,7 +78,7 @@ export const McpPanel: React.FC = () => {
   }, []);
 
   const handleTest = useCallback(async () => {
-    const bridge = window.openreel?.mcp;
+    const bridge = window.licketysplit?.mcp;
     if (!bridge) return;
     setTesting(true);
     try {
@@ -108,8 +108,8 @@ export const McpPanel: React.FC = () => {
           Desktop only
         </Text>
         <Text type="supporting" color="secondary" className="mt-1 max-w-sm text-xs">
-          The MCP server runs inside the OpenReel desktop app, letting external AI
-          clients (Claude Desktop, Cursor, Cline) edit your project. Open OpenReel
+          The MCP server runs inside the LicketySplit desktop app, letting external AI
+          clients (Claude Desktop, Cursor, Cline) edit your project. Open LicketySplit
           on desktop to configure it.
         </Text>
       </div>

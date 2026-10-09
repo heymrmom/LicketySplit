@@ -1,7 +1,7 @@
 import type { JSX } from "react";
 import type React from "react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 
 import { AssetsPanel } from "../../components/editor/AssetsPanel";
 import { InspectorPanel } from "../../components/editor/InspectorPanel";
@@ -130,7 +130,7 @@ export function EditPage({ suspendPreview = false }: { suspendPreview?: boolean 
     max: 520,
     axis: "x",
     direction: 1,
-    storageKey: "openreel-desktop-media-w",
+    storageKey: "licketysplit-desktop-media-w",
   });
   const inspectorW = useResizable({
     initial: 340,
@@ -138,7 +138,7 @@ export function EditPage({ suspendPreview = false }: { suspendPreview?: boolean 
     max: 560,
     axis: "x",
     direction: -1,
-    storageKey: "openreel-desktop-inspector-w",
+    storageKey: "licketysplit-desktop-inspector-w",
   });
   const chatW = useResizable({
     initial: 380,
@@ -146,7 +146,7 @@ export function EditPage({ suspendPreview = false }: { suspendPreview?: boolean 
     max: 560,
     axis: "x",
     direction: -1,
-    storageKey: "openreel-desktop-chat-w",
+    storageKey: "licketysplit-desktop-chat-w",
   });
   const timelineH = useResizable({
     initial: 320,
@@ -154,7 +154,7 @@ export function EditPage({ suspendPreview = false }: { suspendPreview?: boolean 
     max: 640,
     axis: "y",
     direction: -1,
-    storageKey: "openreel-desktop-timeline-h",
+    storageKey: "licketysplit-desktop-timeline-h",
   });
 
   useEffect(() => {

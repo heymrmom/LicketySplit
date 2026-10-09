@@ -1,4 +1,4 @@
-import { cloneProjectForWorkflow, type Project } from "@openreel/core";
+import { cloneProjectForWorkflow, type Project } from "@licketysplit/core";
 
 /**
  * Timeline/motion edits need independent mutable project data, but media items

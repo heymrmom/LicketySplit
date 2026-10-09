@@ -7,11 +7,11 @@ import {
   Sparkles,
   AlertTriangle,
 } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextAreaControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextAreaControl } from "@licketysplit/ui";
 import { MockToggle } from "./shell/InspectorControls";
 import { useSettingsStore } from "../../../stores/settings-store";
 import { useElevenLabsApi } from "./hooks/useElevenLabsApi";
@@ -131,7 +131,7 @@ export const TextToSpeechPanel: React.FC = () => {
       {!hasElevenLabsKey && (
         <Card variant="yellow" padding={2} className="border border-amber-500/30">
           <Text type="supporting" className="text-[10px] text-amber-400">
-            Add your ElevenLabs API key to enable speech generation. OpenReel no longer hosts a speech server.
+            Add your ElevenLabs API key to enable speech generation. LicketySplit no longer hosts a speech server.
           </Text>
         </Card>
       )}

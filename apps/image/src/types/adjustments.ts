@@ -1,1 +1,1 @@
-export * from '@openreel/image-core/adjustments';
+export * from '@licketysplit/image-core/adjustments';

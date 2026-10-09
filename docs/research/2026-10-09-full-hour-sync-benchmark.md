@@ -44,7 +44,7 @@ The harness lives at [full-hour-benchmark.test.ts](../../apps/desktop/src/main/l
 TAKEOVER_HOUR_FIXTURE="/absolute/path/to/full-hour-20261009" \
 TAKEOVER_HOUR_FFMPEG="/absolute/path/to/apps/desktop/resources/bin/darwin-arm64/ffmpeg" \
 TAKEOVER_HOUR_MODE="native-corrected" \
-  pnpm --filter @openreel/desktop exec vitest run \
+  pnpm --filter @licketysplit/desktop exec vitest run \
   src/main/lickety/podcast/verification/full-hour-benchmark.test.ts --reporter=verbose
 ```
 

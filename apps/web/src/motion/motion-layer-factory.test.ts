@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MotionComposition, MotionScene3DLayer } from "@openreel/core";
+import type { MotionComposition, MotionScene3DLayer } from "@licketysplit/core";
 import { createMotionLayerOfType } from "./motion-layer-factory";
 
 const composition = {

@@ -81,7 +81,7 @@ export function resolveExportArgs(
 export async function startExport(wc: WebContents, args: ExportStartArgs): Promise<{ jobId: string }> {
   const jobId = randomUUID();
   const encoders = await probeEncoders();
-  const audioWavPath = path.join(os.tmpdir(), `openreel-${jobId}.wav`);
+  const audioWavPath = path.join(os.tmpdir(), `licketysplit-${jobId}.wav`);
   const exportArgs = resolveExportArgs(args, process.platform, encoders, audioWavPath);
 
   const { port1, port2 } = new MessageChannelMain();
@@ -134,7 +134,7 @@ export async function startExport(wc: WebContents, args: ExportStartArgs): Promi
   });
   port1.start();
 
-  wc.postMessage("openreel:export-port", { jobId }, [port2]);
+  wc.postMessage("licketysplit:export-port", { jobId }, [port2]);
   jobs.set(jobId, entry);
   return { jobId };
 }

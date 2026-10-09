@@ -5,8 +5,8 @@ import type {
   Project,
   Track,
   Clip,
-} from "@openreel/core";
-import type { ActionExecutor } from "@openreel/core";
+} from "@licketysplit/core";
+import type { ActionExecutor } from "@licketysplit/core";
 
 export function createAction(
   type: string,

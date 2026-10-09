@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockLLMClient } from "@openreel/agent";
+import { MockLLMClient } from "@licketysplit/agent";
 import { runEvals, runEvalCase } from "./harness";
 import { SCRIPTED_CASES } from "./cases";
 import { createEmptyProject } from "../project-io";

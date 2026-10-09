@@ -1,5 +1,5 @@
-import { EASING_FUNCTIONS, cubicBezier } from "@openreel/core";
-import type { EasingType } from "@openreel/core";
+import { EASING_FUNCTIONS, cubicBezier } from "@licketysplit/core";
+import type { EasingType } from "@licketysplit/core";
 
 export interface GraphSegmentFrame {
   readonly t0: number;

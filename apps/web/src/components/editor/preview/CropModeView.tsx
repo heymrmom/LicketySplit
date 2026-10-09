@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
 import { Check, X, Maximize2 } from "@/icons/lucide-compat";
-import { videoDecoderBudget, type Clip, type VideoDecoderLease } from "@openreel/core";
+import { videoDecoderBudget, type Clip, type VideoDecoderLease } from "@licketysplit/core";
 
 interface CropModeViewProps {
   clip: Clip;

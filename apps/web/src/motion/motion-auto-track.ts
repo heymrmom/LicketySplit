@@ -1,4 +1,4 @@
-import { trackOpticalFlowStep, type OpticalFlowPoint } from "@openreel/core";
+import { trackOpticalFlowStep, type OpticalFlowPoint } from "@licketysplit/core";
 
 export interface AutoTrackFrame {
   readonly time: number;

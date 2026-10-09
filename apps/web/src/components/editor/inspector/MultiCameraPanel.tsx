@@ -13,13 +13,13 @@ import {
   Link,
   Sparkles,
 } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftNumberInputControl } from "@openreel/ui";
-import { ToolcraftSelectableCard as SelectableCard } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextInputControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftNumberInputControl } from "@licketysplit/ui";
+import { ToolcraftSelectableCard as SelectableCard } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextInputControl } from "@licketysplit/ui";
 import { useProjectStore } from "../../../stores/project-store";
 import { useUIStore } from "../../../stores/ui-store";
 import { useTimelineStore } from "../../../stores/timeline-store";
@@ -44,7 +44,7 @@ import {
   type MultiCamGroup,
   type MulticamEditPolicy,
   type MulticamDecisionStrategy,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   loadMulticamArtifact,
   saveMulticamArtifact,
@@ -71,7 +71,7 @@ interface MultiCameraPanelProps {
 }
 
 async function loadPodcastProgramAudio(
-  project: import("@openreel/core").Project,
+  project: import("@licketysplit/core").Project,
   group: MultiCamGroup,
   signal: AbortSignal,
   onProgress: (message: string) => void,
@@ -459,7 +459,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
   const [includeVisualReactions, setIncludeVisualReactions] = useState(false);
   const [policyPreset, setPolicyPreset] = useState("custom");
   const [multiCamEngine, setMultiCamEngine] =
-    useState<import("@openreel/core").MultiCamEngine | null>(null);
+    useState<import("@licketysplit/core").MultiCamEngine | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -816,7 +816,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
         setStatus(groupId, "Synchronizing camera audio…");
         const { results: syncResults, drift } = syncBeforeAutoEdit
           ? await analyzeMulticamSyncInWorker(buffers, group.angles[0]?.id ?? "")
-          : { results: null, drift: {} as Record<string, import("@openreel/core").MulticamDriftModel> };
+          : { results: null, drift: {} as Record<string, import("@licketysplit/core").MulticamDriftModel> };
 
         const liveGroup = multiCamEngine.getGroup(groupId);
         if (!liveGroup) throw new Error("Camera group is no longer available.");
@@ -835,7 +835,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
         }
 
         setStatus(groupId, "Running local Silero voice detection…");
-        const vadTracks = new Map<string, import("@openreel/core").MulticamVadTrack>();
+        const vadTracks = new Map<string, import("@licketysplit/core").MulticamVadTrack>();
         for (const source of alignedSources) {
           const buffer = buffers.get(source.angle.id);
           if (!buffer) continue;
@@ -1057,7 +1057,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
     downloadText(
       `${group.name.replace(/[^a-z0-9-_]+/gi, "-")}.orma`,
       serializeOrma(artifact),
-      "application/vnd.openreel.activity+json",
+      "application/vnd.licketysplit.activity+json",
     );
   }, [downloadText, multiCamEngine]);
 

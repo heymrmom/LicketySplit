@@ -1,7 +1,7 @@
 import "../test/install-local-storage-mock";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { MotionComposition } from "@openreel/core";
+import type { MotionComposition } from "@licketysplit/core";
 import { createEmptyProject } from "../stores/project/project-helpers";
 import { useProjectStore } from "../stores/project-store";
 import { useNotificationStore } from "../stores/notification-store";
@@ -235,7 +235,7 @@ describe("MotionCreatorShell layout", () => {
 
     expect(timelineHandle).toHaveAttribute("aria-valuenow", "372");
     expect(
-      window.localStorage.getItem("openreel.motionCreator.timelineHeight.v2"),
+      window.localStorage.getItem("licketysplit.motionCreator.timelineHeight.v2"),
     ).toBe("372");
   });
 
@@ -259,7 +259,7 @@ describe("MotionCreatorShell layout", () => {
 
     expect(inspectorHandle).toHaveAttribute("aria-valuenow", "380");
     expect(
-      window.localStorage.getItem("openreel.motionCreator.rightPanelWidth.v2"),
+      window.localStorage.getItem("licketysplit.motionCreator.rightPanelWidth.v2"),
     ).toBe("380");
   });
 
@@ -283,7 +283,7 @@ describe("MotionCreatorShell layout", () => {
 
     expect(timelineHandle).toHaveAttribute("aria-valuenow", "420");
     expect(
-      window.localStorage.getItem("openreel.motionCreator.timelineHeight.v2"),
+      window.localStorage.getItem("licketysplit.motionCreator.timelineHeight.v2"),
     ).toBe("420");
   });
 

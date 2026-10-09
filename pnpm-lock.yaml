@@ -28,7 +28,7 @@ importers:
 
   apps/cloud:
     dependencies:
-      '@openreel/fxpkg':
+      '@licketysplit/fxpkg':
         specifier: workspace:*
         version: link:../../packages/fxpkg
       hono:
@@ -90,10 +90,10 @@ importers:
       '@imgly/background-removal':
         specifier: ^1.7.0
         version: 1.7.0(onnxruntime-web@1.21.0)
-      '@openreel/image-core':
+      '@licketysplit/image-core':
         specifier: workspace:*
         version: link:../../packages/image-core
-      '@openreel/ui':
+      '@licketysplit/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@radix-ui/react-context-menu':
@@ -217,18 +217,18 @@ importers:
 
   apps/studio:
     dependencies:
+      '@licketysplit/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@licketysplit/fxpkg':
+        specifier: workspace:*
+        version: link:../../packages/fxpkg
+      '@licketysplit/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@mediapipe/tasks-vision':
         specifier: ^0.10.35
         version: 0.10.35
-      '@openreel/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@openreel/fxpkg':
-        specifier: workspace:*
-        version: link:../../packages/fxpkg
-      '@openreel/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -335,18 +335,18 @@ importers:
       '@huggingface/transformers':
         specifier: 3.8.1
         version: 3.8.1
+      '@licketysplit/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@licketysplit/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@licketysplit/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@mediapipe/tasks-vision':
         specifier: ^0.10.35
         version: 0.10.35
-      '@openreel/agent':
-        specifier: workspace:*
-        version: link:../../packages/agent
-      '@openreel/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@openreel/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
       '@paper-design/shaders-react':
         specifier: ^0.0.76
         version: 0.0.76(@types/react@19.2.17)(react@19.2.7)
@@ -465,10 +465,10 @@ importers:
 
   packages/agent:
     dependencies:
-      '@openreel/core':
+      '@licketysplit/core':
         specifier: workspace:*
         version: link:../core
-      '@openreel/creation-schema':
+      '@licketysplit/creation-schema':
         specifier: workspace:*
         version: link:../creation-schema
     devDependencies:
@@ -481,10 +481,10 @@ importers:
 
   packages/agent-runner:
     dependencies:
-      '@openreel/agent':
+      '@licketysplit/agent':
         specifier: workspace:*
         version: link:../agent
-      '@openreel/core':
+      '@licketysplit/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -570,7 +570,7 @@ importers:
 
   packages/creation-agent:
     dependencies:
-      '@openreel/creation-schema':
+      '@licketysplit/creation-schema':
         specifier: workspace:*
         version: link:../creation-schema
     devDependencies:
@@ -583,7 +583,7 @@ importers:
 
   packages/creation-bindings:
     dependencies:
-      '@openreel/core':
+      '@licketysplit/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

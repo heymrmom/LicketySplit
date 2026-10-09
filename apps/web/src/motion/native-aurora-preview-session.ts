@@ -40,9 +40,9 @@ export interface NativeAuroraStagePreviewArgs {
 export function startNativeAuroraStagePreviewSession(
   args: NativeAuroraStagePreviewArgs,
 ): (() => void) | null {
-  const aurora = window.openreel?.aurora;
+  const aurora = window.licketysplit?.aurora;
   if (
-    window.openreel?.platform !== "desktop" ||
+    window.licketysplit?.platform !== "desktop" ||
     !aurora?.startPreviewSession ||
     !aurora.cancelPreviewSession ||
     !aurora.onPreviewEvent

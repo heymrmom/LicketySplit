@@ -1,13 +1,13 @@
 import {existingShortCandidates} from "../lickety/shorts";
 import {desktopMediaAvailable} from "../lickety/desktop-media";
-import type { JobResult, MulticamHostBridge } from "@openreel/agent";
+import type { JobResult, MulticamHostBridge } from "@licketysplit/agent";
 import {
   DEFAULT_MULTICAM_SHOT_POLICY,
   incorporateMulticamReactionCues,
   planMulticamShots,
   type MultiCamGroup,
   type MulticamShotPolicy,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { useProjectStore } from "../../stores/project-store";
 import { useEngineStore } from "../../stores/engine-store";
 import { loadMulticamArtifact } from "../multicam-analysis-store";
@@ -19,7 +19,7 @@ import {
   hasGroupedPodcastSources,
   resolveMulticamSources,
 } from "../../components/editor/inspector/multicam-workflow";
-import { DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS, extractMulticamSocialClips } from "@openreel/core";
+import { DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS, extractMulticamSocialClips } from "@licketysplit/core";
 
 function selectGroup(groupId?: string): MultiCamGroup {
   const groups = useProjectStore.getState().project.multicamGroups ?? [];

@@ -1,15 +1,15 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Search } from "@/icons/lucide-compat";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextInputControl } from "@openreel/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextInputControl } from "@licketysplit/ui";
 import { useProjectStore } from "../../../stores/project-store";
 import { useUIStore } from "../../../stores/ui-store";
 import { toast } from "../../../stores/notification-store";
 import type {
   VideoEffectType,
 } from "../../../bridges/effects-bridge";
-import type { Clip, TransitionType } from "@openreel/core";
+import type { Clip, TransitionType } from "@licketysplit/core";
 import { getTransitionBridge } from "../../../bridges/transition-bridge";
 import { serializeEditorEffectDropPayload } from "../timeline/effect-drop";
 
@@ -1228,8 +1228,8 @@ const TRANSITIONS: TransitionDef[] = [
 ];
 
 // ─── Drag payload helpers ──────────────────────────────────────────
-export const EFFECT_DRAG_MIME = "application/x-openreel-effect";
-export const TRANSITION_DRAG_MIME = "application/x-openreel-transition";
+export const EFFECT_DRAG_MIME = "application/x-licketysplit-effect";
+export const TRANSITION_DRAG_MIME = "application/x-licketysplit-transition";
 
 const PREVIEW_CYCLE_MS = 1800;
 

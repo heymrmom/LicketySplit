@@ -15,7 +15,7 @@ import {
   type AudioExportSettings,
   type DeviceProfile,
   type TimeEstimate,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { ExportDialog } from "./ExportDialog";
 import { CompressDialog } from "./CompressDialog";
 import { deriveSourceExportMatch } from "../../services/export-source-match";
@@ -33,7 +33,7 @@ import {
   ToolcraftIconButton,
   ToolcraftText as Text,
   ToolcraftTextInputControl,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 
 type ExportType =
   | "mp4"
@@ -165,7 +165,7 @@ export const Toolbar: React.FC = () => {
 
       try {
         if (type === "wav") {
-          const writable = await showSavePicker(exportFilename(project.name, "wav"), "wav", { delivery: window.openreel?.platform === "desktop" ? "file" : "download" });
+          const writable = await showSavePicker(exportFilename(project.name, "wav"), "wav", { delivery: window.licketysplit?.platform === "desktop" ? "file" : "download" });
 
           beginExport(writable);
 
@@ -203,7 +203,7 @@ export const Toolbar: React.FC = () => {
           };
 
           const preset = presets[type] ?? presets.mp4;
-          const writable = await showSavePicker(exportFilename(project.name, preset.ext), preset.ext, { delivery: window.openreel?.platform === "desktop" ? "file" : "download" });
+          const writable = await showSavePicker(exportFilename(project.name, preset.ext), preset.ext, { delivery: window.licketysplit?.platform === "desktop" ? "file" : "download" });
 
           beginExport(writable);
 
@@ -219,7 +219,7 @@ export const Toolbar: React.FC = () => {
   );
 
   const handleCustomExport = useCallback(
-    async (settings: VideoExportSettings, delivery: ExportDeliveryMode = window.openreel?.platform === "desktop" ? "file" : "download",options?:{generatePublishing:boolean}) => {
+    async (settings: VideoExportSettings, delivery: ExportDeliveryMode = window.licketysplit?.platform === "desktop" ? "file" : "download",options?:{generatePublishing:boolean}) => {
       closeModal();
       if (!hasTimelineContent) return;
 
@@ -241,7 +241,7 @@ export const Toolbar: React.FC = () => {
               : undefined,
         };
 
-        await runExport(exportSettings, ext, writable,{generatePublishing:options?.generatePublishing??false,exportPath:(window as {__openreelExportPath?:string}).__openreelExportPath});
+        await runExport(exportSettings, ext, writable,{generatePublishing:options?.generatePublishing??false,exportPath:(window as {__licketysplitExportPath?:string}).__licketysplitExportPath});
 
         track(AnalyticsEvents.PROJECT_EXPORTED, {
           format: settings.format,
@@ -439,7 +439,7 @@ export const Toolbar: React.FC = () => {
               onClick={openExportDialog}
               disabled={!hasTimelineContent}
               title={hasTimelineContent ? "Choose export settings" : "Add media or text to the timeline to export"}
-              className="rounded-l-[8px] rounded-r-none bg-accent px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-l-[8px] rounded-r-none bg-accent-strong px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Export
             </button>

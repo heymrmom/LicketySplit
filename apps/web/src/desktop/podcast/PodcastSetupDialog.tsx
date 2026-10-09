@@ -1,10 +1,10 @@
 import type { JSX } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { videoDecoderBudget, type MediaItem, type VideoDecoderLease } from "@openreel/core";
-import type { PodcastBridge, PodcastGroup, PodcastSetup, PodcastSetupStep, PodcastSyncChannel, PodcastWaveformSummary } from "@openreel/core/lickety/podcast-types";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from "@openreel/ui";
-import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent, ToolcraftLayoutFooter as LayoutFooter } from "@openreel/ui";
+import { videoDecoderBudget, type MediaItem, type VideoDecoderLease } from "@licketysplit/core";
+import type { PodcastBridge, PodcastGroup, PodcastSetup, PodcastSetupStep, PodcastSyncChannel, PodcastWaveformSummary } from "@licketysplit/core/lickety/podcast-types";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from "@licketysplit/ui";
+import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent, ToolcraftLayoutFooter as LayoutFooter } from "@licketysplit/ui";
 import { AlertTriangle, ArrowLeft, ArrowRight, Clock3, Pause, Play, Plus, Trash2 } from "@/icons/lucide-compat";
 import { useProjectStore } from "../../stores/project-store";
 import { applyPodcastSetup } from "../../services/lickety/podcast";
@@ -74,7 +74,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
   const executeAction = useProjectStore((state) => state.executeAction);
   const allMedia = project.mediaLibrary.items;
   const mediaItems = useMemo(() => selectablePodcastMedia(allMedia), [allMedia]);
-  const bridge = window.openreel?.podcast as PodcastBridge | undefined;
+  const bridge = window.licketysplit?.podcast as PodcastBridge | undefined;
   const [step, setStep] = useState<PodcastSetupStep>("recordings");
   const [setup, setSetup] = useState<PodcastSetup | null>(null);
   const [selectedMediaIds, setSelectedMediaIds] = useState<string[]>([]);
@@ -141,7 +141,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
       setSelectedMediaIds([]);
     }
     const setupId = checkpoint?.setupId ?? activeProject.lickety?.podcastSetup?.setupId;
-    const activeBridge = window.openreel?.podcast as PodcastBridge | undefined;
+    const activeBridge = window.licketysplit?.podcast as PodcastBridge | undefined;
     if (!setupId || !activeBridge) return;
     let active = true;
     void activeBridge.get({ setupId }).then((restored) => {
@@ -348,7 +348,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
 
   if (!isOpen) return null;
   return (
-    <Dialog isOpen onOpenChange={(open) => !open && requestClose()} width={1100} purpose="form" className="openreel-desktop max-h-[calc(100vh-24px)]">
+    <Dialog isOpen onOpenChange={(open) => !open && requestClose()} width={1100} purpose="form" className="licketysplit-desktop max-h-[calc(100vh-24px)]">
       <Layout className="h-[90vh] min-h-0"
         header={<DialogHeader title="Podcast preparation" subtitle={<span className="text-fg-2">Keep original recordings, group sources, review timing, then add one editable timeline.</span>} onOpenChange={(open) => !open && requestClose()} />}
         content={
@@ -574,7 +574,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, pi
     if (!audioMedia || !activeAudio) return;
     let active = true;
     setAudioPreparing(true);
-    const bridge = window.openreel?.lickety;
+    const bridge = window.licketysplit?.lickety;
     if (!bridge?.ensureAudioStream) { setAudioUrl(null); setAudioPreparing(false); setPreviewError("The selected original audio is not registered for preview yet."); return; }
     const selectedAsset = setup.analysis.assets.find((asset) => asset.id === activeAudio.source.assetId);
     const audioOrdinal = selectedAsset?.streams?.filter((stream) => stream.kind === "audio").findIndex((stream) => stream.index === activeAudio.source.streamIndex) ?? -1;
@@ -589,7 +589,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, pi
 
   useEffect(() => {
     if (!activeChannel) { setWaveform(undefined); return; }
-    const bridge = window.openreel?.podcast;
+    const bridge = window.licketysplit?.podcast;
     if (!bridge?.getWaveform) { setWaveform(undefined); return; }
     const channelClip = timelineModel.lanes.flatMap((lane) => lane.clips).find((clip) => clip.channelId === activeChannel.id);
     const sourceStart = channelClip?.sourceStartSeconds ?? activeChannel.firstPTSSeconds ?? 0;
@@ -756,7 +756,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, pi
   };
   return <section className="space-y-5" aria-labelledby="podcast-check-title">
     <div><h2 id="podcast-check-title" className="text-lg font-semibold">Check picture and sound</h2><p className="mt-1 text-xs font-semibold text-fg-2">{reviewState.title}</p><p role="status" className="mt-1 text-sm text-fg-2">{setup.analysisProposal ? "A new timing proposal is waiting for your apply or discard choice." : reviewState.message}</p></div>
-    {setup.analysisProposal && <div className="flex flex-wrap items-center gap-3 rounded border border-yellow-500/40 bg-yellow-500/5 p-3"><p className="min-w-0 flex-1 text-sm">New timing results are staged. Existing placements stay in use until you apply this proposal.</p><button type="button" disabled={busy} onClick={() => void onUpdate({ analysisDecision: "apply" })} className="min-h-9 rounded bg-accent px-3 text-sm text-white">Use new timing</button><button type="button" disabled={busy} onClick={() => void onUpdate({ analysisDecision: "discard" })} className="min-h-9 rounded border border-border px-3 text-sm">Keep previous timing</button></div>}
+    {setup.analysisProposal && <div className="flex flex-wrap items-center gap-3 rounded border border-yellow-500/40 bg-yellow-500/5 p-3"><p className="min-w-0 flex-1 text-sm">New timing results are staged. Existing placements stay in use until you apply this proposal.</p><button type="button" disabled={busy} onClick={() => void onUpdate({ analysisDecision: "apply" })} className="min-h-9 rounded bg-accent-strong px-3 text-sm text-white">Use new timing</button><button type="button" disabled={busy} onClick={() => void onUpdate({ analysisDecision: "discard" })} className="min-h-9 rounded border border-border px-3 text-sm">Keep previous timing</button></div>}
     <fieldset disabled={busy} className="space-y-2 rounded border border-border bg-bg-1 p-3">
       <legend className="px-1 text-sm font-medium">When the selected camera has no picture</legend>
       <p className="text-xs text-fg-2">Choose what the timeline should show during gaps. Select one before creating the timeline.</p>
@@ -772,7 +772,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, pi
         {comparison && <div className="flex flex-wrap items-center gap-2 text-xs text-fg-2"><span>{comparison.evidence ? "Connected timing evidence is saved for this recording." : "Comparison channel is for listening only; no timing evidence is implied."}</span>{comparison.evidence && comparisonChoice && <button type="button" disabled={busy} onClick={() => { setAudioChoiceId(comparisonChoice.id); seek(comparison.start); }} className="min-h-8 rounded border border-border px-2 underline">Review saved comparison</button>}</div>}
         {activeAudio && !audioAtPlayhead?.inBounds && <p role="status" className="text-xs text-fg-2">No selected sound from this source at this time.</p>}
         {audioPreparing && <p role="status" className="text-xs text-fg-2">Preparing selected sound…</p>}
-        <div className="flex flex-wrap items-center gap-3"><button type="button" disabled={(!videoUrl && !audioUrl) || audioPreparing} aria-label={previewPlaying ? "Pause picture and selected sound" : "Play picture and selected sound"} onClick={() => void togglePlayback()} className="flex min-h-9 items-center gap-2 rounded bg-accent px-3 text-sm text-white">{previewPlaying ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}{previewPlaying ? "Pause" : "Play picture and selected sound"}</button><button type="button" disabled={!videoUrl && !audioUrl} onClick={() => { videoRef.current?.pause(); audioRef.current?.pause(); setVideoPreviewPinned(false); setPreviewPlaying(false); }} className="flex min-h-9 items-center gap-2 rounded border border-border px-3 text-sm"><Pause size={14} aria-hidden />Stop</button><span className="text-xs tabular-nums text-fg-muted">Episode {formatClock(playheadSeconds)}</span></div>
+        <div className="flex flex-wrap items-center gap-3"><button type="button" disabled={(!videoUrl && !audioUrl) || audioPreparing} aria-label={previewPlaying ? "Pause picture and selected sound" : "Play picture and selected sound"} onClick={() => void togglePlayback()} className="flex min-h-9 items-center gap-2 rounded bg-accent-strong px-3 text-sm text-white">{previewPlaying ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}{previewPlaying ? "Pause" : "Play picture and selected sound"}</button><button type="button" disabled={!videoUrl && !audioUrl} onClick={() => { videoRef.current?.pause(); audioRef.current?.pause(); setVideoPreviewPinned(false); setPreviewPlaying(false); }} className="flex min-h-9 items-center gap-2 rounded border border-border px-3 text-sm"><Pause size={14} aria-hidden />Stop</button><span className="text-xs tabular-nums text-fg-muted">Episode {formatClock(playheadSeconds)}</span></div>
         <label className="flex items-center gap-3 text-xs"><span className="w-12">Position</span><input aria-label="Episode playhead" type="range" min={0} max={Math.max(1, ...points.map((point) => point.projectSeconds))} step={0.01} value={Math.min(playheadSeconds, Math.max(1, ...points.map((point) => point.projectSeconds)))} onChange={(event) => seek(Number(event.target.value))} className="min-w-0 flex-1" /><span>{formatClock(playheadSeconds)}</span></label>
         {previewError && <p role="status" className="text-xs text-yellow-300">{previewError}</p>}
       </section>

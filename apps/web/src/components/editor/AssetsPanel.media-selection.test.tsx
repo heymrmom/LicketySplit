@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MediaItem } from "@openreel/core";
+import type { MediaItem } from "@licketysplit/core";
 import { AssetsPanel } from "./AssetsPanel";
 import { createEmptyProject } from "../../stores/project/project-helpers";
 import { useProjectStore } from "../../stores/project-store";

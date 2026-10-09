@@ -49,15 +49,15 @@ jobs:
       - run: pnpm test
       - run: node apps/desktop/scripts/fetch-ffmpeg.mjs darwin-arm64
       - run: node apps/desktop/scripts/write-source-receipt.mjs
-      - run: pnpm --filter @openreel/desktop build
+      - run: pnpm --filter @licketysplit/desktop build
       - if: inputs.stage == 'build-only'
-        run: pnpm --filter @openreel/desktop exec electron-builder --mac dmg zip --arm64 --publish never
+        run: pnpm --filter @licketysplit/desktop exec electron-builder --mac dmg zip --arm64 --publish never
       - if: inputs.stage != 'build-only'
-        run: pnpm --filter @openreel/desktop exec electron-builder --mac dmg zip --arm64 --publish never --config.mac.identity="Developer ID Application" --config.mac.notarize=true
+        run: pnpm --filter @licketysplit/desktop exec electron-builder --mac dmg zip --arm64 --publish never --config.mac.identity="Developer ID Application" --config.mac.notarize=true
       - if: inputs.stage == 'build-only'
-        run: node apps/desktop/scripts/verify-licketysplit-package.mjs --app apps/desktop/release/mac-arm64/LicketySplit.app --version 0.1.0-alpha.1 --out apps/desktop/release/build-manifest.json
+        run: node apps/desktop/scripts/verify-licketysplit-package.mjs --app apps/desktop/release/mac-arm64/LicketySplit.app --version 0.1.0-alpha.2 --out apps/desktop/release/build-manifest.json
       - if: inputs.stage != 'build-only'
-        run: node apps/desktop/scripts/verify-licketysplit-package.mjs --app apps/desktop/release/mac-arm64/LicketySplit.app --version 0.1.0-alpha.1 --team "$APPLE_TEAM_ID" --out apps/desktop/release/build-manifest.json
+        run: node apps/desktop/scripts/verify-licketysplit-package.mjs --app apps/desktop/release/mac-arm64/LicketySplit.app --version 0.1.0-alpha.2 --team "$APPLE_TEAM_ID" --out apps/desktop/release/build-manifest.json
       - run: |
           cp apps/desktop/LICENSES/OPENREEL.md apps/desktop/release/THIRD-PARTY-NOTICES.md
           cd apps/desktop/release
@@ -95,4 +95,4 @@ jobs:
           node -e 'const m=JSON.parse(require("fs").readFileSync("candidate/build-manifest.json"));if(m.sourceCommit!==process.env.GITHUB_SHA)throw new Error("Source commit mismatch")'
           cd candidate
           sha256sum -c SHA256SUMS
-          gh release create "licketysplit-desktop-v0.1.0-alpha.1" --draft --prerelease --target "$GITHUB_SHA" --title "LicketySplit 0.1.0-alpha.1" --notes "Signed Apple silicon test candidate. Publication requires separate approval." LicketySplit-*-arm64.dmg LicketySplit-*-arm64.zip SHA256SUMS build-manifest.json THIRD-PARTY-NOTICES.md
+          gh release create "licketysplit-desktop-v0.1.0-alpha.2" --draft --prerelease --target "$GITHUB_SHA" --title "LicketySplit 0.1.0-alpha.2" --notes "Signed Apple silicon test candidate. Publication requires separate approval." LicketySplit-*-arm64.dmg LicketySplit-*-arm64.zip SHA256SUMS build-manifest.json THIRD-PARTY-NOTICES.md

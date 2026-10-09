@@ -1,4 +1,4 @@
-import type { PodcastAnalysis, PodcastGroup } from "@openreel/core/lickety/podcast-types";
+import type { PodcastAnalysis, PodcastGroup } from "@licketysplit/core/lickety/podcast-types";
 
 const reviewGroup = (group: PodcastGroup, assetIds: string[]): PodcastGroup => ({
   ...group,

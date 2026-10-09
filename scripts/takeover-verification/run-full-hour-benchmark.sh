@@ -17,7 +17,7 @@ else
   exit 2
 fi
 
-node_version="$("$pnpm_command" --filter @openreel/desktop exec node --version)"
+node_version="$("$pnpm_command" --filter @licketysplit/desktop exec node --version)"
 node_major="${node_version#v}"
 node_major="${node_major%%.*}"
 if [[ "$node_major" != "22" ]]; then
@@ -31,7 +31,7 @@ run_mode() {
   TAKEOVER_HOUR_FIXTURE="$fixture_dir" \
   TAKEOVER_HOUR_FFMPEG="$repo_root/apps/desktop/resources/bin/darwin-arm64/ffmpeg" \
   TAKEOVER_HOUR_MODE="$mode" \
-    "$pnpm_command" --filter @openreel/desktop exec vitest run "$test_file" --reporter=verbose
+    "$pnpm_command" --filter @licketysplit/desktop exec vitest run "$test_file" --reporter=verbose
 }
 
 run_mode native-cold

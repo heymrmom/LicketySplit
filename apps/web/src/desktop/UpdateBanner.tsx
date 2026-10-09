@@ -1,19 +1,19 @@
 import type { JSX } from "react";
 import { useEffect, useState } from "react";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import type { OpenReelUpdaterStatus } from "../types/global";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import type { LicketySplitUpdaterStatus } from "../types/global";
 
 // Notify → (consented) download → install. Subscribes to main-process update
-// status and drives download/install through window.openreel.updater. The
+// status and drives download/install through window.licketysplit.updater. The
 // install path quits through the normal guarded flow, so unsaved changes are
 // still protected.
 export function UpdateBanner(): JSX.Element | null {
-  const [status, setStatus] = useState<OpenReelUpdaterStatus | null>(null);
+  const [status, setStatus] = useState<LicketySplitUpdaterStatus | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    const updater = window.openreel?.updater;
+    const updater = window.licketysplit?.updater;
     if (!updater) return;
     return updater.onStatus((next) => {
       setStatus(next);
@@ -48,7 +48,7 @@ export function UpdateBanner(): JSX.Element | null {
               label="Download"
               variant="primary"
               size="sm"
-              onClick={() => void window.openreel?.updater.download()}
+              onClick={() => void window.licketysplit?.updater.download()}
             />
             <Button
               label="Later"
@@ -91,7 +91,7 @@ export function UpdateBanner(): JSX.Element | null {
               label="Restart & Install"
               variant="primary"
               size="sm"
-              onClick={() => void window.openreel?.updater.install()}
+              onClick={() => void window.licketysplit?.updater.install()}
             />
             <Button
               label="Later"

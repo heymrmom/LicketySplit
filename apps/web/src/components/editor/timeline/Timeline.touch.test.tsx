@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Clip, TextClip, Track } from "@openreel/core";
+import type { Clip, TextClip, Track } from "@licketysplit/core";
 import { createEmptyProject } from "../../../stores/project/project-helpers";
 import { useProjectStore } from "../../../stores/project-store";
 import { useTimelineStore } from "../../../stores/timeline-store";
@@ -9,10 +9,13 @@ import { ClipComponent } from "./ClipComponent";
 import { TextClipComponent } from "./TextClipComponent";
 import { TimeRuler } from "./TimeRuler";
 
+type TestPointerEventOptions = { bubbles?: boolean; cancelable?: boolean; clientX?: number; pointerId?: number; pointerType?: string };
+type TestFrameCallback = (timestamp: number) => void;
+
 class TestPointerEvent extends MouseEvent {
   readonly pointerId: number;
   readonly pointerType: string;
-  constructor(type: string, options: PointerEventInit = {}) {
+  constructor(type: string, options: TestPointerEventOptions = {}) {
     super(type, options);
     this.pointerId = options.pointerId ?? 1;
     this.pointerType = options.pointerType ?? "touch";
@@ -35,7 +38,7 @@ const props = { clip, track, allTracks: [track], pixelsPerSecond: 50, scrollX: 0
   onSelect: vi.fn(), onMoveClip: vi.fn(), onSnapIndicator: noop };
 
 describe("touch timeline editing", () => {
-  const frames = new Map<number, FrameRequestCallback>();
+  const frames = new Map<number, TestFrameCallback>();
   let nextFrame = 0;
   function flushFrame() {
     act(() => {

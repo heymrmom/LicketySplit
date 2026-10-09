@@ -14,8 +14,8 @@ import type {
   MulticamManifestConstraints,
   MulticamVadTrack,
   MulticamCalibrationRange,
-} from "@openreel/core";
-import { DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS, fingerprintMulticamManifest, type OrmaArtifact } from "@openreel/core";
+} from "@licketysplit/core";
+import { DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS, fingerprintMulticamManifest, type OrmaArtifact } from "@licketysplit/core";
 
 export interface MulticamSyncAnalysis {
   results: Map<string, SyncResult>;
@@ -242,7 +242,7 @@ export function buildMulticamManifest(
   });
   const reference = cameras.find((camera) => camera.type === "wide")?.id ?? (isPodcast ? "" : cameras[0]?.id ?? "");
   return {
-    spec: "openreel-multicam/v1",
+    spec: "licketysplit-multicam/v1",
     fps: project.settings.frameRate,
     sync: { method: "audio-crosscorr", reference },
     participants,

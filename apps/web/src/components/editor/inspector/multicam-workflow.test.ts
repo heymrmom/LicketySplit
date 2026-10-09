@@ -5,7 +5,7 @@ import {
   type MediaItem,
   type MultiCamGroup,
   type Project,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   createMulticamApplyEditAction,
   buildMulticamManifest,
@@ -249,7 +249,7 @@ describe("multicam workflow", () => {
       forbid_jump_cut_same_subject: true,
     });
 
-    expect(value.spec).toBe("openreel-multicam/v1");
+    expect(value.spec).toBe("licketysplit-multicam/v1");
     expect(value.participants.map((participant) => participant.audio)).toEqual(["a", "b"]);
     expect(value.cameras.map((camera) => camera.clipId)).toEqual(["clip-a", "clip-b"]);
   });
@@ -326,7 +326,7 @@ describe("multicam workflow", () => {
     expect(manifest.cameras[1]?.subject).not.toBe("all");
     expect(manifest.participants.map((entry) => entry.id)).toEqual(["participant-host"]);
 
-    const { createOrmaArtifact, fingerprintMulticamManifest } = await import("@openreel/core");
+    const { createOrmaArtifact, fingerprintMulticamManifest } = await import("@licketysplit/core");
     const artifact = createOrmaArtifact({ manifest, media: [], activity: { angleIds: ["participant-host"], duration: 8, windowMs: 50, points: [] } });
     expect(artifact.manifestFingerprint).toBe(fingerprintMulticamManifest(manifest));
     expect(hasCurrentGroupedPodcastActivity(target, grouped, artifact)).toBe(true);

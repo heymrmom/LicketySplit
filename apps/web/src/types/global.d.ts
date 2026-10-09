@@ -1,8 +1,8 @@
-import type {ResourceProfile,RegisteredAsset,ProxyReceipt,AnalysisSnapshot,PreparedAudio,TranscriptDocument,JobState} from "@openreel/core/lickety/types";
-import type { PodcastBridge } from "@openreel/core/lickety/podcast-types";
+import type {ResourceProfile,RegisteredAsset,ProxyReceipt,AnalysisSnapshot,PreparedAudio,TranscriptDocument,JobState} from "@licketysplit/core/lickety/types";
+import type { PodcastBridge } from "@licketysplit/core/lickety/podcast-types";
 export {};
 
-export interface OpenReelHardwareInfo {
+export interface LicketySplitHardwareInfo {
   cpu: { model: string; physicalCores: number; logicalCores: number };
   memory: { totalBytes: number; freeBytes: number };
   gpus: string[];
@@ -11,7 +11,7 @@ export interface OpenReelHardwareInfo {
   arch: string;
 }
 
-export interface OpenReelExportStartArgs {
+export interface LicketySplitExportStartArgs {
   width: number;
   height: number;
   frameRate: number;
@@ -27,11 +27,11 @@ export interface OpenReelExportStartArgs {
   proresProfile?: "proxy" | "lt" | "standard" | "hq" | "4444" | "4444xq";
 }
 
-export interface OpenReelExportSession {
+export interface LicketySplitExportSession {
   jobId: string;
 }
 
-export interface OpenReelAuroraRenderPreviewArgs {
+export interface LicketySplitAuroraRenderPreviewArgs {
   scene: unknown;
   assets: unknown[];
   width: number;
@@ -41,27 +41,27 @@ export interface OpenReelAuroraRenderPreviewArgs {
   quality?: "preview" | "final";
 }
 
-export interface OpenReelAuroraPreviewSessionStartArgs
-  extends OpenReelAuroraRenderPreviewArgs {
+export interface LicketySplitAuroraPreviewSessionStartArgs
+  extends LicketySplitAuroraRenderPreviewArgs {
   sessionId?: string;
 }
 
-export interface OpenReelAuroraPreviewSessionStartResult {
+export interface LicketySplitAuroraPreviewSessionStartResult {
   sessionId: string;
 }
 
-export interface OpenReelAuroraSequenceSessionStartArgs
-  extends Omit<OpenReelAuroraRenderPreviewArgs, "timeSeconds"> {
+export interface LicketySplitAuroraSequenceSessionStartArgs
+  extends Omit<LicketySplitAuroraRenderPreviewArgs, "timeSeconds"> {
   sessionId?: string;
   frameRate: number;
   durationSeconds: number;
 }
 
-export interface OpenReelAuroraSequenceSessionStartResult {
+export interface LicketySplitAuroraSequenceSessionStartResult {
   sessionId: string;
 }
 
-export interface OpenReelAuroraRenderPreviewResult {
+export interface LicketySplitAuroraRenderPreviewResult {
   backend: "native" | "cpu";
   pngBase64: string;
   dataUri: string;
@@ -72,7 +72,7 @@ export interface OpenReelAuroraRenderPreviewResult {
   renderMs: number;
 }
 
-export type OpenReelAuroraPreviewSessionEvent =
+export type LicketySplitAuroraPreviewSessionEvent =
   | {
       kind: "update";
       sessionId: string;
@@ -81,7 +81,7 @@ export type OpenReelAuroraPreviewSessionEvent =
       done: boolean;
       targetWidth: number;
       targetHeight: number;
-      result: OpenReelAuroraRenderPreviewResult;
+      result: LicketySplitAuroraRenderPreviewResult;
     }
   | {
       kind: "error";
@@ -90,7 +90,7 @@ export type OpenReelAuroraPreviewSessionEvent =
       error: string;
     };
 
-export type OpenReelAuroraSequenceSessionEvent =
+export type LicketySplitAuroraSequenceSessionEvent =
   | {
       kind: "frame";
       sessionId: string;
@@ -116,7 +116,7 @@ export type OpenReelAuroraSequenceSessionEvent =
       error: string;
     };
 
-export interface OpenReelMcpStatus {
+export interface LicketySplitMcpStatus {
   running: boolean;
   url: string;
   port: number;
@@ -125,7 +125,7 @@ export interface OpenReelMcpStatus {
   endpointFile: string;
 }
 
-export interface OpenReelRiggingBackendProbe {
+export interface LicketySplitRiggingBackendProbe {
   available: boolean;
   provider: "blender";
   mode?: "configured" | "bundled" | "system";
@@ -134,13 +134,13 @@ export interface OpenReelRiggingBackendProbe {
   error?: string;
 }
 
-export interface OpenReelRiggingWarning {
+export interface LicketySplitRiggingWarning {
   code: string;
   severity: "info" | "warning" | "error";
   message: string;
 }
 
-export interface OpenReelRigHumanoidModelArgs {
+export interface LicketySplitRigHumanoidModelArgs {
   modelUrl: string;
   outputPath?: string;
   name?: string;
@@ -148,7 +148,7 @@ export interface OpenReelRigHumanoidModelArgs {
   overwriteExisting?: boolean;
 }
 
-export interface OpenReelRigHumanoidModelResult {
+export interface LicketySplitRigHumanoidModelResult {
   ok: boolean;
   provider: "blender";
   inputUrl: string;
@@ -160,11 +160,11 @@ export interface OpenReelRigHumanoidModelResult {
   skinnedMeshCount: number;
   meshCount: number;
   boneCount: number;
-  warnings: OpenReelRiggingWarning[];
+  warnings: LicketySplitRiggingWarning[];
   error?: string;
 }
 
-export type OpenReelUpdaterStatus =
+export type LicketySplitUpdaterStatus =
   | { state: "checking" }
   | { state: "available"; version: string }
   | { state: "none" }
@@ -174,7 +174,7 @@ export type OpenReelUpdaterStatus =
 
 declare global {
   interface Window {
-    openreel?: {
+    licketysplit?: {
       platform: "desktop";
       lickety?: {
         reconcileTranscription(jobId:string,providerJobId:string):Promise<void>;
@@ -199,7 +199,7 @@ declare global {
       };
       podcast?: PodcastBridge;
       publicOrigin: string;
-      probeHardware(): Promise<OpenReelHardwareInfo>;
+      probeHardware(): Promise<LicketySplitHardwareInfo>;
       onMenuAction(cb: (id: string) => void): () => void;
       fs: {
         showSaveDialog(opts: {
@@ -225,7 +225,7 @@ declare global {
         delete(id: string): Promise<void>;
       };
       export: {
-        start(args: OpenReelExportStartArgs): Promise<OpenReelExportSession>;
+        start(args: LicketySplitExportStartArgs): Promise<LicketySplitExportSession>;
         writeAudioWav(jobId: string, wav: ArrayBuffer): Promise<void>;
         writeAudioChunk(jobId: string, chunk: ArrayBuffer, position: number): Promise<void>;
         finishAudio(jobId: string): Promise<void>;
@@ -233,21 +233,21 @@ declare global {
       };
       aurora?: {
         renderPreview(
-          args: OpenReelAuroraRenderPreviewArgs,
-        ): Promise<OpenReelAuroraRenderPreviewResult>;
+          args: LicketySplitAuroraRenderPreviewArgs,
+        ): Promise<LicketySplitAuroraRenderPreviewResult>;
         startPreviewSession(
-          args: OpenReelAuroraPreviewSessionStartArgs,
-        ): Promise<OpenReelAuroraPreviewSessionStartResult>;
+          args: LicketySplitAuroraPreviewSessionStartArgs,
+        ): Promise<LicketySplitAuroraPreviewSessionStartResult>;
         cancelPreviewSession(sessionId: string): Promise<void>;
         onPreviewEvent(
-          cb: (event: OpenReelAuroraPreviewSessionEvent) => void,
+          cb: (event: LicketySplitAuroraPreviewSessionEvent) => void,
         ): () => void;
         startSequenceSession(
-          args: OpenReelAuroraSequenceSessionStartArgs,
-        ): Promise<OpenReelAuroraSequenceSessionStartResult>;
+          args: LicketySplitAuroraSequenceSessionStartArgs,
+        ): Promise<LicketySplitAuroraSequenceSessionStartResult>;
         cancelSequenceSession(sessionId: string): Promise<void>;
         onSequenceEvent(
-          cb: (event: OpenReelAuroraSequenceSessionEvent) => void,
+          cb: (event: LicketySplitAuroraSequenceSessionEvent) => void,
         ): () => void;
       };
       cloud: {
@@ -278,7 +278,7 @@ declare global {
         onFlush(handler: () => Promise<void>): () => void;
       };
       updater: {
-        onStatus(cb: (status: OpenReelUpdaterStatus) => void): () => void;
+        onStatus(cb: (status: LicketySplitUpdaterStatus) => void): () => void;
         download(): Promise<void>;
         install(): Promise<void>;
       };
@@ -294,8 +294,8 @@ declare global {
             args?: Record<string, unknown>;
           }) => Promise<{ ok: boolean; result?: unknown; error?: string }>,
         ): () => void;
-        getStatus(): Promise<OpenReelMcpStatus>;
-        rotateToken(): Promise<OpenReelMcpStatus>;
+        getStatus(): Promise<LicketySplitMcpStatus>;
+        rotateToken(): Promise<LicketySplitMcpStatus>;
         testConnection(): Promise<{ ok: boolean; message?: string; toolCount?: number }>;
       };
       media: {
@@ -307,8 +307,8 @@ declare global {
           audioBitrateKbps?: number;
         }): Promise<{ outPath: string }>;
         extractAudioWav(args: { srcPath: string; streamIndex?: number }): Promise<{ outPath: string }>;
-        inspectFile(file:File):Promise<import("@openreel/core/media/types").MediaTrackInfo|null>;
-        inspectPath(args:{srcPath:string}):Promise<import("@openreel/core/media/types").MediaTrackInfo>;
+        inspectFile(file:File):Promise<import("@licketysplit/core/media/types").MediaTrackInfo|null>;
+        inspectPath(args:{srcPath:string}):Promise<import("@licketysplit/core/media/types").MediaTrackInfo>;
         probeFile(file:File):Promise<{streams:{index:number;codec:string;channels:number;sampleRate:number}[]}|null>;
         probeAudioStreams(args: { srcPath: string }): Promise<{
           streams: { index: number; codec: string; channels: number; sampleRate: number; language?: string }[];
@@ -323,10 +323,10 @@ declare global {
         }>;
       };
       rigging?: {
-        probeBackend(): Promise<OpenReelRiggingBackendProbe>;
+        probeBackend(): Promise<LicketySplitRiggingBackendProbe>;
         rigHumanoidModel(
-          args: OpenReelRigHumanoidModelArgs,
-        ): Promise<OpenReelRigHumanoidModelResult>;
+          args: LicketySplitRigHumanoidModelArgs,
+        ): Promise<LicketySplitRigHumanoidModelResult>;
       };
     };
   }

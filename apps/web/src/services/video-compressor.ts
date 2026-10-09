@@ -2,7 +2,7 @@ import {
   getMediaEngine,
   type CompressionPlan,
   type CompressionSource,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 export async function probeCompressionSource(
   file: File | Blob,

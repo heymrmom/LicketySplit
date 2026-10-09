@@ -26,7 +26,7 @@ beforeAll(async () => {
   running = await startHttpServer({
     getToken: () => currentToken,
     provider,
-    serverInfo: { name: "openreel", version: "test" },
+    serverInfo: { name: "licketysplit", version: "test" },
     port: 0,
   });
   base = `http://127.0.0.1:${running.port}/mcp`;

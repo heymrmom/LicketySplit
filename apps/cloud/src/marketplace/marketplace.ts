@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { listBlueprints, paletteNodes, type AbiVersion, type AssetKind } from "@openreel/fxpkg";
+import { listBlueprints, paletteNodes, type AbiVersion, type AssetKind } from "@licketysplit/fxpkg";
 import type { Bindings } from "./types";
 import { getStore } from "./store";
 import { requireUser, isResponse } from "./auth";

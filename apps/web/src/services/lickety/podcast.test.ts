@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PodcastSetup, Project } from "@openreel/core";
-import { makeWorkflowFixture } from "@openreel/core/lickety/test-fixtures";
+import type { PodcastSetup, Project } from "@licketysplit/core";
+import { makeWorkflowFixture } from "@licketysplit/core/lickety/test-fixtures";
 import { applyPodcastSetup, type PodcastApplyDependencies } from "./podcast";
 
 function setup(projectId: string, state: "review" | "approved" = "approved"): PodcastSetup {

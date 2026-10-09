@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createBudgetedVideoElement,
   VideoDecoderBudget,
+  type VideoDecoderLease,
 } from "./video-decoder-budget";
 
 afterEach(() => {
@@ -96,6 +97,32 @@ describe("shared video decoder budget", () => {
     resolveUrl("blob:late-source");
 
     await expect(pending).resolves.toBeNull();
+    expect(makeVideo).not.toHaveBeenCalled();
+    expect(budget.size).toBe(0);
+  });
+
+  it("releases a pending URL reservation immediately when its owner tears down", async () => {
+    const budget = new VideoDecoderBudget(4);
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const makeVideo = vi.fn(fakeVideo);
+    let resolveUrl!: (value: string) => void;
+    let reservation: VideoDecoderLease | null = null;
+    const pending = createBudgetedVideoElement(
+      () => new Promise<string>((resolve) => { resolveUrl = resolve; }),
+      {
+        budget,
+        videoFactory: makeVideo,
+        onReserved: (lease) => { reservation = lease; },
+      },
+    );
+
+    expect(budget.size).toBe(1);
+    reservation!.release();
+    expect(budget.size).toBe(0);
+    resolveUrl("blob:late-after-owner-teardown");
+
+    await expect(pending).resolves.toBeNull();
+    expect(revoke).toHaveBeenCalledWith("blob:late-after-owner-teardown");
     expect(makeVideo).not.toHaveBeenCalled();
     expect(budget.size).toBe(0);
   });

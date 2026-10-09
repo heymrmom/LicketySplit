@@ -52,14 +52,14 @@ describe("DesktopStartScreen", () => {
 
   it("starts the existing editor project shell and opens podcast preparation when selected", async () => {
     const open = vi.fn();
-    window.addEventListener("openreel:podcast:open", open);
+    window.addEventListener("licketysplit:podcast:open", open);
     render(<DesktopStartScreen />);
     await screen.findByText("No recent projects yet. Start a new project above.");
     fireEvent.click(screen.getByRole("button", { name: /Podcast preparation/ }));
     fireEvent.click(screen.getByRole("button", { name: /Horizontal Podcast preparation/ }));
     expect(actionMocks.startNewProject).toHaveBeenCalledWith(DESKTOP_FORMATS[1]);
     expect(open).toHaveBeenCalledOnce();
-    window.removeEventListener("openreel:podcast:open", open);
+    window.removeEventListener("licketysplit:podcast:open", open);
   });
 
   it("routes a Narrative start to the existing transcript panel", async () => {

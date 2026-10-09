@@ -25,7 +25,7 @@ describe("multicam bleed calibration", () => {
 
   it("subtracts predicted bleed while preserving independent speech", () => {
     const calibration = {
-      spec: "openreel-bleed-calibration/v1" as const,
+      spec: "licketysplit-bleed-calibration/v1" as const,
       angleIds: ["a", "b"],
       ratios: { a: { a: 1, b: 0.2 }, b: { a: 0.1, b: 1 } },
       noiseFloor: { a: 0, b: 0 },

@@ -6,7 +6,7 @@ import {
   type BeatSyncConfig,
   type BeatAnalysisResult,
   DEFAULT_BEAT_SYNC_CONFIG,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { loadAudioBuffer } from "../utils/load-audio-buffer";
 import { useProjectStore } from "../stores/project-store";
 

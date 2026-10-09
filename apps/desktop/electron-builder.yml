@@ -1,7 +1,6 @@
 appId: com.heymrmom.licketysplit.desktop
 productName: LicketySplit
-# Predictable, space-free, arch-suffixed names → clean R2 URLs + a simple
-# manifest (e.g. OpenReel-1.2.3-arm64.dmg, OpenReel-1.2.3-x64.exe).
+# Predictable, space-free, arch-suffixed candidate artifact names.
 artifactName: ${productName}-${version}-${arch}.${ext}
 asar: true
 # The MCP stdio shim must be a real on-disk file so external clients (Claude
@@ -10,9 +9,7 @@ asarUnpack:
   - dist/mcp-shim/**
 directories:
   output: release
-# Update feed for electron-updater. Builds embed app-update.yml pointing at the
-# R2-backed download subdomain and generate latest*.yml + blockmaps; the release
-# CI uploads everything to R2 (the generic provider does not upload itself).
+# No update provider is configured for this candidate.
 publish: null
 files:
   - dist/**/*
@@ -47,7 +44,7 @@ extraResources:
       - "**/*"
 mac:
   category: public.app-category.video
-  icon: build/icon.png
+  icon: build/licketysplit.icns
   target:
     - target: dmg
       arch: [arm64]
@@ -61,12 +58,12 @@ mac:
   identity: null
 
 win:
-  icon: build/icon.png
+  icon: ../web/public/icons/licketysplit-mark.png
   target:
     - target: nsis
       arch: [x64]
 linux:
-  icon: build/icon.png
+  icon: ../web/public/icons/licketysplit-mark.png
   target:
     - target: AppImage
       arch: [x64]

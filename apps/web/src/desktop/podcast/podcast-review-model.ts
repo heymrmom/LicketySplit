@@ -4,7 +4,7 @@ import type {
   PodcastSetup,
   PodcastSyncChannel,
   PodcastWaveformSummary,
-} from "@openreel/core/lickety/podcast-types";
+} from "@licketysplit/core/lickety/podcast-types";
 
 /**
  * Adapted from the legacy renderer helpers in src/sync-review-state.ts and

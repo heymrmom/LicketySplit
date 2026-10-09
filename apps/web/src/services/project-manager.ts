@@ -1,6 +1,6 @@
 import {restoreNativeMediaReferences} from "./media-storage";
-import type { Project, ProjectSettings } from "@openreel/core";
-import { serializeProjectFile,assertReaderCompatibility, normalizeProjectStoredFields } from "@openreel/core";
+import type { Project, ProjectSettings } from "@licketysplit/core";
+import { serializeProjectFile,assertReaderCompatibility, normalizeProjectStoredFields } from "@licketysplit/core";
 import { v4 as uuidv4 } from "uuid";
 
 interface FilePickerAcceptType {
@@ -36,7 +36,7 @@ type NativeFileRef = { kind: "native"; path: string };
 type ProjectFileRef = FileSystemFileHandle | NativeFileRef;
 
 function isDesktopFs(): boolean {
-  return typeof window !== "undefined" && !!window.openreel?.fs;
+  return typeof window !== "undefined" && !!window.licketysplit?.fs;
 }
 
 function isNativeRef(ref: unknown): ref is NativeFileRef {
@@ -47,7 +47,7 @@ function isNativeRef(ref: unknown): ref is NativeFileRef {
   );
 }
 
-const PROJECT_DB_NAME = "openreel-projects";
+const PROJECT_DB_NAME = "licketysplit-projects";
 const PROJECT_DB_VERSION = 1;
 const PROJECTS_STORE = "projects";
 const RECENT_STORE = "recent";
@@ -222,7 +222,7 @@ class ProjectManager {
       candidate.project !== null;
 
     const rawProject = (isWrapped ? candidate.project : parsed) as Project;
-    assertReaderCompatibility(isWrapped?candidate as unknown as import("@openreel/core/storage/project-serializer").ProjectFile:{version:"1.2.0",project:rawProject});
+    assertReaderCompatibility(isWrapped?candidate as unknown as import("@licketysplit/core/storage/project-serializer").ProjectFile:{version:"1.2.0",project:rawProject});
     if (typeof rawProject.id !== "string" || typeof rawProject.name !== "string") {
       throw new Error("Invalid project file: missing project id or name");
     }
@@ -330,12 +330,12 @@ class ProjectManager {
 
   async saveProjectAs(project: Project): Promise<boolean> {
     if (isDesktopFs()) {
-      const filePath = await window.openreel!.fs.showSaveDialog({
-        defaultPath: `${project.name}.oreel`,
-        filters: [{ name: "OpenReel Project", extensions: ["oreel", "json"] }],
+      const filePath = await window.licketysplit!.fs.showSaveDialog({
+        defaultPath: `${project.name}.licketysplit`,
+        filters: [{ name: "LicketySplit Project", extensions: ["licketysplit"] }],
       });
       if (!filePath) return false;
-      await window.openreel!.fs.writeFile(
+      await window.licketysplit!.fs.writeFile(
         filePath,
         serializeProjectFile(project),
       );
@@ -353,11 +353,11 @@ class ProjectManager {
     try {
       const win = window as WindowWithFilePicker;
       handle = await win.showSaveFilePicker!({
-        suggestedName: `${project.name}.oreel`,
+        suggestedName: `${project.name}.licketysplit`,
         types: [
           {
-            description: "OpenReel Project",
-            accept: { "application/json": [".oreel", ".json"] },
+            description: "LicketySplit Project",
+            accept: { "application/json": [".licketysplit"] },
           },
         ],
       });
@@ -387,7 +387,7 @@ class ProjectManager {
   ): Promise<boolean> {
     const data = serializeProjectFile(project);
     if (isNativeRef(handle)) {
-      await window.openreel!.fs.writeFile(handle.path, data);
+      await window.licketysplit!.fs.writeFile(handle.path, data);
       this.emit("projectSaved", { project });
       return true;
     }
@@ -413,7 +413,7 @@ class ProjectManager {
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${project.name}.oreel`;
+    a.download = `${project.name}.licketysplit`;
     try {
       document.body.appendChild(a);
       a.click();
@@ -428,11 +428,11 @@ class ProjectManager {
 
   async openProject(): Promise<Project | null> {
     if (isDesktopFs()) {
-      const filePath = await window.openreel!.fs.showOpenDialog({
-        filters: [{ name: "OpenReel Project", extensions: ["oreel", "json"] }],
+      const filePath = await window.licketysplit!.fs.showOpenDialog({
+        filters: [{ name: "LicketySplit Project", extensions: ["licketysplit", "oreel", "json"] }],
       });
       if (!filePath) return null;
-      const content = await window.openreel!.fs.readFile(filePath);
+      const content = await window.licketysplit!.fs.readFile(filePath);
       let project: Project;
       try {
         project = this.parseProjectContent(content);
@@ -453,8 +453,8 @@ class ProjectManager {
         const [handle] = await win.showOpenFilePicker!({
           types: [
             {
-              description: "OpenReel Project",
-              accept: { "application/json": [".oreel", ".json"] },
+              description: "LicketySplit Project",
+              accept: { "application/json": [".licketysplit", ".oreel", ".json"] },
             },
           ],
           multiple: false,
@@ -486,7 +486,7 @@ class ProjectManager {
     return new Promise((resolve) => {
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = ".oreel,.json";
+      input.accept = ".licketysplit,.oreel,.json";
 
       input.onchange = async () => {
         const file = input.files?.[0];
@@ -517,7 +517,7 @@ class ProjectManager {
     if (recentProject.fileHandle) {
       if (isNativeRef(recentProject.fileHandle)) {
         try {
-          const content = await window.openreel!.fs.readFile(
+          const content = await window.licketysplit!.fs.readFile(
             recentProject.fileHandle.path,
           );
           const project = await restoreNativeMediaReferences(this.parseProjectContent(content));

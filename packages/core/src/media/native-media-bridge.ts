@@ -1,5 +1,5 @@
-// Renderer-side bridge to the desktop native FFmpeg sidecar (window.openreel.media).
-// packages/core cannot see apps/web's ambient window.openreel type, so we declare the
+// Renderer-side bridge to the desktop native FFmpeg sidecar (window.licketysplit.media).
+// packages/core cannot see apps/web's ambient window.licketysplit type, so we declare the
 // minimal slice this module uses and access it via a typed cast on globalThis.
 
 export interface NativeMediaBridge {
@@ -30,8 +30,8 @@ export interface NativeMediaBridge {
 }
 
 export function getBridge(): NativeMediaBridge | undefined {
-  const w = globalThis as unknown as { openreel?: Partial<NativeMediaBridge> };
-  const o = w.openreel;
+  const w = globalThis as unknown as { licketysplit?: Partial<NativeMediaBridge> };
+  const o = w.licketysplit;
   if (o && o.platform === "desktop" && o.fs && o.media) {
     return o as NativeMediaBridge;
   }
@@ -159,7 +159,7 @@ export interface ManagedRendererBridge {
  findAsset(mediaId:string):Promise<import('../lickety/types').RegisteredAsset|undefined>;
  resolve(assetId:string,purpose:'original'|'proxy'):Promise<string>;
 }
-export function getManagedBridge():ManagedRendererBridge|undefined {return (globalThis as unknown as {openreel?:{platform?:string;lickety?:ManagedRendererBridge}}).openreel?.lickety;}
+export function getManagedBridge():ManagedRendererBridge|undefined {return (globalThis as unknown as {licketysplit?:{platform?:string;lickety?:ManagedRendererBridge}}).licketysplit?.lickety;}
 export async function prepareNativeOriginal(item:import('../types/project').MediaItem):Promise<import('../types/project').MediaItem>{
  const managed=getManagedBridge();if(!managed)return item;
  const runtimeBlob=item.blob??await item.fileHandle?.getFile();

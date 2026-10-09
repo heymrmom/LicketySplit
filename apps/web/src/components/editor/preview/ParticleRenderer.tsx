@@ -4,7 +4,7 @@ import {
   getParticleEngine,
   type Particle,
   type ParticleEffect,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 interface ParticleRendererProps {
   effects: ParticleEffect[];

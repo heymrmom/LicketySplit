@@ -1,12 +1,12 @@
-import type { JobKind, JobResult, JobRunner } from "@openreel/agent";
+import type { JobKind, JobResult, JobRunner } from "@licketysplit/agent";
 import type {
   VideoExportSettings,
   AudioExportSettings,
   ExportProgress,
   ExportResult,
-} from "@openreel/core/export/types";
-import type { Project } from "@openreel/core/types/project";
-import { getExportEngine, setEncoderBackendFactory, WebCodecsBackend } from "@openreel/core";
+} from "@licketysplit/core/export/types";
+import type { Project } from "@licketysplit/core/types/project";
+import { getExportEngine, setEncoderBackendFactory, WebCodecsBackend } from "@licketysplit/core";
 import { useProjectStore } from "../../stores/project-store";
 import { NativeFFmpegBackend } from "../native-ffmpeg-backend";
 import { renderMotionCompositionFrameToDataUrl } from "../../motion/export-motion-frame";
@@ -138,7 +138,7 @@ function sanitizeName(name: string | undefined): string {
 
 function nativeBackendFactory() {
   return new NativeFFmpegBackend(
-    () => (window as { __openreelExportPath?: string }).__openreelExportPath ?? "",
+    () => (window as { __licketysplitExportPath?: string }).__licketysplitExportPath ?? "",
   );
 }
 
@@ -148,7 +148,7 @@ async function saveExportLocally(
   ext: string,
   contentType: string,
 ): Promise<JobResult> {
-  const bridge = window.openreel?.fs;
+  const bridge = window.licketysplit?.fs;
   if (!bridge) return { ok: false, error: "Local export storage is unavailable" };
   const filename = `${sanitizeName(projectName)}-${Date.now()}.${ext}`;
   const path = await bridge.tempFilePath(ext);

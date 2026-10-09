@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import type { MediaItem } from "@openreel/core";
+import type { MediaItem } from "@licketysplit/core";
 import type { PreviewProxyPreset } from "../../services/preview-proxy-cache";
 import { previewProxyCache, usePreviewProxyStore } from "../../stores/preview-proxy-store";
 

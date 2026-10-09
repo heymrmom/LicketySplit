@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Layout, Clock } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftSelectableCard as SelectableCard } from "@openreel/ui";
-import { ToolcraftTextInputControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftSelectableCard as SelectableCard } from "@licketysplit/ui";
+import { ToolcraftTextInputControl } from "@licketysplit/ui";
 import { useEngineStore } from "../../../stores/engine-store";
 import { useProjectStore } from "../../../stores/project-store";
 import type {
   TemplateSummary,
   TemplateCategory,
-} from "@openreel/core";
-import { TEMPLATE_CATEGORIES } from "@openreel/core";
+} from "@licketysplit/core";
+import { TEMPLATE_CATEGORIES } from "@licketysplit/core";
 
 export const TemplatesTab: React.FC = () => {
   const getTemplateEngine = useEngineStore((s) => s.getTemplateEngine);

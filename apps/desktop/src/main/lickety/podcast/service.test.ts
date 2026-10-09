@@ -179,6 +179,7 @@ describe("native podcast setup revision and live analysis", () => {
     } finally { release(); await rm(directory, { recursive: true, force: true }); }
   });
 
+  // This runs both end-to-end pipelines and can contend with native media tests in the full suite.
   it("preserves legacy grouping order and placements through the public adapter on the same source fixture", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-legacy-parity-"));
     const legacyCache = path.join(directory, "legacy-cache");
@@ -218,7 +219,7 @@ describe("native podcast setup revision and live analysis", () => {
       expect(placements(adapted)).toEqual(placements(legacy.setup));
       expect(adapted.placements.find((placement) => placement.assetId !== adapted.referenceAssetId)?.mapping.offsetSeconds).toBeCloseTo(35, 3);
     } finally { await rm(directory, { recursive: true, force: true }); }
-  });
+  }, 15_000);
 
   it("serves bounded waveform peaks from the checksummed prepared sidecar", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-waveform-"));

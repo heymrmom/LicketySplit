@@ -1,6 +1,6 @@
 import type { JSX } from "react";
 
-export function OpenReelMark({
+export function LicketySplitMark({
   size = 24,
   className,
 }: {

@@ -2,8 +2,8 @@ import type {
   MotionShaderCategory,
   MotionShaderDef,
   MotionShaderParamDef,
-} from "@openreel/core";
-import { validateMotionShaderSource } from "@openreel/core/motion/motion-shader-validator";
+} from "@licketysplit/core";
+import { validateMotionShaderSource } from "@licketysplit/core/motion/motion-shader-validator";
 import { buildShaderAuthoringPrompt } from "./ai-shader-prompt";
 
 export interface LlmMessage {

@@ -3,7 +3,7 @@
 import {
   analyzeMulticamDrift,
   type MulticamDriftAnalysisOptions,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 interface DriftRequest {
   requestId: string;

@@ -1,19 +1,19 @@
 import { it, expect } from "vitest";
-import { makeWorkflowFixture } from "@openreel/core/lickety/test-fixtures";
+import { makeWorkflowFixture } from "@licketysplit/core/lickety/test-fixtures";
 import { useLicketyWorkflowStore } from "./lickety-workflow-store";
 import { useProjectStore } from "./project-store";
 import { snapshotDialogue } from "../services/lickety/transcription";
 import { finalWords } from "../services/lickety/shorts";
 
 it("fresh transcription preserves podcast assembly while clearing stale editorial results", async () => {
-  Object.assign(window, { openreel: { platform: "desktop", lickety: {
+  Object.assign(window, { licketysplit: { platform: "desktop", lickety: {
     findAsset: async (mediaId: string) => ({ identity: { assetId: mediaId, mediaId, sha256: "sha", byteLength: 1 } }),
     resumeTranscription: async () => {},
   } } });
   const source = makeWorkflowFixture();
   const snapshot = await snapshotDialogue(source);
   const doc = { schemaVersion: 1, snapshotHash: snapshot.revisionHash, provider: "assemblyai", providerJobId: "fresh", preparedAudioSha256: "sha", words: [{ id: "new", text: "new current speech", startMs: 100, endMs: 500, confidence: 1 }] };
-  window.openreel!.lickety!.getTranscription = async () => ({ state: "completed", transcript: doc }) as never;
+  window.licketysplit!.lickety!.getTranscription = async () => ({ state: "completed", transcript: doc }) as never;
   const podcastSetup = { setupId: "setup-kept", revision: 3 };
   const podcastAssembly = { setupId: "setup-kept", setupRevision: 3, originShiftSeconds: 12, ownedTrackIds: ["owned"], groupIds: ["group"] };
   const project = {

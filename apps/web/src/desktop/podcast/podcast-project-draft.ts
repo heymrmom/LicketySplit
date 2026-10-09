@@ -1,5 +1,5 @@
-import type { Project } from "@openreel/core";
-import type { PodcastSetup } from "@openreel/core/lickety/podcast-types";
+import type { Project } from "@licketysplit/core";
+import type { PodcastSetup } from "@licketysplit/core/lickety/podcast-types";
 import { useProjectStore } from "../../stores/project-store";
 import { readPodcastWizardCheckpoint, type PodcastWizardCheckpoint, type ProjectWithPodcastCheckpoint } from "./podcast-ui-model";
 

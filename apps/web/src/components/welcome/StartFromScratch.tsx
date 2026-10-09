@@ -7,10 +7,10 @@ import {
   Check,
   Info,
 } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftSelectableCard as SelectableCard } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextInputControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftSelectableCard as SelectableCard } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextInputControl } from "@licketysplit/ui";
 import { useProjectStore } from "../../stores/project-store";
 import { useAnalytics, AnalyticsEvents } from "../../hooks/useAnalytics";
 import {
@@ -18,7 +18,7 @@ import {
   SOCIAL_MEDIA_CATEGORY_INFO,
   createProjectSettingsFromPreset,
   type SocialMediaCategory,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 interface StartFromScratchProps {
   onProjectCreated?: () => void;

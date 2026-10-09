@@ -14,6 +14,6 @@ jobs:
         with:
           node-version: '22'
           cache: pnpm
-      - run: pnpm install --frozen-lockfile --filter @openreel/web...
+      - run: pnpm install --frozen-lockfile --filter @licketysplit/web...
       - run: node --experimental-strip-types --test hosting/railway/server.test.mjs
       - run: pnpm build

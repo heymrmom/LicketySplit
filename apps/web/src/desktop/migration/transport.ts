@@ -185,7 +185,7 @@ export async function connectLegacyMigrationReader(
   targetWindow: Window = window,
   suppliedControl?: IdentityMigrationControl,
 ): Promise<LegacyMigrationReader> {
-  const control = suppliedControl ?? (targetWindow as Window & { openreel?: { identityMigration?: IdentityMigrationControl } }).openreel?.identityMigration;
+  const control = suppliedControl ?? (targetWindow as Window & { licketysplit?: { identityMigration?: IdentityMigrationControl } }).licketysplit?.identityMigration;
   if (!control) throw new IdentityStorageMigrationError("The desktop migration bridge is unavailable. The original profile remains available; restart the app and retry.");
   return new Promise((resolve, reject) => {
     let settled = false;

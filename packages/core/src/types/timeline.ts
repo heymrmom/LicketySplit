@@ -37,7 +37,7 @@ export interface TimelineBeatAnalysis {
 export interface Track {
   readonly id: string;
   /**
-   * Legacy serialization hint retained for older OpenReel readers. New code
+   * Legacy serialization hint retained for older LicketySplit readers. New code
    * must resolve behavior from the timeline item, not from this value.
    */
   readonly type: "video" | "audio" | "image" | "text" | "graphics";

@@ -1,8 +1,8 @@
 import type { JSX } from "react";
 import React, { useCallback, useEffect, useState } from "react";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import type { VideoExportSettings } from "@openreel/core";
-import { setEncoderBackendFactory, WebCodecsBackend } from "@openreel/core";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import type { VideoExportSettings } from "@licketysplit/core";
+import { setEncoderBackendFactory, WebCodecsBackend } from "@licketysplit/core";
 import { useProjectStore } from "../../stores/project-store";
 import { ExportDialog } from "../../components/editor/ExportDialog";
 import { deriveSourceExportMatch } from "../../services/export-source-match";
@@ -14,7 +14,7 @@ import { useUIStore } from "../../stores/ui-store";
 const NO_DRAG = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
 
 const resolveExportOutputPath = (): string =>
-  (window as { __openreelExportPath?: string }).__openreelExportPath ?? "";
+  (window as { __licketysplitExportPath?: string }).__licketysplitExportPath ?? "";
 
 // Native ffmpeg writes the file itself via the resolved output path, so it does
 // not consume the writable stream — a no-op stream satisfies the interface.
@@ -60,8 +60,8 @@ export function DesktopExportButton(): JSX.Element {
 
   useEffect(() => {
     const open = () => setIsDialogOpen(true);
-    window.addEventListener("openreel:menu:export", open);
-    return () => window.removeEventListener("openreel:menu:export", open);
+    window.addEventListener("licketysplit:menu:export", open);
+    return () => window.removeEventListener("licketysplit:menu:export", open);
   }, []);
 
   useEffect(() => {

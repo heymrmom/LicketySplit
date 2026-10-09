@@ -74,7 +74,7 @@ function buildGlbJson(mesh: Mesh, binary: MeshBinary, options: MeshToGltfOptions
   const bounds = computeMeshBounds(mesh.positions);
   const vertexCount = mesh.positions.length / 3;
   const json = {
-    asset: { version: "2.0", generator: "openreel-cpu-geometry-kernel" },
+    asset: { version: "2.0", generator: "licketysplit-cpu-geometry-kernel" },
     scene: 0,
     scenes: [{ nodes: [0] }],
     nodes: [{ mesh: 0, name: options.name }],

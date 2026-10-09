@@ -1,12 +1,12 @@
 /* ============================================================
    LicketySplit Desktop — charcoal surfaces with purple brand accents
-   Scoped under .openreel-desktop. Overrides the same CSS variable
+   Scoped under .licketysplit-desktop. Overrides the same CSS variable
    names index.css defines so desktop components reuse the existing
    Tailwind utilities and inherit the Resolve look.
    Surfaces: charcoal-neutral (hue ~250, low chroma).
    Accent: LicketySplit purple (#8d63f7).
    ============================================================ */
-.openreel-desktop {
+.licketysplit-desktop {
   color-scheme: dark;
 
   --bg: oklch(0.16 0.004 250);
@@ -53,8 +53,8 @@
   --card-foreground: 0 0% 93%;
   --popover: 220 7% 14%;
   --popover-foreground: 0 0% 93%;
-  --primary: 255 89% 68%;
-  --primary-foreground: 266 70% 12%;
+  --primary: 258 64% 56%;
+  --primary-foreground: 0 0% 100%;
   --secondary: 220 6% 19%;
   --secondary-foreground: 0 0% 93%;
   --muted: 220 6% 19%;

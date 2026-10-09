@@ -91,6 +91,7 @@ export interface BudgetedVideoElement {
 export interface BudgetedVideoElementOptions {
   budget?: VideoDecoderBudget;
   isCurrent?: () => boolean;
+  onReserved?: (lease: VideoDecoderLease) => void;
   onDispose?: () => void;
   preload?: "none" | "metadata" | "auto";
   crossOrigin?: string;
@@ -129,6 +130,12 @@ export async function createBudgetedVideoElement(
     }
   });
   if (!lease) return null;
+  try {
+    options.onReserved?.(lease);
+  } catch (error) {
+    lease.release();
+    throw error;
+  }
 
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {

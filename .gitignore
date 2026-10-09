@@ -108,3 +108,5 @@ scripts/__pycache__/
 
 # Separate local native-import test artifacts; preserve the original candidate.
 apps/desktop/release-native-import/
+# Final local takeover output; not a distributable release artifact.
+apps/desktop/release-takeover-alpha2/

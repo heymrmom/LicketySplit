@@ -4,9 +4,9 @@ import type {
 } from "../multicam/automatic-edit";
 import type { Clip, Track } from "../types/timeline";
 import type { ProjectSettings } from "../types/project";
-import type { MulticamManifest } from "../multicam/manifest";
+import { LEGACY_MULTICAM_MANIFEST_SPEC, MULTICAM_MANIFEST_SPEC, type MulticamManifest } from "../multicam/manifest";
 import { applyMulticamDirectives } from "../multicam/shot-planner";
-import type { MulticamShotPlan } from "../multicam/shot-planner";
+import { LEGACY_MULTICAM_EDIT_SPEC, MULTICAM_EDIT_SPEC, type MulticamShotPlan } from "../multicam/shot-planner";
 import type { MulticamShotPolicy } from "../multicam/shot-planner";
 
 export interface CameraAngle {
@@ -241,6 +241,12 @@ export class MultiCamEngine {
     this.groups.clear();
     for (const group of groups) {
       const normalized = cloneGroup(group);
+      if (normalized.manifest && (normalized.manifest as { spec: string }).spec === LEGACY_MULTICAM_MANIFEST_SPEC) {
+        normalized.manifest.spec = MULTICAM_MANIFEST_SPEC;
+      }
+      if (normalized.shotPlan && (normalized.shotPlan as { spec: string }).spec === LEGACY_MULTICAM_EDIT_SPEC) {
+        normalized.shotPlan.spec = MULTICAM_EDIT_SPEC;
+      }
       this.groups.set(group.id, normalized);
     }
   }

@@ -1,7 +1,8 @@
 import type { MulticamEditPolicy } from "./automatic-edit";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
-export const MULTICAM_MANIFEST_SPEC = "openreel-multicam/v1" as const;
+export const MULTICAM_MANIFEST_SPEC = "licketysplit-multicam/v1" as const;
+export const LEGACY_MULTICAM_MANIFEST_SPEC = "openreel-multicam/v1" as const;
 
 export type MulticamCameraType =
   | "closeup"
@@ -44,7 +45,7 @@ export interface MulticamManifestCamera {
   subject: string;
   /** Original file hint used to resolve/relink the camera source. */
   file: string;
-  /** Optional resolved OpenReel timeline clip id. */
+  /** Optional resolved LicketySplit timeline clip id. */
   clipId?: string;
   /** Runtime angle mapping; camera id/file remain the shoot-authored identity. */
   angleId?: string;
@@ -117,8 +118,8 @@ export function validateMulticamManifest(
   if (!isRecord(value)) {
     return { valid: false, errors: ["Manifest must be an object"] };
   }
-  if (value.spec !== MULTICAM_MANIFEST_SPEC) {
-    errors.push(`spec must be ${MULTICAM_MANIFEST_SPEC}`);
+  if (value.spec !== MULTICAM_MANIFEST_SPEC && value.spec !== LEGACY_MULTICAM_MANIFEST_SPEC) {
+    errors.push(`spec must be ${MULTICAM_MANIFEST_SPEC} or ${LEGACY_MULTICAM_MANIFEST_SPEC}`);
   }
   positiveNumber(value.fps, "fps", errors);
 
@@ -280,14 +281,15 @@ export function parseMulticamManifest(
   if (!validation.valid) {
     throw new Error(`Invalid multicam manifest: ${validation.errors.join("; ")}`);
   }
-  return parsed as MulticamManifest;
+  return { ...(parsed as MulticamManifest), spec: MULTICAM_MANIFEST_SPEC };
 }
 
 export function serializeMulticamManifest(
   manifest: MulticamManifest,
   format: "json" | "yaml" = "json",
 ): string {
+  const current = { ...manifest, spec: MULTICAM_MANIFEST_SPEC };
   return format === "json"
-    ? JSON.stringify(manifest, null, 2)
-    : stringifyYaml(manifest);
+    ? JSON.stringify(current, null, 2)
+    : stringifyYaml(current);
 }

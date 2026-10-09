@@ -74,6 +74,31 @@ describe("MultiCamEngine automatic edits", () => {
     expect(engine.getGroup(source.id)?.angles[0]?.sourceSegments?.[0]?.episodeMapping.scale).toBe(1);
   });
 
+  it("normalizes saved legacy manifests and plans without mutating the saved group", () => {
+    const priorGroup = group({
+      manifest: {
+        spec: "openreel-multicam/v1" as never,
+        fps: 25,
+        sync: { method: "audio-crosscorr", reference: "a" },
+        participants: [{ id: "host", name: "Host", audio: "mic", seat: "left" }],
+        cameras: [
+          { id: "a", type: "wide", subject: "host", file: "camera.mov" },
+          { id: "b", type: "closeup", subject: "host", file: "camera-b.mov" },
+        ],
+        constraints: DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
+      },
+      shotPlan: { spec: "openreel-multicam-edit/v1" as never, durationMs: 0, shots: [] },
+    }) as unknown as MultiCamGroup;
+    const engine = new MultiCamEngine();
+
+    engine.loadGroups([priorGroup]);
+
+    expect(engine.getGroup("group-1")?.manifest?.spec).toBe("licketysplit-multicam/v1");
+    expect(engine.getGroup("group-1")?.shotPlan?.spec).toBe("licketysplit-multicam-edit/v1");
+    expect((priorGroup.manifest as unknown as { spec: string }).spec).toBe("openreel-multicam/v1");
+    expect((priorGroup.shotPlan as unknown as { spec: string }).spec).toBe("openreel-multicam-edit/v1");
+  });
+
   it("inserts manual cuts without changing the start or duplicating a boundary", () => {
     const engine = new MultiCamEngine();
     engine.loadGroups([group()]);
@@ -244,14 +269,14 @@ describe("MultiCamEngine automatic edits", () => {
       }],
       activeAngleId: "a", switches: [], syncPoint: 10, duration: 8,
       manifest: {
-        spec: "openreel-multicam/v1", fps: 25,
+        spec: "openreel-multicam/v1" as never, fps: 25,
         sync: { method: "audio-crosscorr", reference: "a" },
         participants: [{ id: "host", name: "Host", audio: "mic", seat: "left" }],
         cameras: [{ id: "a", type: "wide", subject: "host", file: "camera.mov", clipId: first.id }],
         constraints: DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
       },
       shotPlan: {
-        spec: "openreel-multicam-edit/v1", durationMs: 8_000,
+        spec: "openreel-multicam-edit/v1" as never, durationMs: 8_000,
         shots: [{ startMs: 0, endMs: 8_000, reason: "speaker", confidence: 1,
           transitionIn: { type: "cut", durationMs: 0 },
           layout: { template: "solo", panels: [{ cameraId: "a", subject: "host", rect: { x: 0, y: 0, width: 1, height: 1 } }] },
@@ -307,7 +332,7 @@ describe("MultiCamEngine automatic edits", () => {
     const engine = new MultiCamEngine();
     engine.loadGroups([group({
       manifest: {
-        spec: "openreel-multicam/v1",
+        spec: "openreel-multicam/v1" as never,
         fps: 25,
         sync: { method: "audio-crosscorr", reference: "a" },
         participants: [
@@ -321,7 +346,7 @@ describe("MultiCamEngine automatic edits", () => {
         constraints: DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
       },
       shotPlan: {
-        spec: "openreel-multicam-edit/v1",
+        spec: "openreel-multicam-edit/v1" as never,
         durationMs: 4_000,
         shots: [
           {

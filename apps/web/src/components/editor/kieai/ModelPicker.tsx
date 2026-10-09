@@ -1,5 +1,5 @@
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { ChevronRight } from "@/icons/lucide-compat";
 import { IMAGE_MODELS, type ImageModelId } from "../../../services/kieai/image-generation";
 

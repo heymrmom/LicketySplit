@@ -1,7 +1,7 @@
 import {desktopMediaAvailable} from "./lickety/desktop-media";
 import {useProjectStore} from "../stores/project-store";
 import type {AnalysisSamples} from "./lickety/analysis-audio";
-import type { MulticamTranscriptSegment } from "@openreel/core";
+import type { MulticamTranscriptSegment } from "@licketysplit/core";
 import { audioBufferToWhisperSamples } from "../utils/whisper-audio";
 import type { WhisperModelKey } from "../workers/whisper-models";
 

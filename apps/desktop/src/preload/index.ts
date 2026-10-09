@@ -51,7 +51,7 @@ const identityMigration = {
   },
 };
 
-contextBridge.exposeInMainWorld("openreel", {
+contextBridge.exposeInMainWorld("licketysplit", {
   platform: "desktop",
   lickety: {
     reconcileTranscription: (jobId:string,providerJobId:string) => ipcRenderer.invoke(CHANNELS.licketyReconcileTranscription,{jobId,providerJobId}),
@@ -94,8 +94,8 @@ contextBridge.exposeInMainWorld("openreel", {
   probeHardware: () => ipcRenderer.invoke(CHANNELS.probeHardware, undefined),
   onMenuAction: (cb: (id: string) => void) => {
     const handler = (_event: unknown, id: string) => cb(id);
-    ipcRenderer.on("openreel:menu:action", handler);
-    return () => ipcRenderer.removeListener("openreel:menu:action", handler);
+    ipcRenderer.on("licketysplit:menu:action", handler);
+    return () => ipcRenderer.removeListener("licketysplit:menu:action", handler);
   },
   fs: {
     showSaveDialog: (opts: unknown) => ipcRenderer.invoke(CHANNELS.fsShowSaveDialog, opts),
@@ -119,13 +119,13 @@ contextBridge.exposeInMainWorld("openreel", {
   export: {
     start: (args: unknown) =>
       new Promise((resolve) => {
-        ipcRenderer.once("openreel:export-port", (event, meta) => {
+        ipcRenderer.once("licketysplit:export-port", (event, meta) => {
           const { jobId } = meta as { jobId: string };
           const [port] = event.ports;
           // A live MessagePort cannot survive contextBridge serialization into
           // the main world, so forward it via window.postMessage transfer (the
           // documented Electron path) and resolve with just the jobId.
-          window.postMessage({ __openreelExportPort: true, jobId }, "*", [port]);
+          window.postMessage({ __licketysplitExportPort: true, jobId }, "*", [port]);
           resolve({ jobId });
         });
         ipcRenderer.invoke(CHANNELS.exportStart, args);

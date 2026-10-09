@@ -130,10 +130,10 @@ describe("editor keyboard shortcut dispatch", () => {
     expect(keyboardShortcuts.resetShortcut("playback.prevClip")).toBe(false);
     expect(keyboardShortcuts.getShortcut("playback.prevClip")?.currentKey).toBe("alt+[");
     keyboardShortcuts.resetAllShortcuts();
-    expect(keyboardShortcuts.getActivePreset()).toBe("openreel");
+    expect(keyboardShortcuts.getActivePreset()).toBe("licketysplit");
   });
 
-  it("keeps OpenReel fit on Cmd+0 and applies only verified Resolve bindings", () => {
+  it("keeps LicketySplit fit on Cmd+0 and applies only verified Resolve bindings", () => {
     expect(keyboardShortcuts.getShortcut("timeline.fitTimeline")?.currentKey).toBe("cmd+0");
 
     keyboardShortcuts.applyPreset("davinci");
@@ -192,10 +192,10 @@ describe("editor keyboard shortcut dispatch", () => {
 
 describe("shortcut initialization", () => {
   it("recovers from malformed stored preferences", async () => {
-    localStorage.setItem("openreel_shortcuts", "{broken JSON");
+    localStorage.setItem("licketysplit_shortcuts", "{broken JSON");
     vi.resetModules();
     const loaded = await import("./keyboard-shortcuts");
     expect(loaded.keyboardShortcuts.getShortcut("editing.split")?.currentKey).toBe("s");
-    localStorage.removeItem("openreel_shortcuts");
+    localStorage.removeItem("licketysplit_shortcuts");
   });
 });

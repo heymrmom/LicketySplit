@@ -6,7 +6,7 @@ import {
   type PersistStorage,
 } from "zustand/middleware";
 
-export const TIMELINE_WORKSPACE_STORAGE_KEY = "openreel-timeline-workspace";
+export const TIMELINE_WORKSPACE_STORAGE_KEY = "licketysplit-timeline-workspace";
 
 interface TimelineWorkspace {
   trackHeight: number;

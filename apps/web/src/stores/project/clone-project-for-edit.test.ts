@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MediaItem, Track } from "@openreel/core";
+import type { MediaItem, Track } from "@licketysplit/core";
 import { createEmptyProject } from "./project-helpers";
 import { cloneProjectForEdit } from "./clone-project-for-edit";
 

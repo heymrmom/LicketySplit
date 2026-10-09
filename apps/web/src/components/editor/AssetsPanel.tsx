@@ -3,18 +3,18 @@ import {
   Image as ImageIcon, Film, Music, Plus, Upload, Trash2,
   Square, Circle, Triangle, Star, ArrowRight, Hexagon, FileCode, AlertTriangle,
   RefreshCw, Palette, Sparkles, Video,
-  Type, Shapes, Wand2, LayoutTemplate, Zap, Shuffle,
+  Type, Shapes, Wand2, LayoutTemplate, Zap, Shuffle, Check,
 } from "@/icons/lucide-compat";
 import {
   BACKGROUND_PRESETS,
   generateBackgroundBlob,
   type BackgroundPreset,
 } from "../../services/background-generator";
-import type { ShapeType, TextStyle } from "@openreel/core";
+import type { ShapeType, TextStyle } from "@licketysplit/core";
 import { useProjectStore } from "../../stores/project-store";
 import { useUIStore } from "../../stores/ui-store";
 import { useTimelineStore } from "../../stores/timeline-store";
-import type { MediaItem } from "@openreel/core";
+import type { MediaItem } from "@licketysplit/core";
 import { AspectRatioMatchDialog } from "./dialogs/AspectRatioMatchDialog";
 import { AIGenTab } from "./AIGenTab";
 import { RecipesTab } from "./panels/RecipesTab";
@@ -26,10 +26,10 @@ import {
 import { useTtsAudioStore } from "../../stores/tts-store";
 import { toast } from "../../stores/notification-store";
 import { saveFileHandle, saveDirectoryHandle } from "../../services/media-storage";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftSelectableCard as SelectableCard } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftSelectableCard as SelectableCard } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { KieAIImageDialog } from "./kieai/KieAIImageDialog";
 import { loadMediaBlob } from "../../services/media-storage";
 import { useKieAIStore } from "../../stores/kieai-store";
@@ -424,7 +424,7 @@ const MediaThumbnail: React.FC<{
           </div>
         </div>
 
-        {isUsedOnTimeline && <span aria-label="Used on timeline" title="Used on timeline" className="shrink-0 rounded border border-accent/30 px-1.5 py-0.5 text-[9px] text-accent">Used</span>}
+        {isUsedOnTimeline && <span role="img" aria-label="Used on timeline" title="Used on timeline" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-accent-soft text-accent"><Check size={12} aria-hidden="true" /></span>}
 
         {/* Hover actions */}
         {isHovered && (
@@ -533,7 +533,7 @@ const MediaThumbnail: React.FC<{
             ))}
           </div>
         )}
-        {isUsedOnTimeline && <span aria-label="Used on timeline" title="Used on timeline" className="absolute left-1 top-1 z-10 rounded bg-bg/90 px-1.5 py-0.5 text-[9px] text-accent">Used on timeline</span>}
+        {isUsedOnTimeline && <span role="img" aria-label="Used on timeline" title="Used on timeline" className="absolute right-1 top-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded bg-bg/90 text-accent"><Check size={12} aria-hidden="true" /></span>}
 
         {/* KieAI Error Badge */}
         {item.kieaiError && (
@@ -592,7 +592,7 @@ const MediaThumbnail: React.FC<{
 
         {/* Selection indicator */}
         {isSelected && (
-          <div className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full shadow-sm" />
+          <div className="absolute bottom-1 left-1 w-2 h-2 bg-accent rounded-full shadow-sm" />
         )}
       </div>
 
@@ -1113,12 +1113,12 @@ export const AssetsPanel: React.FC = () => {
               <div className="px-4 pb-[18px] relative">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <span className="text-[13px] font-semibold text-fg-2">Project Media <span className="text-[12px] font-medium text-fg-muted">{filteredItems.length}</span></span>
-                  <button type="button" aria-label={hasPodcastDraft ? "Resume podcast setup" : "Open podcast setup"} onClick={() => window.dispatchEvent(new CustomEvent("openreel:podcast:open"))} className="min-h-8 shrink-0 rounded border border-border px-2 text-[11px] text-fg-2 hover:border-accent/50 hover:text-accent">{hasPodcastDraft ? "Resume podcast setup" : "Podcast setup"}</button>
+                  <button type="button" aria-label={hasPodcastDraft ? "Resume podcast setup" : "Open podcast setup"} onClick={() => window.dispatchEvent(new CustomEvent("licketysplit:podcast:open"))} className="min-h-8 shrink-0 rounded border border-border px-2 text-[11px] text-fg-2 hover:border-accent/50 hover:text-accent">{hasPodcastDraft ? "Resume podcast setup" : "Podcast setup"}</button>
                 </div>
                 {filteredItems.length === 0 ? (
                   <EmptyState onImport={triggerFileInput} />
                 ) : (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="media-card-grid grid gap-3">
                     {filteredItems.map((item) => (
                       <MediaThumbnail
                         key={item.id}
@@ -1191,7 +1191,7 @@ export const AssetsPanel: React.FC = () => {
                           variant={backgroundCategory === cat ? "green" : "muted"}
                           className={`px-2.5 py-1 text-[10px] rounded-md transition-all ${
                             backgroundCategory === cat
-                              ? "bg-primary text-white"
+                              ? "bg-accent-strong text-white"
                               : "bg-background-tertiary text-text-muted hover:text-text-secondary"
                           }`}
                         >
@@ -1556,7 +1556,7 @@ export const AssetsPanel: React.FC = () => {
 
       {/* ── Body: section content fills the remaining space ──── */}
       <div className="flex-1 flex flex-col min-w-0 h-full bg-bg-1 relative">
-        {isImporting && (window.openreel?.platform==='desktop'?<p role="status" className="px-3 py-2 text-xs text-fg-2">{importProgress}</p>:<LoadingIndicator message={importProgress || "Importing media..."} />)}
+        {isImporting && (window.licketysplit?.platform==='desktop'?<p role="status" className="px-3 py-2 text-xs text-fg-2">{importProgress}</p>:<LoadingIndicator message={importProgress || "Importing media..."} />)}
         {importFailures.length>0&&<section role="alert" className="border-b border-border px-3 py-2 text-xs text-fg-2"><details><summary>{importFailures.length} files could not be imported</summary><ul className="max-h-40 overflow-auto">{importFailures.map((failure,index)=><li key={index} className="py-1">{failure}</li>)}</ul></details></section>}
 
         <input

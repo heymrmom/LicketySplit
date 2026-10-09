@@ -1,8 +1,8 @@
 import "../../test/install-local-storage-mock";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import type { MediaItem } from "@openreel/core";
-import type { PodcastBridge, PodcastSetup, PodcastSyncChannel } from "@openreel/core/lickety/podcast-types";
+import type { MediaItem } from "@licketysplit/core";
+import type { PodcastBridge, PodcastSetup, PodcastSyncChannel } from "@licketysplit/core/lickety/podcast-types";
 import { useProjectStore } from "../../stores/project-store";
 import { createEmptyProject } from "../../stores/project/project-helpers";
 import { registerDesktopMedia } from "../../services/lickety/desktop-media";
@@ -79,12 +79,12 @@ describe("PodcastSetupDialog", () => {
       approve: vi.fn(async () => setup),
       onProgress: vi.fn(() => () => undefined),
     };
-    Object.assign(window, { openreel: { platform: "desktop", podcast: bridge } });
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge } });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    delete (window as unknown as { openreel?: unknown }).openreel;
+    delete (window as unknown as { licketysplit?: unknown }).licketysplit;
     window.localStorage.clear();
     vi.clearAllMocks();
   });
@@ -269,12 +269,12 @@ describe("PodcastSetupDialog", () => {
     setup.state = "review";
     bridge.get = vi.fn(async () => setup);
     const ensureAudioStream = vi.fn(async () => "file:///host.wav");
-    Object.assign(window, { openreel: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream } } });
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream } } });
     const current = useProjectStore.getState().project;
     useProjectStore.setState({ project: { ...current, mediaLibrary: { items: [...media, audioItem] } } });
     restoreSetupForStep(setup, "check");
 
-    const callbacks: FrameRequestCallback[] = [];
+    const callbacks: Array<(timestamp: number) => void> = [];
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => { callbacks.push(callback); return callbacks.length; });
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     const view = render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
@@ -392,7 +392,7 @@ describe("PodcastSetupDialog", () => {
     ];
     bridge.get = vi.fn(async () => setup);
     const ensureAudioStream = vi.fn(async () => "file:///camera-scratch.m4a");
-    Object.assign(window, { openreel: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream } } });
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream } } });
     restoreSetupForStep(setup, "check");
 
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
@@ -432,7 +432,7 @@ describe("PodcastSetupDialog", () => {
     bridge.get = vi.fn(async () => setup);
     const pendingPreviews: Array<(value: string) => void> = [];
     const ensureAudioStream = vi.fn(() => new Promise<string>((resolve) => pendingPreviews.push(resolve)));
-    Object.assign(window, { openreel: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream } } });
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream } } });
     restoreSetupForStep(setup, "check");
 
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
@@ -463,7 +463,7 @@ describe("PodcastSetupDialog", () => {
       { assetId: "asset-2", status: "measured", mapping: { version: 1, scale: 1, offsetSeconds: 0 }, locked: false, component: "connected", provenance: [] },
     ];
     bridge.get = vi.fn(async () => setup);
-    Object.assign(window, { openreel: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream: vi.fn(async () => "file:///camera-scratch.m4a") } } });
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream: vi.fn(async () => "file:///camera-scratch.m4a") } } });
     restoreSetupForStep(setup, "check");
 
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);

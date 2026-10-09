@@ -4,11 +4,15 @@ Engineering checks, synthetic normal-UI proof, physical-device acceptance, provi
 
 ## Reproducible fixture and measured budgets
 
-Generate public synthetic media with `node scripts/verify-desktop-fixture.mjs --generate <evidence-directory> --ffmpeg <pinned-arm64-ffmpeg> --seconds 3600`. The generator creates three4K H.264 cameras at25,30000/1001 and24000/1001 fps, two isolated48kHz microphones, and known beginning/middle/end impulses. Use an editable project with actual current camera cuts, static/ordinary keyframed effects and a title overlay. Record source hashes and actual codecs/rates; test missing originals and exact relink. Add expected retained source-word IDs and rendered dimensions/rate/channel count/duration to fixture.json for each selected render.
+For a general export-shape fixture, `node scripts/verify-desktop-fixture.mjs --generate <evidence-directory> --ffmpeg <pinned-arm64-ffmpeg> --seconds 3600` creates three 4K H.264 camera files and two 48 kHz microphones with known signal events. This checks deterministic media/export properties; its repeated tone and event impulses do **not** prove long-offset synchronization or drift recovery.
+
+Use the separate [full-hour nonperiodic sync fixture](../../scripts/takeover-verification/generate-full-hour.mjs) for long-offset and drift checks. It creates 3,602 seconds of synthetic camera/mic sources with aperiodic signals, camera and mic drift, split originals, a 35-second source start, overlap, gap, rotation, a stereo decoy channel, and measurement points through the hour. Reproduce the native and compact comparisons using the commands in the [full-hour benchmark report](../../.superpowers/work/takeover/verification/full-hour-benchmark-report.md). The report records the measured results and limits: synthetic continuous noise is not speech, the benchmark is not a normal-UI walkthrough, and it does not establish human acceptance.
+
+For full workflow acceptance, build an editable project from the fixture with actual current camera cuts, static/ordinary keyframed effects and a title overlay. Record source hashes and actual codecs/rates; test missing originals and exact relink. Add expected retained source-word IDs and rendered dimensions/rate/channel count/duration to the fixture manifest for each selected render.
 
 Run `python3 scripts/verify-desktop-memory.py --pid <app-main-pid> --output <evidence-directory> --duration 60`. It reads process-tree RSS once per second and queries memory pressure without changing it. Summed RSS may double-count shared pages; GPU/unified memory ownership is qualified. Actual8GiB acceptance requires sampled tree RSS≤3GiB, warm ready-preview seek p95≤500ms,≥90% delivered frames for sources≤30fps, UI cancel acknowledgement≤2s and worker exit≤5s. Cold preparation timing is reported separately from warm reopening/playback; required proxies and the queue must be ready before measuring warm editing.
 
-Validate an actual original-quality render with `node scripts/verify-desktop-fixture.mjs --manifest <fixture.json> --export <video> --project <saved-draft.oreel> --ffmpeg <pinned-arm64-ffmpeg> --out <receipt.json>`. Proxy-resolution output fails resolution verification. Compare beginning/middle/end sync, camera cuts, word retention, titles/effects and picture/audio correspondence. A short segment does not establish full-hour export timing. Inspect the saved original/draft and undo/redo with the normal UI. Human listening/story review remains separate.
+Validate an actual original-quality render with `node scripts/verify-desktop-fixture.mjs --manifest <fixture.json> --export <video> --project <saved-draft.licketysplit> --ffmpeg <pinned-arm64-ffmpeg> --out <receipt.json>`. Proxy-resolution output fails resolution verification. Compare beginning/middle/end sync, camera cuts, word retention, titles/effects and picture/audio correspondence. A short segment does not establish full-hour export timing. Inspect the saved original/draft and undo/redo with the normal UI. Human listening/story review remains separate.
 
 ## Provider and installation gates
 
@@ -59,7 +63,3 @@ are deferred. Unsupported codecs require a preview proxy even below540p.
 General waveform/sync scheduling and batch format-conversion UI are separate
 proposals, not part of this follow-up. Import conversion still requires separate
 user approval. Existing source copies, databases and installed apps are preserved.
-
-Keep the original12477c5 candidate in `release`. The native-import test candidate
-uses a separate `release-native-import` output with `native-import` artifact names;
-building it does not install or alter an application currently importing media.

@@ -7,7 +7,7 @@ import {
 } from "./shot-planner";
 
 const manifest = {
-  spec: "openreel-multicam/v1" as const,
+  spec: "licketysplit-multicam/v1" as const,
   fps: 25,
   sync: { method: "audio-crosscorr" as const, reference: "wide" },
   participants: [
@@ -44,6 +44,9 @@ function activity(entries: Array<{ ids: string[]; scores?: [number, number]; spe
 }
 
 describe("multicam shot planner", () => {
+  it("emits the current edit-spec identifier", () => {
+    expect(planMulticamShots(activity([{ ids: ["mic1"] }]), manifest).spec).toBe("licketysplit-multicam-edit/v1");
+  });
   it("uses seat-ordered split layouts for sustained overlap", () => {
     const plan = planMulticamShots(
       activity([
@@ -144,6 +147,7 @@ describe("multicam shot planner", () => {
       { id: "d1", startMs: 500, endMs: 1_500, cameraId: "cam2" },
     ]);
 
+    expect(changed.spec).toBe("licketysplit-multicam-edit/v1");
     expect(changed.shots.some((shot) => shot.reason === "directive")).toBe(true);
     expect(changed.shots.find((shot) => shot.reason === "directive")?.layout.panels[0]?.cameraId).toBe("cam2");
     expect(plan.shots.every((shot) => shot.reason !== "directive")).toBe(true);

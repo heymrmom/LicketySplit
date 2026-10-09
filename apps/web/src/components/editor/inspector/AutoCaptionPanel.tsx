@@ -5,13 +5,13 @@ import {
   SUBTITLE_STYLE_PRESETS,
   splitCaptionIntoSingleLineCues,
   type TranscriptionSegment,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   ToolcraftButton as Button,
   ToolcraftCard as Card,
   ToolcraftSelectControl as Selector,
   ToolcraftText as Text,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import {
   AlertCircle,
   Check,

@@ -10,7 +10,7 @@ import {
   type AppliedAsset,
   type EventType,
   type EarningsEntry,
-} from "@openreel/fxpkg";
+} from "@licketysplit/fxpkg";
 import type { Bindings } from "./types";
 import { getStore } from "./store";
 import { rateLimit, SECOND } from "./ratelimit";

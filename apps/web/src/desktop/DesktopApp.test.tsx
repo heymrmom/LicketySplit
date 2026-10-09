@@ -62,7 +62,7 @@ beforeEach(() => {
     },
   });
   useSettingsStore.setState({ settingsOpen: false, settingsTab: "general" });
-  (window as unknown as { openreel: unknown }).openreel = {
+  (window as unknown as { licketysplit: unknown }).licketysplit = {
     platform: "desktop",
     win: { minimize: () => {}, toggleMaximize: () => {}, close: () => {}, isMaximized: async () => false },
   };
@@ -70,7 +70,7 @@ beforeEach(() => {
 afterEach(() => {
   useTimelineStore.getState().pause();
   delete (mockedUseProjectStore as unknown as { getState?: unknown }).getState;
-  delete (window as unknown as { openreel?: unknown }).openreel;
+  delete (window as unknown as { licketysplit?: unknown }).licketysplit;
   vi.clearAllMocks();
 });
 
@@ -78,7 +78,7 @@ describe("DesktopApp", () => {
   it("applies the desktop theme class to its root", () => {
     mockHasProject(false);
     const { container } = render(<DesktopApp />);
-    expect(container.querySelector(".openreel-desktop")).not.toBeNull();
+    expect(container.querySelector(".licketysplit-desktop")).not.toBeNull();
   });
 
   it("shows the start screen and hides the workspace when no project is open", () => {
@@ -122,7 +122,7 @@ describe("DesktopApp", () => {
   it("opens podcast preparation from the existing-project launch event", () => {
     mockHasProject(true);
     const editor = render(<DesktopApp />);
-    act(() => window.dispatchEvent(new CustomEvent("openreel:podcast:open")));
+    act(() => window.dispatchEvent(new CustomEvent("licketysplit:podcast:open")));
     expect(editor.getByRole("dialog", { name: "Podcast preparation test dialog" })).toBeTruthy();
   });
 
@@ -133,7 +133,7 @@ describe("DesktopApp", () => {
     const editor = render(<DesktopApp />);
     expect(editor.getByTestId("desktop-workspace").getAttribute("data-preview-suspended")).toBe("false");
 
-    act(() => window.dispatchEvent(new CustomEvent("openreel:podcast:open")));
+    act(() => window.dispatchEvent(new CustomEvent("licketysplit:podcast:open")));
     expect(useTimelineStore.getState().playbackState).toBe("paused");
     expect(useTimelineStore.getState().playheadPosition).toBe(42);
     expect(editor.getByTestId("desktop-workspace").getAttribute("data-preview-suspended")).toBe("true");
@@ -150,15 +150,15 @@ describe("DesktopApp", () => {
     const undo = vi.fn(); const redo = vi.fn(); const loadProject = vi.fn();
     Object.assign(mockedUseProjectStore, { getState: () => ({ hasOpenProject: true, undo, redo, loadProject }) });
     let menuAction: ((id: string) => void) | undefined;
-    Object.assign(window.openreel!, { onMenuAction: (callback: (id: string) => void) => { menuAction = callback; return () => { menuAction = undefined; }; } });
+    Object.assign(window.licketysplit!, { onMenuAction: (callback: (id: string) => void) => { menuAction = callback; return () => { menuAction = undefined; }; } });
     const execCommand = vi.fn();
     const originalExecCommand = Object.getOwnPropertyDescriptor(document, "execCommand");
     Object.defineProperty(document, "execCommand", { configurable: true, value: execCommand });
     const exportEvent = vi.fn();
-    window.addEventListener("openreel:menu:export", exportEvent);
+    window.addEventListener("licketysplit:menu:export", exportEvent);
     mockHasProject(true);
     const view = render(<DesktopApp />);
-    act(() => window.dispatchEvent(new CustomEvent("openreel:podcast:open")));
+    act(() => window.dispatchEvent(new CustomEvent("licketysplit:podcast:open")));
     const input = view.getByRole("textbox", { name: "Podcast dialog text field" });
     input.focus();
     menuAction?.("cut");
@@ -171,7 +171,7 @@ describe("DesktopApp", () => {
     expect(openProject).not.toHaveBeenCalled();
     expect(exportEvent).not.toHaveBeenCalled();
     expect(view.queryByRole("dialog", { name: "Start a new project" })).toBeNull();
-    window.removeEventListener("openreel:menu:export", exportEvent);
+    window.removeEventListener("licketysplit:menu:export", exportEvent);
     if (originalExecCommand) Object.defineProperty(document, "execCommand", originalExecCommand);
     else delete (document as unknown as { execCommand?: unknown }).execCommand;
     openProject.mockRestore();
@@ -203,4 +203,4 @@ describe("DesktopApp", () => {
     expect(view.getByTestId("desktop-settings-dialog")).toBeTruthy();
   });
 });
-it('native Open menu loads an editable saved project',async()=>{const {projectManager}=await import('../services/project-manager');const fixture={id:'opened',name:'Opened',settings:{},timeline:{tracks:[],duration:0},mediaLibrary:{items:[]}};const open=vi.spyOn(projectManager,'openProject').mockResolvedValue(fixture as never);const loadProject=vi.fn();let action:((id:string)=>void)|undefined;Object.assign(window.openreel!,{onMenuAction:(callback:(id:string)=>void)=>{action=callback;return ()=>{};}});mockHasProject(false);Object.assign(mockedUseProjectStore,{getState:()=>({loadProject})});const view=render(<DesktopApp/>);action?.('open');await vi.waitFor(()=>expect(loadProject).toHaveBeenCalledWith(fixture));expect(open).toHaveBeenCalledOnce();view.unmount();open.mockRestore();});
+it('native Open menu loads an editable saved project',async()=>{const {projectManager}=await import('../services/project-manager');const fixture={id:'opened',name:'Opened',settings:{},timeline:{tracks:[],duration:0},mediaLibrary:{items:[]}};const open=vi.spyOn(projectManager,'openProject').mockResolvedValue(fixture as never);const loadProject=vi.fn();let action:((id:string)=>void)|undefined;Object.assign(window.licketysplit!,{onMenuAction:(callback:(id:string)=>void)=>{action=callback;return ()=>{};}});mockHasProject(false);Object.assign(mockedUseProjectStore,{getState:()=>({loadProject})});const view=render(<DesktopApp/>);action?.('open');await vi.waitFor(()=>expect(loadProject).toHaveBeenCalledWith(fixture));expect(open).toHaveBeenCalledOnce();view.unmount();open.mockRestore();});

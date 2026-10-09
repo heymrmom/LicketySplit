@@ -17,6 +17,16 @@ import { normalizeMotionLights } from "../motion/motion-lights";
 import { normalizeMotionTracks } from "../motion/motion-tracking";
 import { normalizeCreationState } from "../creation";
 import {
+  LEGACY_MULTICAM_MANIFEST_SPEC,
+  MULTICAM_MANIFEST_SPEC,
+  type MulticamManifest,
+} from "../multicam/manifest";
+import {
+  LEGACY_MULTICAM_EDIT_SPEC,
+  MULTICAM_EDIT_SPEC,
+  type MulticamShotPlan,
+} from "../multicam/shot-planner";
+import {
   UNIVERSAL_TRACKS_MIN_READER_VERSION,
   projectUsesUniversalTracks,
 } from "../timeline/timeline-items";
@@ -133,7 +143,7 @@ export function assertReaderCompatibility(projectFile: ProjectFile, readerVersio
     compareVersions(minimumReaderVersion, readerVersion) > 0
   ) {
     throw new Error(
-      `This project requires OpenReel project reader ${minimumReaderVersion} or newer. Current reader: ${readerVersion}.`,
+      `This project requires LicketySplit project reader ${minimumReaderVersion} or newer. Current reader: ${readerVersion}.`,
     );
   }
 }
@@ -213,10 +223,30 @@ export function normalizeProjectGeneratedShaderFields(
   };
 }
 
+function normalizeProjectMulticamSpecs(project: Project): Project {
+  if (!project.multicamGroups?.length) return project;
+  return {
+    ...project,
+    multicamGroups: project.multicamGroups.map((group) => {
+      const oldManifest = (group.manifest as unknown as { spec?: string } | undefined)?.spec === LEGACY_MULTICAM_MANIFEST_SPEC;
+      const oldShotPlan = (group.shotPlan as unknown as { spec?: string } | undefined)?.spec === LEGACY_MULTICAM_EDIT_SPEC;
+      return {
+        ...group,
+        manifest: oldManifest
+          ? { ...group.manifest, spec: MULTICAM_MANIFEST_SPEC } as MulticamManifest
+          : group.manifest,
+        shotPlan: oldShotPlan
+          ? { ...group.shotPlan, spec: MULTICAM_EDIT_SPEC } as MulticamShotPlan
+          : group.shotPlan,
+      };
+    }),
+  };
+}
+
 export function normalizeProjectStoredFields(project: Project): Project {
-  return normalizeProjectGeneratedShaderFields(
+  return normalizeProjectMulticamSpecs(normalizeProjectGeneratedShaderFields(
     normalizeProjectCreationFields(normalizeProjectMotionFields(project)),
-  );
+  ));
 }
 
 export class ProjectSerializer {
@@ -227,10 +257,11 @@ export class ProjectSerializer {
   }
 
   async saveProject(project: Project): Promise<void> {
-    await this.saveMediaBlobs(project);
+    const normalizedProject = normalizeProjectStoredFields(project);
+    await this.saveMediaBlobs(normalizedProject);
 
     const projectToSave: Project = {
-      ...project,
+      ...normalizedProject,
       modifiedAt: Date.now(),
     };
 
@@ -468,7 +499,8 @@ export class ProjectSerializer {
   }
 
   private stripMediaBlobs(project: Project): Project {
-    const strippedItems: MediaItem[] = project.mediaLibrary.items.map(
+    const normalizedProject = normalizeProjectStoredFields(project);
+    const strippedItems: MediaItem[] = normalizedProject.mediaLibrary.items.map(
       (item) => ({
         ...item,
         blob: null,
@@ -479,7 +511,7 @@ export class ProjectSerializer {
     );
 
     return {
-      ...project,
+      ...normalizedProject,
       mediaLibrary: {
         items: strippedItems,
       },
@@ -510,6 +542,7 @@ export function createProjectSerializer(
 }
 
 export function serializeProjectFile(project:Project):string {
- const portable={...project,mediaLibrary:{items:project.mediaLibrary?.items?.map(item=>({...item,blob:null,fileHandle:null,waveformData:null,nativeSource:undefined}))??[]}};
- return JSON.stringify({version:SCHEMA_VERSION,...getProjectFileCompatibility(project),project:portable},null,2);
+ const normalized=normalizeProjectStoredFields(project);
+ const portable={...normalized,mediaLibrary:{items:normalized.mediaLibrary?.items?.map(item=>({...item,blob:null,fileHandle:null,waveformData:null,nativeSource:undefined}))??[]}};
+ return JSON.stringify({version:SCHEMA_VERSION,...getProjectFileCompatibility(normalized),project:portable},null,2);
 }

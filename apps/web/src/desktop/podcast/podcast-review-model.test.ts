@@ -3,7 +3,7 @@
 // held-out comparison starts at 27s. The adjacent timeline case also reuses the
 // legacy sync-timeline.test.ts 3–13 / 20–23 / 26–29 split-region spans.
 import { describe, expect, it } from "vitest";
-import type { PodcastAsset, PodcastPlacement, PodcastSetup, PodcastSyncChannel } from "@openreel/core/lickety/podcast-types";
+import type { PodcastAsset, PodcastPlacement, PodcastSetup, PodcastSyncChannel } from "@licketysplit/core/lickety/podcast-types";
 import { clipReview, formatReviewTime, parseReviewTime, podcastReviewState, podcastTimelineModel, reviewComparison, timelinePercent, timelineSeconds, timelineWaveformPath, PACKET_TIMING_WARNING } from "./podcast-review-model";
 
 function asset(id: string, name: string, kind: "video" | "audio", durationSeconds = 10): PodcastAsset {

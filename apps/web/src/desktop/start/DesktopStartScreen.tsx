@@ -1,13 +1,13 @@
 import type { JSX } from "react";
 import { useState, useEffect, useCallback } from "react";
-import { ToolcraftBadge } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftHeading as Heading } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftBadge } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftHeading as Heading } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { Smartphone, Monitor, Square, Film } from "@/icons/lucide-compat";
 
-import { OpenReelMark } from "../brand/OpenReelMark";
+import { LicketySplitMark } from "../brand/LicketySplitMark";
 import { Icon } from "@/icons/Icon";
 import {
   DESKTOP_FORMATS,
@@ -76,7 +76,7 @@ export function DesktopStartScreen(): JSX.Element {
     setDesktopPage("edit");
     startNewProject(format);
     if (startMode === "podcast") {
-      window.dispatchEvent(new CustomEvent("openreel:podcast:open"));
+      window.dispatchEvent(new CustomEvent("licketysplit:podcast:open"));
     } else if (startMode === "narrative") {
       useUIStore.getState().setInspectorActiveTab("lickety-narrative");
     }
@@ -89,7 +89,7 @@ export function DesktopStartScreen(): JSX.Element {
       <div className="mx-auto flex max-w-4xl flex-col gap-10 px-8 py-12">
         <section>
           <div className="flex items-center gap-3">
-            <OpenReelMark size={40} />
+            <LicketySplitMark size={40} />
             <Heading level={1}>New Project</Heading>
           </div>
           <Text type="supporting" display="block" className="mt-1">

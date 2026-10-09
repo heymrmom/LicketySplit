@@ -1,16 +1,14 @@
 {
-  "name": "openreel",
+  "name": "licketysplit",
   "version": "0.1.2",
   "private": true,
-  "description": "Professional video, audio, and photo editing in your browser",
+  "description": "LicketySplit video and media editing workspace",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @openreel/web dev",
-    "build:wasm": "pnpm --filter @openreel/core build:wasm",
-    "build": "pnpm build:wasm && pnpm --filter @openreel/web build",
-    "preview": "pnpm --filter @openreel/web preview",
-    "deploy": "pnpm build && pnpm --filter @openreel/web deploy",
-    "deploy:preview": "pnpm build && pnpm --filter @openreel/web deploy:preview",
+    "dev": "pnpm --filter @licketysplit/web dev",
+    "build:wasm": "pnpm --filter @licketysplit/core build:wasm",
+    "build": "pnpm build:wasm && pnpm --filter @licketysplit/web build",
+    "preview": "pnpm --filter @licketysplit/web preview",
     "test": "pnpm -r test:run",
     "test:watch": "pnpm -r test",
     "lint": "pnpm -r lint",
@@ -36,19 +34,19 @@
     "color-grading",
     "export"
   ],
-  "author": "Augustus Otu and Contributors",
+  "author": "heymrmom and contributors",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Augani/openreel-video.git"
+    "url": "https://github.com/heymrmom/LicketySplit.git"
   },
   "bugs": {
-    "url": "https://github.com/Augani/openreel-video/issues"
+    "url": "https://github.com/heymrmom/LicketySplit/issues"
   },
-  "homepage": "https://openreel.video",
+  "homepage": "https://github.com/heymrmom/LicketySplit",
   "engines": {
-    "node": ">=18.0.0",
-    "pnpm": ">=8.0.0"
+    "node": ">=22.0.0",
+    "pnpm": ">=11.7.0"
   },
   "packageManager": "pnpm@11.7.0",
   "dependencies": {

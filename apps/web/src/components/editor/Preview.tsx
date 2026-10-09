@@ -5,9 +5,9 @@ import {
   videoDecoderBudget,
   type BudgetedVideoElement,
   type VideoDecoderLease,
-} from "@openreel/core";
-import {getOriginalFadePhase} from "@openreel/core";
-import {getNativeMediaSource,nativeVideoUrl} from "@openreel/core";
+} from "@licketysplit/core";
+import {getOriginalFadePhase} from "@licketysplit/core";
+import {getNativeMediaSource,nativeVideoUrl} from "@licketysplit/core";
 import React, {
   useRef,
   useEffect,
@@ -32,9 +32,9 @@ import {
   Magnet,
   Repeat,
 } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { useProjectStore } from "../../stores/project-store";
 import { previewProxyCache, usePreviewProxyStore } from "../../stores/preview-proxy-store";
 import { useTimelineStore } from "../../stores/timeline-store";
@@ -76,7 +76,7 @@ import {
   getVisibleTrackRenderOrder,
   trackHasAudioItems,
   calculateProjectDuration,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { useEngineStore } from "../../stores/engine-store";
 import {
   type HandlePosition,
@@ -110,7 +110,12 @@ import {
 } from "./preview/index";
 import { snapCanvasPosition } from "./preview/canvas-snapping";
 import { captureNativeVideoFrame } from "./preview/video-frame";
-import { createBudgetedPreviewDecoder } from "./preview/budgeted-decoder";
+import {
+  createBudgetedPreviewDecoder,
+  PendingVideoDecoderReservations,
+  PinnedVideoDecoderLeases,
+  waitForBudgetedVideoElementReadiness,
+} from "./preview/budgeted-decoder";
 import { resolvePlaybackLoop, resolvePlaybackStart } from "../../utils/playback-loop";
 import { ProcessingOverlay } from "./ProcessingOverlay";
 import { editingFrameDurationMs } from "./editing-frame-rate";
@@ -120,12 +125,12 @@ import {
   createMotionAwareOcclusionMask,
   getStabilizedTransform,
   getVidstabEngine,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import type {
   GSAPMotionPathPoint,
   MotionPathConfig,
   SegmentationResult,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 interface GPULayer {
   bitmap: ImageBitmap;
@@ -872,8 +877,14 @@ export const Preview: React.FC = () => {
   const videoUrlRef = useRef<string | null>(null);
   const currentVideoMediaIdRef = useRef<string | null>(null);
   const nativePlaybackActiveRef = useRef<boolean>(false);
+  const activeNativePlaybackGenerationRef = useRef<object | null>(null);
   type PreviewVideoElement = BudgetedVideoElement & { lastUsed: number };
   const nativeVideoCacheRef = useRef<Map<string, PreviewVideoElement>>(new Map());
+  const pendingNativeVideoLeasesRef = useRef(new PendingVideoDecoderReservations());
+  const releasePendingNativeVideoLeases = useCallback((owner?: object) => {
+    if (owner) pendingNativeVideoLeasesRef.current.releaseOwner(owner);
+    else pendingNativeVideoLeasesRef.current.releaseAll();
+  }, []);
   const nativeImageBitmapCacheRef = useRef<Map<string, ImageBitmap>>(new Map());
 
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
@@ -908,7 +919,7 @@ export const Preview: React.FC = () => {
     audioTrackIndex: number = 0,
   ): Promise<AudioBuffer | null> => {
     try {
-      const { extractAudioWav } = await import("@openreel/core/media");
+      const { extractAudioWav } = await import("@licketysplit/core/media");
       const wavBlob = await extractAudioWav(blob, audioTrackIndex);
       const arrayBuffer = await wavBlob.arrayBuffer();
       return await audioContext.decodeAudioData(arrayBuffer);
@@ -1089,6 +1100,7 @@ export const Preview: React.FC = () => {
   // Video element cache for native hardware-accelerated frame decoding (thumbnails/scrubbing)
   // Much more reliable than MediaBunny's CanvasSink for random-access seeking
   const videoElementCacheRef = useRef<Map<string, PreviewVideoElement>>(new Map());
+  const pendingScrubVideoLeasesRef = useRef(new Set<VideoDecoderLease>());
 
   const releaseVideoElement = useCallback(
     (entry: BudgetedVideoElement): void => entry.lease.release(),
@@ -1129,6 +1141,8 @@ export const Preview: React.FC = () => {
       scrubVideoReleaseTimerRef.current = null;
     }
     cancelPendingScrubDecode();
+    for (const lease of pendingScrubVideoLeasesRef.current) lease.release();
+    pendingScrubVideoLeasesRef.current.clear();
     for (const entry of videoElementCacheRef.current.values()) {
       releaseVideoElement(entry);
     }
@@ -1225,12 +1239,14 @@ export const Preview: React.FC = () => {
   }, [project, proxySourceRevision]);
 
   useEffect(() => {
+    // A replacement project can be paused at the same playhead and proxy revision.
+    releasePendingNativeVideoLeases();
     releaseScrubVideoElements();
     for (const entry of decoderCacheRef.current.values()) entry.input[Symbol.dispose]?.();
     decoderCacheRef.current.clear();
     for (const entry of nativeVideoCacheRef.current.values()) releaseVideoElement(entry);
     nativeVideoCacheRef.current.clear();
-  }, [proxySourceRevision, releaseScrubVideoElements, releaseVideoElement]);
+  }, [project.id, proxySourceRevision, releasePendingNativeVideoLeases, releaseScrubVideoElements, releaseVideoElement]);
 
   // Get text clips from TitleEngine
   const getTitleEngine = useEngineStore((state) => state.getTitleEngine);
@@ -1607,6 +1623,7 @@ export const Preview: React.FC = () => {
 
   useEffect(() => {
     return () => {
+      releasePendingNativeVideoLeases();
       for (const entry of decoderCacheRef.current.values()) {
         entry.input[Symbol.dispose]?.();
       }
@@ -1636,7 +1653,7 @@ export const Preview: React.FC = () => {
       }
       nativeImageBitmapCacheRef.current.clear();
     };
-  }, [releaseScrubVideoElements]);
+  }, [releasePendingNativeVideoLeases, releaseScrubVideoElements]);
 
   // Set canvas internal resolution ONLY when project settings change
   // This follows the WebGPU best practice of keeping internal resolution fixed
@@ -2471,13 +2488,19 @@ export const Preview: React.FC = () => {
 
             if (!cached) {
               let created: BudgetedVideoElement | null = null;
+              let reservedLease: VideoDecoderLease | null = null;
               created = await createBudgetedVideoElement(
                 () => nativeVideoUrl(mediaBlob),
                 {
                   isCurrent: () => !isStaleRequest(),
                   preload: "metadata",
                   crossOrigin: "anonymous",
+                  onReserved: (lease) => {
+                    reservedLease = lease;
+                    pendingScrubVideoLeasesRef.current.add(lease);
+                  },
                   onDispose: () => {
+                    if (reservedLease) pendingScrubVideoLeasesRef.current.delete(reservedLease);
                     const current = videoElementCacheRef.current.get(cacheKey);
                     if (current && current.video === created?.video) {
                       videoElementCacheRef.current.delete(cacheKey);
@@ -2522,6 +2545,7 @@ export const Preview: React.FC = () => {
               }
               cached = { ...created, lastUsed: Date.now() };
               videoElementCacheRef.current.set(cacheKey, cached);
+              if (reservedLease) pendingScrubVideoLeasesRef.current.delete(reservedLease);
               created.lease.unpin();
 
               while (videoElementCacheRef.current.size > 2) {
@@ -3631,6 +3655,7 @@ export const Preview: React.FC = () => {
       startPosition: number,
       onEnd: () => void,
       shouldContinue: () => boolean,
+      pendingLeaseOwner: object,
     ): Promise<() => void> => {
       let isActive = true;
       const isCurrentPlayback = () => isActive && shouldContinue();
@@ -3665,7 +3690,10 @@ export const Preview: React.FC = () => {
         }
       }
 
-      if (!isCurrentPlayback()) return () => {};
+      if (!isCurrentPlayback()) {
+        releasePendingNativeVideoLeases(pendingLeaseOwner);
+        return () => {};
+      }
       preDecodeAllAudioBuffers().catch((error) => {
         console.warn("[Preview] Audio warmup failed:", error);
       });
@@ -3673,6 +3701,7 @@ export const Preview: React.FC = () => {
       const videoCache = nativeVideoCacheRef.current;
       const loadingVideos = new Map<string, Promise<void>>();
       const pinnedVideoIds = new Set<string>();
+      const pinnedVideoLeases = new PinnedVideoDecoderLeases();
 
       const videoCacheIdForClip = (
         clip: (typeof timelineTracks)[0]["clips"][0],
@@ -3683,10 +3712,11 @@ export const Preview: React.FC = () => {
       const pinNativeVideoSources = (sourceIds: string[]): void => {
         const next = new Set(sourceIds);
         for (const sourceId of pinnedVideoIds) {
-          if (!next.has(sourceId)) videoCache.get(sourceId)?.lease.unpin();
+          if (!next.has(sourceId)) pinnedVideoLeases.unpin(sourceId);
         }
         for (const sourceId of next) {
-          if (!pinnedVideoIds.has(sourceId)) videoCache.get(sourceId)?.lease.pin();
+          const lease = videoCache.get(sourceId)?.lease;
+          if (lease) pinnedVideoLeases.pin(sourceId, lease);
         }
         pinnedVideoIds.clear();
         for (const sourceId of next) pinnedVideoIds.add(sourceId);
@@ -3725,6 +3755,8 @@ export const Preview: React.FC = () => {
           : mediaItem.blob)!;
         const cacheId = isStabilized ? `stabilized:${clip.id}` : clip.mediaId;
         let created: BudgetedVideoElement | null = null;
+        let reservedLease: VideoDecoderLease | null = null;
+        let cancelVideoLoad: (() => void) | null = null;
         const loadPromise = (async () => {
           try {
             created = await createBudgetedVideoElement(
@@ -3732,13 +3764,20 @@ export const Preview: React.FC = () => {
               {
                 preload: "auto",
                 isCurrent: isCurrentPlayback,
+                onReserved: (lease) => {
+                  reservedLease = lease;
+                  pendingNativeVideoLeasesRef.current.track(pendingLeaseOwner, lease);
+                },
                 onDispose: () => {
+                  if (reservedLease) pendingNativeVideoLeasesRef.current.forget(pendingLeaseOwner, reservedLease);
                   const current = videoCache.get(cacheId);
                   if (current && current.video === created?.video) videoCache.delete(cacheId);
+                  cancelVideoLoad?.();
                 },
               },
             );
-            if (!created) {
+            if (!created || !created.lease.active || !isCurrentPlayback()) {
+              created?.lease.release();
               if (isCurrentPlayback() && pinnedVideoIds.has(cacheId)) {
                 setVideoDecoderNotice("Preview paused because a visible camera could not obtain a video decoder slot.");
               }
@@ -3747,34 +3786,19 @@ export const Preview: React.FC = () => {
             const entry: PreviewVideoElement = { ...created, lastUsed: Date.now() };
             const video = entry.video;
             videoCache.set(cacheId, entry);
-            if (pinnedVideoIds.has(cacheId)) entry.lease.pin();
-            await new Promise<void>((resolve, reject) => {
-              let settled = false;
-              const timeout = setTimeout(() => finish(new Error("Video load timeout")), 10000);
-              const finish = (error?: Error) => {
-                if (settled) return;
-                settled = true;
-                clearTimeout(timeout);
-                video.onloadedmetadata = null;
-                video.onloadeddata = null;
-                video.oncanplay = null;
-                video.onerror = null;
-                if (error) reject(error);
-                else resolve();
-              };
-              video.onloadeddata = () => finish();
-              video.oncanplay = () => finish();
-              video.onloadedmetadata = () => {
-                if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) finish();
-              };
-              video.onerror = () => finish(new Error("Video load failed"));
-              video.src = entry.url;
-              video.load();
-            });
-            if (!isCurrentPlayback()) {
+            if (pinnedVideoIds.has(cacheId)) pinnedVideoLeases.pin(cacheId, entry.lease);
+            const readiness = waitForBudgetedVideoElementReadiness(video, entry.url);
+            cancelVideoLoad = readiness.cancel;
+            try {
+              await readiness.promise;
+            } finally {
+              if (cancelVideoLoad === readiness.cancel) cancelVideoLoad = null;
+            }
+            if (!isCurrentPlayback() || !entry.lease.active) {
               entry.lease.release();
               return;
             }
+            if (reservedLease) pendingNativeVideoLeasesRef.current.forget(pendingLeaseOwner, reservedLease);
             entry.lease.unpin();
             entry.lastUsed = Date.now();
           } catch {
@@ -3800,7 +3824,11 @@ export const Preview: React.FC = () => {
           throw new Error("The visible camera could not obtain a video decoder slot.");
         }
       }
-      if (!isCurrentPlayback()) return () => {};
+      if (!isCurrentPlayback()) {
+        releasePendingNativeVideoLeases(pendingLeaseOwner);
+        pinNativeVideoSources([]);
+        return () => {};
+      }
 
       const masterClock = getMasterClock();
       masterClock.setDuration(actualEndTime);
@@ -3827,7 +3855,11 @@ export const Preview: React.FC = () => {
       }
 
       await audioGraph.resume();
-      if (!isCurrentPlayback()) return () => {};
+      if (!isCurrentPlayback()) {
+        releasePendingNativeVideoLeases(pendingLeaseOwner);
+        pinNativeVideoSources([]);
+        return () => {};
+      }
       audioGraph.seekTo(startPosition);
       let rafId: number | null = null;
       let currentClipId: string | null = null;
@@ -4505,9 +4537,11 @@ export const Preview: React.FC = () => {
 
       const cleanup = (preserveCaches = false) => {
         isActive = false;
-        nativePlaybackActiveRef.current = false;
+        releasePendingNativeVideoLeases(pendingLeaseOwner);
         pinNativeVideoSources([]);
         if (rafId) cancelAnimationFrame(rafId);
+        if (activeNativePlaybackGenerationRef.current !== pendingLeaseOwner) return;
+        nativePlaybackActiveRef.current = false;
 
         if (preserveCaches) {
           for (const [, entry] of videoCache) {
@@ -4546,7 +4580,7 @@ export const Preview: React.FC = () => {
         const startupVideo = videoCache.get(startupCacheId)?.video;
         if (startupVideo) {
           await syncVideoToClipTime(startupVideo, activeStartClip.clip, startPosition);
-          if (!isActive || !nativePlaybackActiveRef.current) {
+          if (!isCurrentPlayback()) {
             cleanup(true);
             return () => {};
           }
@@ -4554,9 +4588,15 @@ export const Preview: React.FC = () => {
         }
       }
 
-      if (!isCurrentPlayback()) return () => {};
+      if (!isCurrentPlayback()) {
+        cleanup(true);
+        return () => {};
+      }
       await masterClock.play();
-      if (!isCurrentPlayback()) return () => {};
+      if (!isCurrentPlayback()) {
+        cleanup(true);
+        return () => {};
+      }
       audioGraph.startScheduler(getAudioClipsForScheduler);
       rafId = requestAnimationFrame(() => { drawFrame(); });
 
@@ -4572,6 +4612,7 @@ export const Preview: React.FC = () => {
       isMuted,
       preDecodeAllAudioBuffers,
       releaseVideoElement,
+      releasePendingNativeVideoLeases,
       hasActiveMotionInstances,
       renderOverlayClipsInTrackOrder,
       fillPreviewBackground,
@@ -4610,6 +4651,7 @@ export const Preview: React.FC = () => {
 
     let isActive = true;
     let nativeCleanup: ((preserveCaches?: boolean) => void) | null = null;
+    const pendingNativeLeaseOwner = {};
 
     const startPosition = resolvePlaybackStart(
       startPositionRef.current,
@@ -6203,9 +6245,10 @@ export const Preview: React.FC = () => {
       return nextStart;
     };
 
-    const startPlayback = async () => {
-      setVideoDecoderNotice(null);
-      const nativeCheck = canUseNativeVideoPlayback(playbackStartPosition);
+      const startPlayback = async () => {
+        setVideoDecoderNotice(null);
+        activeNativePlaybackGenerationRef.current = pendingNativeLeaseOwner;
+        const nativeCheck = canUseNativeVideoPlayback(playbackStartPosition);
 
       if (nativeCheck.canUse && nativeCheck.clips.length > 0) {
         try {
@@ -6215,14 +6258,21 @@ export const Preview: React.FC = () => {
             playbackStartPosition,
             () => pause(),
             () => isActive && previewProxyCache.store.getState().revision === proxySourceRevision,
+            pendingNativeLeaseOwner,
           );
           return nativeCleanup;
         } catch (error) {
+          releasePendingNativeVideoLeases(pendingNativeLeaseOwner);
+          if (!isActive || previewProxyCache.store.getState().revision !== proxySourceRevision) return;
           console.warn(
             "[Preview] Native video playback failed, falling back to MediaBunny:",
             error,
           );
         }
+      }
+      if (!isActive || previewProxyCache.store.getState().revision !== proxySourceRevision) {
+        releasePendingNativeVideoLeases(pendingNativeLeaseOwner);
+        return;
       }
       await startMultiTrackPlayback();
     };
@@ -6234,6 +6284,7 @@ export const Preview: React.FC = () => {
     return () => {
       isActive = false;
       nativePlaybackActiveRef.current = false;
+      releasePendingNativeVideoLeases(pendingNativeLeaseOwner);
       const masterClock = getMasterClock();
       if (masterClock.isPlaying || masterClock.isPaused) {
         startPositionRef.current = masterClock.currentTime;
@@ -6243,6 +6294,9 @@ export const Preview: React.FC = () => {
           useTimelineStore.getState().playbackState === "paused";
         nativeCleanup(pausedForResume);
         nativeCleanup = null;
+      }
+      if (activeNativePlaybackGenerationRef.current === pendingNativeLeaseOwner) {
+        activeNativePlaybackGenerationRef.current = null;
       }
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
@@ -6273,6 +6327,7 @@ export const Preview: React.FC = () => {
     failProxyPlayback,
     proxySourceRevision,
     cleanupPlaybackResources,
+    releasePendingNativeVideoLeases,
     cleanupAudioResources,
     setupAudioFromAudioTrack,
     preDecodeAllAudioBuffers,
@@ -6392,8 +6447,8 @@ export const Preview: React.FC = () => {
       }
       setPreviewInvalidateCounter((c) => c + 1);
     };
-    window.addEventListener("openreel:preview-invalidate", handler);
-    return () => window.removeEventListener("openreel:preview-invalidate", handler);
+    window.addEventListener("licketysplit:preview-invalidate", handler);
+    return () => window.removeEventListener("licketysplit:preview-invalidate", handler);
   }, []);
 
   useEffect(() => {

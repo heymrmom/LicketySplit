@@ -29,7 +29,7 @@ describe("DesktopExportButton", () => {
   it("opens the real export settings dialog for the desktop menu export action", () => {
     render(<DesktopExportButton />);
     expect(screen.queryByRole("dialog", { name: "Export video settings" })).toBeNull();
-    act(() => window.dispatchEvent(new Event("openreel:menu:export")));
+    act(() => window.dispatchEvent(new Event("licketysplit:menu:export")));
     expect(screen.getByRole("dialog", { name: "Export video settings" })).toBeTruthy();
   });
 });

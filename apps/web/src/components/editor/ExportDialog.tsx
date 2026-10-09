@@ -24,22 +24,22 @@ import {
 import {
   ToolcraftSegmentedControl,
   ToolcraftSwitchControl,
-} from "@openreel/ui";
-import { ToolcraftButton as Button } from "@openreel/ui";
+} from "@licketysplit/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
 import {
   ToolcraftDialog as Dialog,
   ToolcraftDialogHeader as DialogHeader,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import {
   ToolcraftLayout as Layout,
   ToolcraftLayoutContent as LayoutContent,
   ToolcraftLayoutFooter as LayoutFooter,
-} from "@openreel/ui";
-import { ToolcraftNumberInputControl } from "@openreel/ui";
-import { ToolcraftSelectableCard as SelectableCard } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftSliderControl } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+} from "@licketysplit/ui";
+import { ToolcraftNumberInputControl } from "@licketysplit/ui";
+import { ToolcraftSelectableCard as SelectableCard } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftSliderControl } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import {
   exportPresetsManager,
   type PlatformExportPreset,
@@ -51,7 +51,7 @@ import type {
   CompressionSource,
   CompressionTarget,
   CompressionPlan,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import type { SourceExportMatch } from "../../services/export-source-match";
 import {
   getDeviceProfile,
@@ -72,7 +72,7 @@ import {
   type BenchmarkProgress,
   type TimeEstimate,
   type CodecRecommendation,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { EDITING_FRAME_RATE_OPTIONS } from "./editing-frame-rate";
 import type { ExportDeliveryMode } from "../../services/export-runner";
 
@@ -159,7 +159,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   hasAudio = true,
 }) => {
   const isDesktop =
-    typeof window !== "undefined" && window.openreel?.platform === "desktop";
+    typeof window !== "undefined" && window.licketysplit?.platform === "desktop";
   const [generatePublishing,setGeneratePublishing]=useState(false);
   useEffect(()=>{if(isOpen)setGeneratePublishing(false);},[isOpen]);
   const [delivery, setDelivery] = useState<ExportDeliveryMode>(isDesktop ? "file" : "download");

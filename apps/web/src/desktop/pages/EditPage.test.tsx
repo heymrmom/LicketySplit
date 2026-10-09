@@ -67,7 +67,7 @@ describe("EditPage AI Editor dock", () => {
     [1080, 680, 439, "220px minmax(0, 1fr) 260px 320px"],
     [1440, 900, 640, "320px minmax(0, 1fr) 340px 380px"],
   ])("fits the saved layout into a %i px editor viewport", async (width, height, expectedTimelineHeight, expectedColumns) => {
-    window.localStorage.setItem("openreel-desktop-timeline-h", "640");
+    window.localStorage.setItem("licketysplit-desktop-timeline-h", "640");
     const TestResizeObserver = class {
       private callback: ConstructorParameters<typeof ResizeObserver>[0];
       constructor(callback: ConstructorParameters<typeof ResizeObserver>[0]) { this.callback = callback; }
@@ -87,7 +87,7 @@ describe("EditPage AI Editor dock", () => {
     });
 
     expect(page.style.gridTemplateColumns).toBe(expectedColumns);
-    expect(window.localStorage.getItem("openreel-desktop-timeline-h")).toBe("640");
+    expect(window.localStorage.getItem("licketysplit-desktop-timeline-h")).toBe("640");
   });
 
   it("clamps only the live timeline row and preserves the saved preference", () => {

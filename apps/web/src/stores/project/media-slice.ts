@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { StoreApi } from "zustand";
-import type { Action, MediaItem } from "@openreel/core";
+import type { Action, MediaItem } from "@licketysplit/core";
 import type { ProjectState } from "../project-store";
 import { getMediaBridge, initializeMediaBridge } from "../../bridges/media-bridge";
 import { saveMediaBlob, deleteMediaBlob } from "../../services/media-storage";
@@ -24,7 +24,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
   return {
     importMedia: async (file: File) => {
       const { project } = get();
-      const desktop=typeof window!=="undefined"&&window.openreel?.platform==="desktop";
+      const desktop=typeof window!=="undefined"&&window.licketysplit?.platform==="desktop";
 
       try {
         const mediaBridge = getMediaBridge();
@@ -264,7 +264,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
       const replacementKey = `${project.id}:${mediaId}`;
       const replacementRequest = Symbol();
       replacementRequests.set(replacementKey, replacementRequest);
-      const desktop=typeof window!=="undefined"&&window.openreel?.platform==="desktop";
+      const desktop=typeof window!=="undefined"&&window.licketysplit?.platform==="desktop";
 
       try {
         const mediaBridge = getMediaBridge();

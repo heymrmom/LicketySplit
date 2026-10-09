@@ -9,7 +9,7 @@ import {
 } from "./manifest";
 
 const manifest = (): MulticamManifest => ({
-  spec: "openreel-multicam/v1",
+  spec: "licketysplit-multicam/v1",
   fps: 25,
   sync: { method: "audio-crosscorr", reference: "wide" },
   participants: [
@@ -25,8 +25,15 @@ const manifest = (): MulticamManifest => ({
 });
 
 describe("validateMulticamManifest", () => {
-  it("accepts the openreel-multicam/v1 shoot specification", () => {
+  it("accepts the LicketySplit v1 shoot specification", () => {
     expect(validateMulticamManifest(manifest())).toEqual({ valid: true, errors: [] });
+  });
+
+  it("reads the prior v1 spec and normalizes it for current writes", () => {
+    const legacy = { ...manifest(), spec: "openreel-multicam/v1" };
+    const parsed = parseMulticamManifest(JSON.stringify(legacy));
+    expect(parsed.spec).toBe("licketysplit-multicam/v1");
+    expect(JSON.parse(serializeMulticamManifest(parsed)).spec).toBe("licketysplit-multicam/v1");
   });
 
   it("accepts explicitly unknown podcast framing without inventing a participant subject", () => {
