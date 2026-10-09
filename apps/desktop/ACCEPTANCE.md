@@ -6,7 +6,7 @@ Engineering checks, synthetic normal-UI proof, physical-device acceptance, provi
 
 For a general export-shape fixture, `node scripts/verify-desktop-fixture.mjs --generate <evidence-directory> --ffmpeg <pinned-arm64-ffmpeg> --seconds 3600` creates three 4K H.264 camera files and two 48 kHz microphones with known signal events. This checks deterministic media/export properties; its repeated tone and event impulses do **not** prove long-offset synchronization or drift recovery.
 
-Use the separate [full-hour nonperiodic sync fixture](../../scripts/takeover-verification/generate-full-hour.mjs) for long-offset and drift checks. It creates 3,602 seconds of synthetic camera/mic sources with aperiodic signals, camera and mic drift, split originals, a 35-second source start, overlap, gap, rotation, a stereo decoy channel, and measurement points through the hour. Reproduce the native and compact comparisons using the commands in the [full-hour benchmark report](../../.superpowers/work/takeover/verification/full-hour-benchmark-report.md). The report records the measured results and limits: synthetic continuous noise is not speech, the benchmark is not a normal-UI walkthrough, and it does not establish human acceptance.
+Use the separate [full-hour nonperiodic sync fixture](../../scripts/takeover-verification/generate-full-hour.mjs) for long-offset and drift checks. It creates 3,602 seconds of synthetic camera/mic sources with aperiodic signals, camera and mic drift, split originals, a 35-second source start, overlap, gap, rotation, a stereo decoy channel, and measurement points through the hour. Reproduce the native and compact comparisons using the commands in the [full-hour benchmark report](../../docs/research/2026-10-09-full-hour-sync-benchmark.md). The report records the measured results and limits: synthetic continuous noise is not speech, the benchmark is not a normal-UI walkthrough, and it does not establish human acceptance.
 
 For full workflow acceptance, build an editable project from the fixture with actual current camera cuts, static/ordinary keyframed effects and a title overlay. Record source hashes and actual codecs/rates; test missing originals and exact relink. Add expected retained source-word IDs and rendered dimensions/rate/channel count/duration to the fixture manifest for each selected render.
 
@@ -23,7 +23,7 @@ Unsigned/ad-hoc ARM64 archives are test packages. Release readiness requires the
 Current host prerequisites are known to be missing at implementation: actual8GiB hardware; paid provider/editorial quality authorization; a valid local DeveloperID identity and repository signing/notarization secrets; signed downloaded-install proof. Complete the remaining engineering and retain exact evidence rather than marking these gates passed.
 
 
-A committed source receipt is embedded as `Contents/Resources/BUILD_SOURCE.json`.
+A receipt identifying the clean committed source is embedded as `Contents/Resources/BUILD_SOURCE.json`.
 Run `node apps/desktop/scripts/write-source-receipt.mjs` from a clean committed
 checkout before packaging. The package verifier rejects a candidate whose
 embedded source differs from the checked commit.

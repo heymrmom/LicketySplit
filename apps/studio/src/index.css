@@ -24,9 +24,9 @@
     --t-tertiary: 107 107 117;
     --t-disabled: 74 74 82;
 
-    /* accents — LicketySplit brand green (matches the main app) */
-    --accent: 34 197 94;
-    --accent-2: 74 222 128;
+    /* accents — LicketySplit purple */
+    --accent: 113 70 214;
+    --accent-2: 141 99 247;
 
     /* semantic */
     --ok: 34 197 94;
@@ -35,8 +35,8 @@
     --info: 56 189 248;
 
     /* direct color vars for inline / JS-driven styles */
-    --accent-soft: rgba(34, 197, 94, 0.16);
-    --accent-2-soft: rgba(74, 222, 128, 0.16);
+    --accent-soft: rgba(141, 99, 247, 0.16);
+    --accent-2-soft: rgba(141, 99, 247, 0.16);
 
     --cat-input: #38bdf8;
     --cat-math: #94a3b8;
@@ -124,7 +124,7 @@
   }
   .node.is-selected {
     border-color: rgb(var(--accent));
-    box-shadow: 0 0 0 1px rgb(var(--accent)), 0 4px 14px rgba(34, 197, 94, 0.18);
+    box-shadow: 0 0 0 1px rgb(var(--accent)), 0 4px 14px rgba(141, 99, 247, 0.18);
   }
   .node__header {
     @apply relative flex items-center gap-1.5 border-b border-border-subtle bg-elev2 px-2 py-[5px];
@@ -158,7 +158,7 @@
   /* ── graph canvas backdrop ─────────────────────────────────── */
   .canvas-viewport {
     background-color: rgb(var(--bg-base));
-    background-image: radial-gradient(circle at center, rgba(34, 197, 94, 0.05) 0%, transparent 50%),
+    background-image: radial-gradient(circle at center, rgba(141, 99, 247, 0.05) 0%, transparent 50%),
       linear-gradient(rgb(var(--b-subtle) / 1) 1px, transparent 1px),
       linear-gradient(90deg, rgb(var(--b-subtle) / 1) 1px, transparent 1px);
     background-size: 100% 100%, 24px 24px, 24px 24px;
@@ -167,8 +167,8 @@
   /* ── timeline clip ─────────────────────────────────────────── */
   .timeline-clip {
     @apply relative flex h-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-sm px-2 font-mono text-[10px] text-text-primary;
-    background: linear-gradient(180deg, var(--cat, var(--accent-soft)) 0%, var(--cat-dark, rgba(34, 197, 94, 0.4)) 100%);
-    border: 1px solid var(--cat-border, rgba(34, 197, 94, 0.5));
+    background: linear-gradient(180deg, var(--cat, var(--accent-soft)) 0%, var(--cat-dark, rgba(141, 99, 247, 0.4)) 100%);
+    border: 1px solid var(--cat-border, rgba(141, 99, 247, 0.5));
     user-select: none;
   }
   .timeline-clip:hover {

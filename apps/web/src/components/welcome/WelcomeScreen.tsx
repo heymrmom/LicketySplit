@@ -266,7 +266,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ initialTab }) => {
                 <LicketySplitLogo className="w-full h-full" />
               </div>
               <Text type="body" color="primary" weight="semibold" className="text-xl text-text-primary tracking-tight">
-                Open Reel Video
+                LicketySplit
               </Text>
             </div>
 

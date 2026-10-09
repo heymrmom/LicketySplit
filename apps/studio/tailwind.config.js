@@ -46,7 +46,7 @@ export default {
       },
       boxShadow: {
         node: "0 2px 6px rgba(0,0,0,0.35)",
-        "node-selected": "0 0 0 1px rgb(var(--accent)), 0 4px 14px rgba(124,92,255,0.18)",
+        "node-selected": "0 0 0 1px rgb(var(--accent)), 0 4px 14px rgba(141,99,247,0.18)",
         float: "0 2px 8px rgba(0,0,0,0.3)",
       },
     },

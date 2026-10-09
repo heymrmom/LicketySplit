@@ -120,9 +120,7 @@ export function WelcomeScreen() {
     <div className="h-full w-full bg-background flex flex-col">
       <header className="flex items-center justify-between px-8 py-6 border-b border-border">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-            <Image size={20} className="text-primary-foreground" />
-          </div>
+          <img src="/icons/licketysplit-mark.png" alt="" aria-hidden="true" className="h-10 w-10 object-contain" />
           <div>
             <h1 className="text-xl font-semibold text-foreground">LicketySplit Image</h1>
             <p className="text-sm text-muted-foreground">Professional Graphic Design Editor</p>
