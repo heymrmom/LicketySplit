@@ -1,4 +1,6 @@
-# OpenReel Desktop — Distribution Guide
+# LicketySplit Desktop — Distribution Guide
+
+**Current LicketySplit instructions:** use the independent ARM64 section below and [ACCEPTANCE.md](ACCEPTANCE.md). The original OpenReel sections are retained as upstream reference; their signing identity, feeds, hosting and publication automation do not apply to this app.
 
 How to build, sign, notarize, and ship the desktop app for **macOS, Windows, and Linux**.
 
@@ -159,6 +161,8 @@ the live manifest.
 
 LicketySplit uses `com.heymrmom.licketysplit.desktop`, version `0.1.0-alpha.1`, macOS 14+, and its own Application Support/LicketySplit profile. Preserve installed legacy apps, profiles and projects. The dedicated `licketysplit-desktop.yml` workflow dispatch builds ARM64 DMG/ZIP test packages; it never publishes or changes upstream browser hosting. Node 22 and packageManager's frozen pnpm version are required. The pinned GPL ARM64 FFmpeg binary and upstream MIT attribution ship with the app.
 
-Local test build: `pnpm build:wasm`, `node apps/desktop/scripts/fetch-ffmpeg.mjs darwin-arm64`, `pnpm --filter @openreel/desktop build`, then `CSC_IDENTITY_AUTO_DISCOVERY=false pnpm --filter @openreel/desktop exec electron-builder --mac dmg zip --arm64 --publish never`. Run `verify-licketysplit-package.mjs` against the app before labelling architecture or identity verified. These packages are unsigned test artifacts, not Gatekeeper-ready downloads.
+Local test build: `pnpm build:wasm`, `node apps/desktop/scripts/fetch-ffmpeg.mjs darwin-arm64`, `pnpm --filter @openreel/desktop build`, `node apps/desktop/scripts/write-source-receipt.mjs` from a committed clean checkout, then `CSC_IDENTITY_AUTO_DISCOVERY=false pnpm --filter @openreel/desktop exec electron-builder --mac dmg zip --arm64 --publish never`. Run `verify-licketysplit-package.mjs` against the app before labelling architecture or identity verified. These packages are unsigned test artifacts, not Gatekeeper-ready downloads.
 
 Automatic update is disabled by default. Do not configure a feed, embed repository tokens, reuse the upstream author's Apple signing identity, publish a release or merge the feature branch without the separate authorized operation. Candidate tags use `licketysplit-desktop-v*`, outside upstream `v*` publishing triggers. Signing/notarization, real 8 GiB acceptance and downloaded installation are separate evidence gates. A successful archive does not close them.
+
+The dedicated workflow has three explicit stages: `build-only`, `signed-test`, and `draft-release`. Signed testing requires the owner's `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` in the protected LicketySplit release environment. Draft preparation downloads the already-tested signed artifact by ID, verifies its checksums/source and matching physical8GiB/fresh-download evidence, and creates a draft prerelease. It never rebuilds the accepted candidate or publishes it.
