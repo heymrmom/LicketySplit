@@ -100,3 +100,5 @@ export {getOriginalFadePhase} from "./audio/clip-fade-envelope";
 
 export {planPauseCuts,applyPauseCuts} from "./lickety/pacing";
 export {scanProductionCues,associateCueMarkers} from "./lickety/cues";
+
+export {validatePublishingPackage} from "./lickety/publishing";

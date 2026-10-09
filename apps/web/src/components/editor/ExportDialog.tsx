@@ -1,3 +1,4 @@
+import {PublishingOptions} from "./lickety/PublishingOptions";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Download,
@@ -81,7 +82,7 @@ const WEB_EXPORT_GUARDRAIL_MESSAGE =
 interface ExportDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onExport: (settings: VideoExportSettings, delivery?: ExportDeliveryMode) => void;
+  onExport: (settings: VideoExportSettings, delivery?: ExportDeliveryMode, options?:{generatePublishing:boolean}) => void;
   duration?: number;
   projectWidth?: number;
   projectHeight?: number;
@@ -159,6 +160,8 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 }) => {
   const isDesktop =
     typeof window !== "undefined" && window.openreel?.platform === "desktop";
+  const [generatePublishing,setGeneratePublishing]=useState(false);
+  useEffect(()=>{if(isOpen)setGeneratePublishing(false);},[isOpen]);
   const [delivery, setDelivery] = useState<ExportDeliveryMode>(isDesktop ? "file" : "download");
   const [capabilityError, setCapabilityError] = useState<string | null>(null);
   const [checkingCapability, setCheckingCapability] = useState(false);
@@ -455,7 +458,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     if (guardrailBlocking || validationError || capabilityError) return;
     if (activeTab === "reduce") {
       if (!reducePlan) return;
-      onExport(resolveBrowserSettings(compressionPlanToExportSettings(reducePlan)), delivery);
+      if(generatePublishing)onExport(resolveBrowserSettings(compressionPlanToExportSettings(reducePlan)),delivery,{generatePublishing:true});else onExport(resolveBrowserSettings(compressionPlanToExportSettings(reducePlan)), delivery);
       onClose();
       return;
     }
@@ -467,7 +470,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
       ...chosen,
       encodeMode: customSettings.encodeMode ?? "balanced",
     };
-    onExport(resolveBrowserSettings(settings), delivery);
+    if(generatePublishing)onExport(resolveBrowserSettings(settings),delivery,{generatePublishing:true});else onExport(resolveBrowserSettings(settings), delivery);
     onClose();
   }, [
     activeTab,
@@ -481,6 +484,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     capabilityError,
     resolveBrowserSettings,
     delivery,
+    generatePublishing,
   ]);
 
   const handleMatchSourceExport = useCallback(() => {
@@ -1288,7 +1292,8 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                   </section>
 
                   <section className="rounded-[10px] border border-border bg-bg-1 p-4">
-                    <div className="flex items-center justify-between gap-4">
+                    {isDesktop&&<PublishingOptions enabled={generatePublishing} onChange={setGeneratePublishing}/>}
+            <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent/10 text-accent">
                           <Zap size={14} aria-hidden />
@@ -1405,7 +1410,8 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
             {deviceProfile && (
               <div className="shrink-0 border-t border-border bg-bg-1 px-5 py-2.5">
-                <div className="flex items-center justify-between gap-4">
+                {isDesktop&&<PublishingOptions enabled={generatePublishing} onChange={setGeneratePublishing}/>}
+            <div className="flex items-center justify-between gap-4">
                   <Button
                     label="Show device export estimate details"
                     variant="ghost"
@@ -1597,6 +1603,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                 )}
               </div>
             )}
+            {isDesktop&&<PublishingOptions enabled={generatePublishing} onChange={setGeneratePublishing}/>}
             <div className="flex items-center justify-between gap-4">
               <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-fg-muted">
                 {duration > 0 && (

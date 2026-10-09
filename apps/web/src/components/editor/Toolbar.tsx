@@ -106,6 +106,7 @@ export const Toolbar: React.FC = () => {
     failExport,
     cancel: handleCancelExport,
     resetError,
+    cancelPublishing,
   } = useExportRunner({ project, onExported: handleExported });
 
   const [deviceProfile, setDeviceProfile] = useState<DeviceProfile | null>(null);
@@ -218,7 +219,7 @@ export const Toolbar: React.FC = () => {
   );
 
   const handleCustomExport = useCallback(
-    async (settings: VideoExportSettings, delivery: ExportDeliveryMode = window.openreel?.platform === "desktop" ? "file" : "download") => {
+    async (settings: VideoExportSettings, delivery: ExportDeliveryMode = window.openreel?.platform === "desktop" ? "file" : "download",options?:{generatePublishing:boolean}) => {
       closeModal();
       if (!hasTimelineContent) return;
 
@@ -240,7 +241,7 @@ export const Toolbar: React.FC = () => {
               : undefined,
         };
 
-        await runExport(exportSettings, ext, writable);
+        await runExport(exportSettings, ext, writable,{generatePublishing:options?.generatePublishing??false,exportPath:(window as {__openreelExportPath?:string}).__openreelExportPath});
 
         track(AnalyticsEvents.PROJECT_EXPORTED, {
           format: settings.format,
@@ -399,6 +400,7 @@ export const Toolbar: React.FC = () => {
         <ProjectSwitcher />
       </div>
 
+      {exportState.publishingState&&exportState.publishingState!=="not-requested"&&<div className="max-w-56 text-xs text-fg-2" role="status">{exportState.publishingState==="files-ready"?"Publishing files saved; rendering has its own status.":exportState.publishingState==="failed"?`Publishing: ${exportState.publishingError}`:"Generating publishing files…"}{exportState.publishingState==="generating"&&<button type="button" className="min-h-9 underline" onClick={cancelPublishing}>Cancel publishing only</button>}</div>}
       {/* ─── Right: export only ───────────────────────────────── */}
       <div className="flex items-center justify-end shrink-0">
         {/* Export */}

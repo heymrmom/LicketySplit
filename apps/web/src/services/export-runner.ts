@@ -13,6 +13,8 @@ export interface ExportRunnerState {
   phase: string;
   error: string | null;
   complete: boolean;
+  publishingState?:"not-requested"|"generating"|"files-ready"|"failed";
+  publishingError?:string;
 }
 
 export type ExportContainer = "mp4" | "webm" | "mov" | "wav";
@@ -417,6 +419,7 @@ export interface UseExportRunner {
     videoSettings: Partial<VideoExportSettings>,
     ext: string,
     writableStream: FileSystemWritableFileStream,
+    options?: { generatePublishing: boolean; exportPath?: string },
   ) => Promise<void>;
   runAudioExport: (settings: Partial<AudioExportSettings>, writable: FileSystemWritableFileStream) => Promise<void>;
   showSavePicker: (filename: string, ext: string, opts?: { streamToFile?: boolean; delivery?: ExportDeliveryMode }) => Promise<FileSystemWritableFileStream>;
@@ -427,6 +430,7 @@ export interface UseExportRunner {
   finishExportSoon: () => void;
   failExport: (error: unknown) => void;
   cancel: () => void;
+  cancelPublishing:()=>void;
   resetError: () => void;
 }
 
@@ -437,6 +441,8 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
   const running = useRef(false);
   const cancelled = useRef(false);
   const activeWritable = useRef<FileSystemWritableFileStream | null>(null);
+  const publishingAbort=useRef<AbortController|null>(null);
+  const cancelPublishing=useCallback(()=>publishingAbort.current?.abort(new DOMException("Publishing generation cancelled; video export continues","AbortError")),[]);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const assertNotCancelled = useCallback(() => {
@@ -483,7 +489,7 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
   const finishExportSoon = useCallback(() => {
     const completedEpoch = epoch.current;
     resetTimer.current = setTimeout(() => {
-      if (epoch.current === completedEpoch) setState(INITIAL_STATE);
+      if (epoch.current === completedEpoch) setState(previous => ({ ...INITIAL_STATE, publishingState: previous.publishingState, publishingError: previous.publishingError }));
     }, 2000);
   }, []);
 
@@ -510,6 +516,7 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
       videoSettings: Partial<VideoExportSettings>,
       _ext: string,
       writableStream: FileSystemWritableFileStream,
+      options?:{generatePublishing:boolean;exportPath?:string},
     ): Promise<void> => {
       if (running.current) {
         await writableStream.abort().catch(() => undefined);
@@ -524,9 +531,11 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
       const engine = getExportEngine();
       let generator: ReturnType<typeof engine.exportVideo> | undefined;
       try {
+        let exportProject=project;
+        if(options?.generatePublishing){const {cloneProjectForWorkflow}=await import("@openreel/core/lickety/clone-project");exportProject=cloneProjectForWorkflow(project);setState(prev=>({...prev,publishingState:"generating",publishingError:undefined,phase:"Generating publishing files…"}));publishingAbort.current=new AbortController();try{const {preparePublishingForExport}=await import("./lickety/publishing");if(!options.exportPath)throw new Error("Select a native video destination for publishing files");await preparePublishingForExport(exportProject,{generatePublishing:true,exportPath:options.exportPath,signal:publishingAbort.current.signal});setState(prev=>({...prev,publishingState:"files-ready"}));}catch(error){setState(prev=>({...prev,publishingState:"failed",publishingError:error instanceof Error?error.message:"Publishing failed"}));}finally{publishingAbort.current=null;}checkCurrent();}
         await engine.initialize();
         checkCurrent();
-        generator = engine.exportVideo(project, videoSettings, writableStream);
+        generator = engine.exportVideo(exportProject, videoSettings, writableStream);
         let finalResult: ExportResult | undefined;
 
         while (true) {
@@ -655,6 +664,7 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
   );
 
   const cancel = useCallback(() => {
+    publishingAbort.current?.abort(new DOMException("Export cancelled","AbortError"));
     epoch.current += 1;
     cancelled.current = true;
     void activeWritable.current?.abort().catch(() => undefined);
@@ -670,6 +680,7 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
 
   return {
     state,
+    cancelPublishing,
     runExport,
     runAudioExport,
     showSavePicker,
