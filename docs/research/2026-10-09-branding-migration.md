@@ -47,11 +47,13 @@ Every workspace TypeScript check passed. All configured lint workspaces passed, 
 ## Remaining old identifiers and explicit exceptions
 
 - The service worker recognizes old `openreel-*` cache names only when cleaning regenerable application caches; it does not rename or delete project databases.
-- `app://openreel` is the read-only migration source origin. Old IndexedDB/localStorage names appear only in `apps/web/src/desktop/migration/namespace.ts` and legacy fixtures; current consumers use the mapped LicketySplit names. `OPENREEL_CRASH_ENDPOINT` appears only in the negative compatibility test.
+- `app://openreel` is the read-only migration source origin. The desktop/editor old IndexedDB/localStorage names are isolated in `apps/web/src/desktop/migration/namespace.ts` and legacy fixtures; current editor consumers use the mapped LicketySplit names. `OPENREEL_CRASH_ENDPOINT` appears only in the negative compatibility test.
 - The previous `.openreel-build` GPU-cache marker is read without deleting or changing it; the current marker is `.licketysplit-build`.
 - The old native key filename `openreel-keys.json`, secure-vault verifier `openreel-verify-v1`, old `.oreel` project suffix, and four old `openreel-*/v1` specs are read/migration compatibility values. `.orma` remains the stable interchange extension.
 - Existing legal attribution/source-offer files retain upstream names and text. Required upstream attribution is preserved; active repository metadata points to `heymrmom/LicketySplit`.
-- Separate `apps/image` and `apps/studio` products are not included in this desktop/editor rename. The preserved `codex/openreel-baseline` workflow branch and the external `openreel-claude-bot` account reference are not product namespaces.
+- Image autosaves/color preferences and Studio drafts now write `licketysplit-image-project-*`, `licketysplit-image-colors`, and `licketysplit-studio`. Explicit adapters read `openreel-image-project-*`, `openreel-image-colors`, and `openreel-studio` with destination precedence; reads/saves leave source data unchanged, while explicit user deletion removes both copies to prevent deleted drafts returning. Image service-worker cleanup recognizes only the owned old/new Image cache prefixes and preserves unrelated caches. These boundaries passed 7 Image and 8 Studio tests, including absent legacy databases with/without enumeration and malformed-schema errors; Image, Studio, Agent, and Core typechecks passed. Image/Studio normal-UI and deployment behavior were not exercised. Old mobile paths occur in a compatibility-check script, but the referenced mobile source trees are absent from this checkout. The preserved `codex/openreel-baseline` workflow branch and external `openreel-claude-bot` account reference identify existing history/accounts rather than the product.
+
+- `LEGACY_PARTICLE_DEFAULT_SEED` retains the exact `openreel-particles` value because changing it reshapes existing scenes without an explicit seed. Core and Agent share that one compatibility constant; five particle tests preserve deterministic behavior. The active built-in template label is LicketySplit.
 
 ## External hosts awaiting product-owner disposition
 
@@ -61,7 +63,7 @@ No replacement endpoints were invented and no endpoint behavior was redirected. 
 - `https://media.openreel.video/models/`: `apps/web/src/workers/whisper-worker.ts`, reached by local Whisper multicam transcription and auto-caption flows.
 - `https://mediashares.openreel.video/ffmpeg-vidstab/{mt,st}`: `packages/core/src/video/stabilization/vidstab-engine.ts`, reachable from the editor’s stabilization controls.
 - `https://app.openreel.video`: referenced by the share-origin helper; no current desktop user-flow caller was found.
-- `https://filters.openreel.video` and `https://dl.openreel.video`: generator/build scripts only, not desktop runtime paths.
+- `https://filters.openreel.video` and `https://dl.openreel.video`: generator/build scripts only, not desktop runtime paths. Filter deployment prefers `LICKETYSPLIT_FILTERS_BUCKET`, with the old environment name and existing `openreel-filters` bucket retained as infrastructure compatibility pending disposition. Image deployment still names the existing `openreel-image` Cloudflare project; Studio sample documentation still references `cdn.openreel.video`. No deployment was run.
 - `openreel.pages.dev` and `openreel-preview.pages.dev`: web Pages proxy allowlist/configuration only. Wrangler project names and Cloudflare resources still point at existing upstream services.
 - `api.elevenlabs.io`, `api.openai.com`, and `api.anthropic.com` are third-party provider APIs and remain unchanged.
 

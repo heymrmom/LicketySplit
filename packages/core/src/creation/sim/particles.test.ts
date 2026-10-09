@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { aliveCount, simulateParticles, spawnParticles, stepParticles } from "./particles";
+import { aliveCount, LEGACY_PARTICLE_DEFAULT_SEED, simulateParticles, spawnParticles, stepParticles } from "./particles";
 
 describe("particle simulation", () => {
   it("spawns a deterministic particle set from a seed", () => {
@@ -8,6 +8,13 @@ describe("particle simulation", () => {
     expect(a).toHaveLength(20);
     expect(a[0]!.velocity).toEqual(b[0]!.velocity);
     expect(a.every((particle) => particle.alive)).toBe(true);
+  });
+
+  it("preserves the established default seed for scenes without an explicit seed", () => {
+    expect(LEGACY_PARTICLE_DEFAULT_SEED).toBe("openreel-particles");
+    expect(spawnParticles({ count: 20 })).toEqual(
+      spawnParticles({ count: 20, seed: LEGACY_PARTICLE_DEFAULT_SEED }),
+    );
   });
 
   it("integrates gravity so particles rise then fall", () => {

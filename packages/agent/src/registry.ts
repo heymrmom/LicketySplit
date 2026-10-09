@@ -364,6 +364,7 @@ import {
   humanoidAnimationPose,
   type HumanoidAnimation,
   skinMesh,
+  LEGACY_PARTICLE_DEFAULT_SEED,
   spawnParticles,
   stepParticles,
   makeRigidBody,
@@ -6752,7 +6753,7 @@ function buildParticleMeshFrames(
   worldSize: number,
 ): MotionObjectMeshFrames {
   const count = Math.round(clampNumber(optionalNumber(args.count) ?? 90, 1, 600));
-  const seed = optionalString(args.seed) ?? "openreel-particles";
+  const seed = optionalString(args.seed) ?? LEGACY_PARTICLE_DEFAULT_SEED;
   const speed = Math.max(0, optionalNumber(args.speed) ?? worldSize * 1.1);
   const spread = clampNumber(optionalNumber(args.spread) ?? 0.7, 0, Math.PI);
   const gravity = optionalNumber(args.gravity) ?? 2.5;
@@ -6848,7 +6849,7 @@ function updateCreationAssetParticleBake(
     gravity: optionalNumber(args.gravity) ?? 2.5,
     drag: clampNumber(optionalNumber(args.drag) ?? 0.04, 0, 1),
     lifetime: clampNumber(optionalNumber(args.lifetime) ?? 2.4, 0.2, 8),
-    seed: optionalString(args.seed) ?? "openreel-particles",
+    seed: optionalString(args.seed) ?? LEGACY_PARTICLE_DEFAULT_SEED,
     fps: Math.round(clampNumber(optionalNumber(args.fps) ?? 24, 8, 30)),
   });
   const particleNode = {

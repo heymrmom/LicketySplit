@@ -641,7 +641,7 @@ export const BUILT_IN_EDITING_TEMPLATES: readonly EditingTemplate[] = [
     tags: ["branding", "lower third", "name"],
     supportedTargets: ["video", "image"],
     controls: [
-      { id: "name", label: "Name", type: "text", defaultValue: "Open Reel" },
+      { id: "name", label: "Name", type: "text", defaultValue: "LicketySplit" },
       { id: "role", label: "Role", type: "text", defaultValue: "Creator" },
       { id: "accent", label: "Accent", type: "color", defaultValue: "#7bf1a8" },
     ],

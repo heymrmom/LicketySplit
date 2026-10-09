@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-BUCKET="${OPENREEL_FILTERS_BUCKET:-openreel-filters}"
+BUCKET="${LICKETYSPLIT_FILTERS_BUCKET:-${OPENREEL_FILTERS_BUCKET:-openreel-filters}}"
 OUT="${OUT_DIR:-out}"
 
 if [[ ! -f "$OUT/manifest.json" ]]; then

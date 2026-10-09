@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useProjectStore } from '../stores/project-store';
+import { createImageProjectStorage } from '../persistence/identity-storage';
 
 const AUTO_SAVE_DELAY = 2000;
-const STORAGE_KEY_PREFIX = 'openreel-image-project-';
+const projectStorage = () => createImageProjectStorage(localStorage);
 
 export function useAutoSave() {
   const { project, isDirty, markClean } = useProjectStore();
@@ -21,7 +22,7 @@ export function useAutoSave() {
 
     timeoutRef.current = window.setTimeout(() => {
       try {
-        localStorage.setItem(`${STORAGE_KEY_PREFIX}${project.id}`, projectJson);
+        projectStorage().save(project.id, projectJson);
         lastSavedRef.current = projectJson;
         markClean();
       } catch (error) {
@@ -39,7 +40,7 @@ export function useAutoSave() {
 
 export function loadSavedProject(projectId: string) {
   try {
-    const json = localStorage.getItem(`${STORAGE_KEY_PREFIX}${projectId}`);
+    const json = projectStorage().load(projectId);
     if (json) {
       return JSON.parse(json);
     }
@@ -50,16 +51,9 @@ export function loadSavedProject(projectId: string) {
 }
 
 export function getSavedProjectIds(): string[] {
-  const ids: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(STORAGE_KEY_PREFIX)) {
-      ids.push(key.replace(STORAGE_KEY_PREFIX, ''));
-    }
-  }
-  return ids;
+  return projectStorage().listIds();
 }
 
 export function deleteSavedProject(projectId: string): void {
-  localStorage.removeItem(`${STORAGE_KEY_PREFIX}${projectId}`);
+  projectStorage().delete(projectId);
 }
