@@ -90,3 +90,5 @@ export {bindNativeMediaSources,getNativeMediaSource,nativeVideoUrl} from "./medi
 
 export {createAnalysisSnapshot,fullEditRevision,revisionHash} from "./lickety/snapshot";
 export {normalizeAssemblyTranscript} from "./lickety/transcript";
+
+export {serializeProjectFile,assertReaderCompatibility} from "./storage/project-serializer";

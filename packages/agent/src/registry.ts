@@ -31955,7 +31955,7 @@ const TOOLS: RegisteredTool[] = [
     domain: "multicam",
     title: "Get multicam transcript",
     description:
-      "Read optional per-participant local Whisper transcript segments from the separate .orma artifact.",
+      "Read the saved current-timeline AssemblyAI transcript on desktop, retaining word/channel/speaker timing. Browser reads optional artifact transcripts. This read never purchases transcription.",
     inputSchema: obj({ groupId: str, startMs: num, endMs: num }),
     readOnly: true,
     destructive: false,

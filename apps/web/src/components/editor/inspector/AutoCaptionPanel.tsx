@@ -1,3 +1,5 @@
+import {desktopMediaAvailable} from "../../../services/lickety/desktop-media";
+import {TranscriptControls} from "../lickety/TranscriptControls";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   SUBTITLE_STYLE_PRESETS,
@@ -59,7 +61,7 @@ interface WorkerChunk {
 
 type WorkerState = "idle" | "loading" | "ready";
 
-export const AutoCaptionPanel: React.FC<AutoCaptionPanelProps> = ({
+const BrowserAutoCaptionPanel: React.FC<AutoCaptionPanelProps> = ({
   clipId,
   maxWordsPerLine = 5,
 }) => {
@@ -504,5 +506,9 @@ export const AutoCaptionPanel: React.FC<AutoCaptionPanelProps> = ({
     </div>
   );
 };
+
+
+
+export const AutoCaptionPanel:React.FC<AutoCaptionPanelProps>=props=>desktopMediaAvailable()?<TranscriptControls/>:<BrowserAutoCaptionPanel {...props}/>;
 
 export default AutoCaptionPanel;

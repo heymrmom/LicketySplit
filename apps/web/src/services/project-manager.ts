@@ -1,5 +1,5 @@
 import type { Project, ProjectSettings } from "@openreel/core";
-import { normalizeProjectStoredFields } from "@openreel/core";
+import { serializeProjectFile,assertReaderCompatibility, normalizeProjectStoredFields } from "@openreel/core";
 import { v4 as uuidv4 } from "uuid";
 
 interface FilePickerAcceptType {
@@ -210,6 +210,7 @@ class ProjectManager {
       candidate.project !== null;
 
     const rawProject = (isWrapped ? candidate.project : parsed) as Project;
+    assertReaderCompatibility(isWrapped?candidate as unknown as import("@openreel/core/storage/project-serializer").ProjectFile:{version:"1.2.0",project:rawProject});
     if (typeof rawProject.id !== "string" || typeof rawProject.name !== "string") {
       throw new Error("Invalid project file: missing project id or name");
     }
@@ -324,7 +325,7 @@ class ProjectManager {
       if (!filePath) return false;
       await window.openreel!.fs.writeFile(
         filePath,
-        JSON.stringify(project, null, 2),
+        serializeProjectFile(project),
       );
       this.currentFileHandle = { kind: "native", path: filePath };
       await this.addToRecent(project, this.currentFileHandle);
@@ -371,7 +372,7 @@ class ProjectManager {
     project: Project,
     handle: ProjectFileRef,
   ): Promise<boolean> {
-    const data = JSON.stringify(project, null, 2);
+    const data = serializeProjectFile(project);
     if (isNativeRef(handle)) {
       await window.openreel!.fs.writeFile(handle.path, data);
       this.emit("projectSaved", { project });
@@ -393,7 +394,7 @@ class ProjectManager {
   }
 
   private downloadProject(project: Project): boolean {
-    const data = JSON.stringify(project, null, 2);
+    const data = serializeProjectFile(project);
     const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 

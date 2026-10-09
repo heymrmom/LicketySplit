@@ -114,7 +114,7 @@ function getProjectFileCompatibility(project: Project): Pick<
   };
 }
 
-function assertReaderCompatibility(projectFile: ProjectFile): void {
+export function assertReaderCompatibility(projectFile: ProjectFile): void {
   const minimumReaderVersion = projectFile.minimumReaderVersion ?? projectFile.project?.minimumReaderVersion;
   if (
     minimumReaderVersion &&
@@ -495,4 +495,9 @@ export function createProjectSerializer(
   storage: IStorageEngine,
 ): ProjectSerializer {
   return new ProjectSerializer(storage);
+}
+
+export function serializeProjectFile(project:Project):string {
+ const portable={...project,mediaLibrary:{items:project.mediaLibrary?.items?.map(item=>({...item,blob:null,fileHandle:null,waveformData:null,nativeSource:undefined}))??[]}};
+ return JSON.stringify({version:SCHEMA_VERSION,...getProjectFileCompatibility(project),project:portable},null,2);
 }

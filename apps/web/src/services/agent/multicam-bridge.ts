@@ -1,3 +1,4 @@
+import {desktopMediaAvailable} from "../lickety/desktop-media";
 import type { JobResult, MulticamHostBridge } from "@openreel/agent";
 import {
   DEFAULT_MULTICAM_SHOT_POLICY,
@@ -102,6 +103,7 @@ export function createMulticamHostBridge(
     },
 
     async getTranscript(groupId, range = {}) {
+      if(desktopMediaAvailable()){const p=useProjectStore.getState().project;const doc=p.lickety?.transcript;if(!doc)throw new Error("No saved AssemblyAI transcript. Create it in Captions first.");const words=doc.words.filter(w=>w.endMs>(range.startMs??0)&&w.startMs<(range.endMs??p.timeline.duration*1000));const transcripts:Record<string,{startMs:number;endMs:number;text:string}[]>={};for(const w of words)(transcripts[w.speaker??"unknown-speaker"]??=[]).push({startMs:w.startMs,endMs:w.endMs,text:w.text});return {groupId:groupId??p.multicamGroups?.[0]?.id??"current-timeline",transcripts};}
       const value = await artifact(groupId);
       const startMs = range.startMs ?? 0;
       const endMs = range.endMs ?? value.artifact.durationMs;

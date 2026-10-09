@@ -1354,7 +1354,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
             checked={includeTranscripts}
             onChange={(event) => setIncludeTranscripts(event.target.checked)}
           />
-          Add per-channel local Whisper transcripts to the .orma artifact
+          {desktopMediaAvailable()?"Use the saved AssemblyAI transcript (no new purchase)":"Add per-channel local Whisper transcripts to the .orma artifact"}
         </label>
         <label className="flex items-center gap-2 text-[9px] text-fg-2">
           <input

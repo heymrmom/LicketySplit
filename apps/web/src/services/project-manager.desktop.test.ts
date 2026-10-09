@@ -37,3 +37,5 @@ describe("ProjectManager desktop fs", () => {
     expect(loaded?.name).toBe("Demo");
   });
 });
+
+it('desktop workflow saves declare reader and omit local source bindings',async()=>{const {makeWorkflowFixture}=await import('@openreel/core/lickety/test-fixtures');const fixture=makeWorkflowFixture();const p={...fixture,lickety:{schemaVersion:1 as const,words:[{occurrenceId:'o',sourceWordId:'w',text:'hello',startMs:0,endMs:100}]},mediaLibrary:{items:fixture.mediaLibrary.items.map(item=>({...item,nativeSource:{identity:{assetId:'asset',mediaId:item.id,sha256:'sha',byteLength:1},originalUri:'licketysplit-media://asset/original',durationMs:20000}}))}};await projectManager.saveProjectAs(p);const json=JSON.parse(store.get('/tmp/proj.oreel')!);expect(json).toMatchObject({version:'1.3.0',minimumReaderVersion:'1.3.0'});expect(JSON.stringify(json)).not.toContain('nativeSource');expect((await projectManager.openProject())?.lickety?.words?.[0].sourceWordId).toBe('w');});
