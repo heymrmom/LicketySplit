@@ -59,6 +59,7 @@ export interface BYOKClientOptions {
   readonly apiKey: string;
   readonly baseUrl?: string;
   readonly maxTokens?: number;
+  readonly retries?:number;
   readonly signal?: AbortSignal;
 }
 
@@ -70,6 +71,7 @@ export interface BYOKClientOptions {
 export function makeBYOKClient(opts: BYOKClientOptions): LLMClient {
   const send = withRetry(makeSend(opts.provider, opts.apiKey, opts.baseUrl, opts.signal), {
     signal: opts.signal,
+    retries:opts.retries,
   });
   return makeClientFromSend({
     provider:

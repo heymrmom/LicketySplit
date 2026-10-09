@@ -1,3 +1,6 @@
+import {desktopMediaAvailable} from "../../services/lickety/desktop-media";
+import {TranscriptControls} from "./lickety/TranscriptControls";
+import {NarrativePanel} from "./lickety/NarrativePanel";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Captions, Shuffle } from "@/icons/lucide-compat";
@@ -884,6 +887,7 @@ export const InspectorPanel: React.FC = () => {
             </React.Suspense>
           </InspectorTabErrorBoundary>
         </Section>
+        {desktopMediaAvailable()&&<><Section title="Transcript" sectionId="lickety-transcript"><TranscriptControls key={project.id}/></Section><Section title="AI Narrative" sectionId="lickety-narrative"><NarrativePanel/></Section></>}
         {selectedClipIds.length > 1 ? (
           <MultiClipInspector clipIds={selectedClipIds} />
         ) : selectedClip ? (
