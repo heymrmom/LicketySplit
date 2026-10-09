@@ -105,3 +105,6 @@ xcuserdata/
 # Source receipt generated only after source is committed for a package.
 apps/desktop/resources/BUILD_SOURCE.json
 scripts/__pycache__/
+
+# Separate local native-import test artifacts; preserve the original candidate.
+apps/desktop/release-native-import/
