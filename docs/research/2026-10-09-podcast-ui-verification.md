@@ -1,0 +1,39 @@
+# Podcast desktop workflow verification
+
+This is engineering evidence on the synthetic full-hour fixture, using an isolated Electron profile on the available 16 GiB ARM64 Mac. It is not owner-footage, physical 8 GiB, provider, downloaded-install, or human listening acceptance. The running development build for this checkpoint includes UI commit `8379262`; branding and final package verification are separate subsequent steps.
+
+## Normal application path
+
+The test started with ordinary Blank → Horizontal creation and imported eight original files through the renderer's native file input. Existing imported media was inspected from Podcast setup. Controls confirmed three physical camera groups, Camera A as the wide view, Alice and Bob participants, and Bob's channel 0 as program dialogue while the independent channel 1 remained unassigned. Alignment used the ported legacy native pipeline. Camera B's second original received a manual offset of 1835.216 seconds, scale 1.00012, a review note, and explicit acceptance. Closing and resuming setup retained that reviewed timing and note.
+
+Explicit **Keep picture gaps** enabled **Create timeline**. The actual control created a native assembly spanning 3602.0279950710697 seconds. Its saved representation has eight original media references, three physical camera angles, six camera-original source rows, two dialogue rows, and one program picture row. Source rows remain hidden and scratch sound muted; they are not six separate physical camera angles. The program picture initially uses the confirmed wide camera and retains original segment references.
+
+One Undo removed the assembly, and Redo restored it. Normal Save wrote the project, then File → Open restored that saved assembly after Undo had removed the live version. Only the native picker selection was stubbed to the isolated fixture's `Horizontal.oreel` path; application menu dispatch, serialization, file write/read, and renderer restoration were real. The main window had to be focused because native menu dispatch targets `BrowserWindow.getFocusedWindow()`. No project data was injected to claim this result. The owner's similarly named project was not read or modified.
+
+The reopened editor displayed the synthetic purple camera picture and retained the hour-long duration and Used on timeline indicators. This confirms visible picture restoration, not audible synchronization quality. Selected microphone playback and boundary/export checks remain to be completed against the integrated candidate.
+
+## Full Extent Zoom and shortcut UI
+
+The existing reopened hour project was resized with the test application's own window API. Actual Full Extent Zoom and vertical scrolling produced:
+
+| Window content size | Track viewport width | Fitted content width | Track viewport height | Track content height | Bottom scroll position |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1440 × 940 | 1260 px | 1260 px | 209 px | 594 px | 385 px |
+| 1080 × 720 | 962 px | 962 px | 200 px | 594 px | 394 px |
+
+Both microphone rows and the program row are reachable by vertical scrolling. Track headers follow the same scroll offset; editing controls remain above the tracks. At 1080 × 720, Cmd+0 restored the prior 180101 px detail extent and horizontal position 1730 px; a second Cmd+0 returned to the 962 px overview at scroll position zero. Resizing while fitted recomputed the width.
+
+The normal Keyboard Shortcuts control opened the mounted help dialog. Searching the **Resolve 21.1 comparison** view for J/K/L returned the unsupported transport row and the Space playback comparison. Typing Space in the search field inserted a space rather than triggering playback. The help reflects the isolated profile's active default keymap; it does not claim to inspect the owner's Resolve or editor customizations. See [the full comparison](../resolve-shortcut-comparison.md) for verified manual references and supported differences.
+
+Visual review identified wrapped Used on timeline text overlapping another badge and excessively narrow two-column media cards at 1080 px. Those fixes belong to the final branding/UI pass; the screenshots here are intentionally prebranding evidence.
+
+## Local receipts
+
+Ignored evidence directory: `.superpowers/work/takeover/verification/normal-ui-1791576272789/`.
+
+- `project-reopened-from-disk.png`, `timeline-created.png`, `timeline-undone.png`, `timeline-redone.png` and the saved fixture project.
+- `full-extent-metrics.json`; top/bottom screenshots for both requested sizes.
+- `shortcuts-ui-receipt.json` and `shortcuts-resolve-search.png`.
+- Setup, manual review, and restart screenshots from the same isolated profile.
+
+These receipts identify a development checkpoint, not the final source-matched installer. Final candidate evidence must add new-origin migration, branded assets, bounded decoders, selected-mic playback, split-boundary cuts/relink/export, replacement MCP shim, and embedded source receipt/checksums.
