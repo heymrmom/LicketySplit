@@ -3,7 +3,7 @@ export interface ResourceProfile { lowMemory: boolean; maxHeavyJobs: 1; maxVideo
 export interface AssetIdentity { assetId: string; mediaId: string; sha256: string; byteLength: number; }
 export interface RegisteredAsset { identity: AssetIdentity; originalUri: string; durationMs: number; }
 export interface ProxyReceipt { assetId: string; sourceSha256: string; proxyUri: string; width: number; height: number; sourceStartPTS: number; proxyStartPTS: number; durationMs: number; version: 1; }
-export interface DialogueSpan { clipId: string; mediaId: string; assetId: string; trackId: string; timelineStartMs: number; timelineEndMs: number; sourceInMs: number; channel: number; participantId?: string; }
+export interface DialogueSpan { clipId: string; mediaId: string; assetId: string; trackId: string; timelineStartMs: number; timelineEndMs: number; sourceInMs: number; channel: number; participantId?: string; render?: {volume:number;audioTrackIndex:number;fade?:{fadeIn:number;fadeOut:number};automation?:import("../types/timeline").Clip["automation"];effects:import("../types/timeline").Effect[];clipDurationMs:number}; }
 export interface AnalysisSnapshot { schemaVersion: 1; projectId: string; revisionHash: string; durationMs: number; frameRate: number; assets: AssetIdentity[]; dialogue: DialogueSpan[]; }
 export interface PreparedAudio { handleId: string; snapshotHash: string; sha256: string; sampleRate: 16000; channels: 1|2; durationMs: number; }
 export interface TranscriptWord { id: string; text: string; startMs: number; endMs: number; confidence: number; channel?: number; speaker?: string; sourceWordId?: string; }

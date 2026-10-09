@@ -5,6 +5,7 @@ import type { McpBridgeRequest } from "../shared/mcp";
 contextBridge.exposeInMainWorld("openreel", {
   platform: "desktop",
   lickety: {
+    prepareAudio: (args: unknown) => ipcRenderer.invoke(CHANNELS.licketyPrepareAudio,args),
     audioWindow: (args: unknown) => ipcRenderer.invoke(CHANNELS.licketyAudioWindow,args),
     resourceProfile: () => ipcRenderer.invoke(CHANNELS.licketyResourceProfile),
     registerFile: (mediaId: string, file: File) => ipcRenderer.invoke(CHANNELS.licketyRegisterAsset, {mediaId, path:webUtils.getPathForFile(file)}),

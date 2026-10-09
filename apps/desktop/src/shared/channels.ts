@@ -1,4 +1,5 @@
 export const CHANNELS = {
+  licketyPrepareAudio:"openreel:lickety:prepareAudio",
   licketyAudioWindow: "openreel:lickety:audioWindow",
   licketyResourceProfile: "openreel:lickety:resourceProfile",
   licketyRegisterAsset: "openreel:lickety:registerAsset",

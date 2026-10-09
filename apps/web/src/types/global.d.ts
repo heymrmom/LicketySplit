@@ -1,4 +1,4 @@
-import type {ResourceProfile,RegisteredAsset,ProxyReceipt} from "@openreel/core/lickety/types";
+import type {ResourceProfile,RegisteredAsset,ProxyReceipt,AnalysisSnapshot,PreparedAudio,TranscriptDocument,JobState} from "@openreel/core/lickety/types";
 export {};
 
 export interface OpenReelHardwareInfo {
@@ -176,6 +176,8 @@ declare global {
     openreel?: {
       platform: "desktop";
       lickety?: {
+        prepareAudio(args:{snapshot:AnalysisSnapshot;options:{mode:"mixed"|"isolated-stereo";participants?:{channel:1|2;participantId:string}[]};requestId:string}):Promise<PreparedAudio>;
+        getTranscription(jobId:string):Promise<{state:JobState;providerJobId?:string;transcript?:TranscriptDocument;error?:string}>;
         audioWindow(args:{requestId?:string;assetId:string;trackIndex:number;startMs:number;durationMs:number;sampleRate:1000|16000|48000;channels:1|2}):Promise<{channels:Float32Array[];sampleRate:number}>;
         resourceProfile():Promise<ResourceProfile>;
         registerFile(mediaId:string,file:Blob):Promise<RegisteredAsset>;

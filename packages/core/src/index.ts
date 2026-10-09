@@ -87,3 +87,6 @@ export type { JobState, ResourceProfile, AssetIdentity, RegisteredAsset, ProxyRe
 export { cloneProjectForWorkflow } from "./lickety/clone-project";
 
 export {bindNativeMediaSources,getNativeMediaSource,nativeVideoUrl} from "./media/native-media-bridge";
+
+export {createAnalysisSnapshot,fullEditRevision,revisionHash} from "./lickety/snapshot";
+export {normalizeAssemblyTranscript} from "./lickety/transcript";

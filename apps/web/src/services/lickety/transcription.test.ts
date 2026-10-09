@@ -1,0 +1,2 @@
+import {it,expect} from 'vitest';import {prepareAnalysisAudio} from './transcription';
+it('blocks preparation before native work if cancelled',async()=>{let calls=0;Object.assign(window,{openreel:{platform:'desktop',lickety:{prepareAudio:async()=>{calls++;return {};},cancelMedia:async()=>{}}}});const c=new AbortController();c.abort(new Error('cancelled'));await expect(prepareAnalysisAudio({} as never,{mode:'mixed'},c.signal)).rejects.toThrow(/cancelled/);expect(calls).toBe(0);});
