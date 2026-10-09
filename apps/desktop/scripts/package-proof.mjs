@@ -14,6 +14,46 @@ export async function sha256File(filePath) {
   return hash.digest("hex");
 }
 
+/** Hashes a canonical manifest of every path below a package root (directories, files, and symlinks). */
+export async function digestPackageTree(root) {
+  const entries = [];
+  const addTree = async (directory, relativeDirectory) => {
+    const names = (await fs.readdir(directory)).sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+    for (const name of names) {
+      const filePath = path.join(directory, name);
+      const relativePath = relativeDirectory ? `${relativeDirectory}/${name}` : name;
+      const stat = await fs.lstat(filePath);
+      const mode = stat.mode & 0o7777;
+      if (stat.isDirectory()) {
+        entries.push({ path: relativePath, type: "directory", mode });
+        await addTree(filePath, relativePath);
+      } else if (stat.isFile()) {
+        entries.push({ path: relativePath, type: "file", mode, size: stat.size, sha256: await sha256File(filePath) });
+      } else if (stat.isSymbolicLink()) {
+        entries.push({ path: relativePath, type: "symlink", target: await fs.readlink(filePath) });
+      } else {
+        throw new Error(`Unsupported special file in package tree: ${relativePath}`);
+      }
+    }
+  };
+
+  const rootStat = await fs.lstat(root);
+  if (!rootStat.isDirectory()) throw new Error("Package tree root must be a directory");
+  entries.push({ path: ".", type: "directory", mode: rootStat.mode & 0o7777 });
+  await addTree(root, "");
+  entries.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+  const fileCount = entries.filter((entry) => entry.type === "file").length;
+  const directoryCount = entries.filter((entry) => entry.type === "directory").length;
+  const symlinkCount = entries.filter((entry) => entry.type === "symlink").length;
+  return {
+    sha256: sha256Bytes(JSON.stringify(entries)),
+    entries,
+    fileCount,
+    directoryCount,
+    symlinkCount,
+  };
+}
+
 export function sha256Bytes(value) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -59,6 +99,26 @@ export async function assertPackagedFileMatchesCommit({ root, revision, relative
   await assertTrackedAssetMatchesCommit({ root, revision, relativePath, expectedSha256: sourceSha256 });
   if (await sha256File(packagedPath) !== sourceSha256) {
     throw new Error(`Packaged license differs from committed source: ${relativePath}`);
+  }
+}
+
+export async function assertPackagedAssetMatchesSha256({ packagedPath, expectedSha256, label }) {
+  const actualSha256 = await sha256File(packagedPath);
+  if (actualSha256 !== expectedSha256) {
+    throw new Error(`Packaged ${label ?? "asset"} differs from its source receipt`);
+  }
+  return actualSha256;
+}
+
+export const REQUIRED_ASAR_ENTRIES = [
+  "/dist/main/index.js",
+  "/dist/preload/index.js",
+  "/dist/preload/migration-reader.js",
+];
+
+export function assertRequiredAsarEntries(files) {
+  for (const required of REQUIRED_ASAR_ENTRIES) {
+    if (!files.includes(required)) throw new Error(`Missing packaged entry ${required}`);
   }
 }
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -9,10 +8,13 @@ import { createRequire } from "node:module";
 import {
   assertInspectorLicenseNotice,
   assertInspectorProof,
+  assertPackagedAssetMatchesSha256,
   assertNoPrivatePackagePaths,
   assertPackagedFileMatchesCommit,
+  assertRequiredAsarEntries,
   assertSourceReceipt,
   assertSourceTreeMatchesReceipt,
+  digestPackageTree,
   readGitHead,
   readGitSourceStatus,
   readInspectorProof,
@@ -32,14 +34,6 @@ export function assertArm64Architectures(architectures) {
 
 export function canPromote(evidence) {
   return evidence.signed === true && evidence.notarized === true && evidence.deviceAccepted === true;
-}
-
-async function* walk(root) {
-  for (const entry of await fs.readdir(root, { withFileTypes: true })) {
-    const file = path.join(root, entry.name);
-    if (entry.isDirectory()) yield* walk(file);
-    else if (entry.isFile()) yield file;
-  }
 }
 
 async function assertPackagedInspector(resources, sourceReceipt, teamId) {
@@ -107,6 +101,22 @@ export async function verifyLicketySplitPackage(appPath, expectedVersion, teamId
     }
   }
 
+  const iconFileValue = await field("CFBundleIconFile");
+  const iconFileName = path.basename(iconFileValue);
+  if (!iconFileName || iconFileName !== iconFileValue || path.extname(iconFileName).toLowerCase() !== ".icns") {
+    throw new Error("Package CFBundleIconFile must name an .icns resource inside Contents/Resources");
+  }
+  const packagedIconSha256 = await assertPackagedAssetMatchesSha256({
+    packagedPath: path.join(resources, iconFileName),
+    expectedSha256: sourceReceipt.originalIconSourceSha256,
+    label: "CFBundleIconFile",
+  });
+  const packagedRendererMarkSha256 = await assertPackagedAssetMatchesSha256({
+    packagedPath: path.join(resources, "renderer", "icons", "licketysplit-mark.png"),
+    expectedSha256: sourceReceipt.rendererMarkSourceSha256,
+    label: "renderer mark",
+  });
+
   const ffmpeg = path.join(resources, "bin", "darwin-arm64", "ffmpeg");
   await fs.access(ffmpeg);
   const manifest = JSON.parse(await fs.readFile(path.join(resources, "bin", "MANIFEST.json"), "utf8"));
@@ -145,19 +155,19 @@ export async function verifyLicketySplitPackage(appPath, expectedVersion, teamId
   const asar = appBuilder("@electron/asar");
   const archive = path.join(resources, "app.asar");
   const files = asar.listPackage(archive);
-  for (const required of ["/dist/main/index.js", "/dist/preload/index.js"]) {
-    if (!files.includes(required)) throw new Error(`Missing packaged entry ${required}`);
-  }
+  assertRequiredAsarEntries(files);
   assertNoPrivatePackagePaths(files);
 
   const native = [];
-  const packagedResources = [];
-  for await (const file of walk(contents)) {
-    const relative = path.relative(contents, file).replaceAll("\\", "/");
-    if (relative.toLowerCase().includes("managed-media/")) {
+  const packageTree = await digestPackageTree(contents);
+  const packagedResources = packageTree.entries.map((entry) => entry.path);
+  for (const entry of packageTree.entries) {
+    const relative = entry.path;
+    if (/(^|\/)managed-media(\/|$)/i.test(relative)) {
       throw new Error("Private data found in package: managed-media/");
     }
-    packagedResources.push(relative);
+    if (entry.type !== "file") continue;
+    const file = path.join(contents, relative);
     const result = await exec("/usr/bin/file", ["-b", file]);
     if (result.stdout.includes("Mach-O")) {
       if (teamId) {
@@ -167,21 +177,29 @@ export async function verifyLicketySplitPackage(appPath, expectedVersion, teamId
       }
       const architectures = (await exec("/usr/bin/lipo", ["-archs", file])).stdout.trim().split(/\s+/);
       assertArm64Architectures(architectures);
-      native.push({ file: relative, sha256: await sha256File(file) });
+      native.push({ file: relative, sha256: entry.sha256 });
     }
   }
   assertNoPrivatePackagePaths(packagedResources);
   if (!native.some((row) => row.file.startsWith("MacOS/"))) throw new Error("Missing app executable");
 
-  const archiveSha = await sha256File(archive);
-  const digest = createHash("sha256").update(JSON.stringify(native)).update(archiveSha).digest("hex");
   if (sourceRoot) await assertSourceTreeMatchesReceipt(sourceRoot, sourceReceipt, { version: expectedVersion });
   return {
     sourceCommit: sourceReceipt.sourceCommit,
     architecture: "arm64",
     appId,
     version,
-    sha256: digest,
+    // SHA-256 over the sorted Contents tree manifest: relative path, type,
+    // permission bits, size and content SHA for files, plus symlink targets.
+    sha256: packageTree.sha256,
+    packageTreeSha256: packageTree.sha256,
+    packageTreeDigestScope: "complete-Contents-tree-v1",
+    packageTreeManifestFormat: "JSON array sorted by relative POSIX path; file rows contain mode/size/SHA-256, directory rows mode, symlink rows target; timestamps are omitted",
+    packageTreeFileCount: packageTree.fileCount,
+    packageTreeDirectoryCount: packageTree.directoryCount,
+    packageTreeSymlinkCount: packageTree.symlinkCount,
+    packagedIconSha256,
+    packagedRendererMarkSha256,
     ffmpegSha256: ffmpegSha,
     ffmpegSourceSha256: sourceReceipt.ffmpegSourceSha256,
     ffprobeSha256: inspector.proof.binarySha256,

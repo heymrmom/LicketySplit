@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,10 +7,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   assertInspectorProof,
   assertInspectorLicenseNotice,
+  assertPackagedAssetMatchesSha256,
   assertNoPrivatePackagePaths,
+  assertRequiredAsarEntries,
   assertSourceTreeMatchesReceipt,
+  digestPackageTree,
   isForbiddenPrivatePackagePath,
   readGitHead,
+  REQUIRED_ASAR_ENTRIES,
   sha256Bytes,
 } from "../scripts/package-proof.mjs";
 // @ts-expect-error The source receipt writer is an executable ESM script.
@@ -126,6 +130,57 @@ describe("package source proof", () => {
 });
 
 describe("packaged private-file and inspector checks", () => {
+  it("requires the dedicated migration preload inside the packaged ASAR", () => {
+    expect(REQUIRED_ASAR_ENTRIES).toContain("/dist/preload/migration-reader.js");
+    expect(() => assertRequiredAsarEntries(REQUIRED_ASAR_ENTRIES)).not.toThrow();
+    expect(() => assertRequiredAsarEntries(REQUIRED_ASAR_ENTRIES.filter((entry) => !entry.includes("migration-reader"))))
+      .toThrow(/migration-reader/);
+  });
+
+  it("compares packaged icon and renderer files to receipt hashes", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "licketysplit-packaged-assets-"));
+    temporaryRoots.push(root);
+    const asset = path.join(root, "icon.icns");
+    const expected = Buffer.from("source icon bytes");
+    await writeFile(asset, expected);
+    await expect(assertPackagedAssetMatchesSha256({
+      packagedPath: asset,
+      expectedSha256: sha256Bytes(expected),
+      label: "CFBundleIconFile",
+    })).resolves.toBe(sha256Bytes(expected));
+    await writeFile(asset, "tampered icon bytes");
+    await expect(assertPackagedAssetMatchesSha256({
+      packagedPath: asset,
+      expectedSha256: sha256Bytes(expected),
+      label: "CFBundleIconFile",
+    })).rejects.toThrow(/CFBundleIconFile/);
+  });
+
+  it("digests every sorted package path, file byte, mode, and symlink target deterministically", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "licketysplit-package-tree-"));
+    temporaryRoots.push(root);
+    await mkdir(path.join(root, "Resources"));
+    await writeFile(path.join(root, "z-last.txt"), "last");
+    await writeFile(path.join(root, "Resources", "icon.icns"), "icon");
+    await chmod(path.join(root, "Resources", "icon.icns"), 0o751);
+    await symlink("Resources/icon.icns", path.join(root, "icon-link.icns"));
+
+    const first = await digestPackageTree(root);
+    const second = await digestPackageTree(root);
+    expect(second.sha256).toBe(first.sha256);
+    expect(first.entries.map((entry) => entry.path)).toEqual([
+      ".", "Resources", "Resources/icon.icns", "icon-link.icns", "z-last.txt",
+    ]);
+    expect(first.entries.find((entry) => entry.path === "Resources/icon.icns")).toMatchObject({ type: "file", mode: 0o751 });
+    expect(first.entries.find((entry) => entry.path === "icon-link.icns")).toMatchObject({ type: "symlink", target: "Resources/icon.icns" });
+    expect(first).toMatchObject({ fileCount: 2, directoryCount: 2, symlinkCount: 1 });
+
+    await chmod(path.join(root, "Resources", "icon.icns"), 0o644);
+    expect((await digestPackageTree(root)).sha256).not.toBe(first.sha256);
+    await writeFile(path.join(root, "z-last.txt"), "changed");
+    expect((await digestPackageTree(root)).sha256).not.toBe(first.sha256);
+  });
+
   it("excludes old and new private key/project file names while retaining the named license exception", () => {
     const privatePaths = [
       "Contents/Resources/openreel-keys.json",
