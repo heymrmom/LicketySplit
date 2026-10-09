@@ -1718,6 +1718,10 @@ export const useProjectStore = create<ProjectState>()(
         const previousProject = get().project;
         const nextProject = createEmptyProject(name, settings);
 
+        // New project IDs have no file binding. Clear the active project's
+        // native/browser handle before the next Save can target the prior file.
+        projectManager.activateProjectFile(nextProject.id);
+
         syncProjectEffectsBridge(nextProject, previousProject);
         syncProjectTransitionsBridge(nextProject, previousProject);
 

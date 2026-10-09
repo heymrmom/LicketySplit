@@ -322,9 +322,12 @@ class ProjectManager {
   }
 
   async saveProject(project: Project): Promise<boolean> {
-    if (this.currentFileHandle) {
-      return this.saveToFileHandle(project, this.currentFileHandle);
-    }
+    // A single active handle is only a convenience for UI/readback. The save
+    // destination belongs to the project being saved; a project switch must
+    // never route a new project's Save command into the previous project's file.
+    const fileHandle = this.projectFileHandles.get(project.id) ?? null;
+    this.currentFileHandle = fileHandle;
+    if (fileHandle) return this.saveToFileHandle(project, fileHandle);
     return this.saveProjectAs(project);
   }
 
@@ -726,7 +729,7 @@ class ProjectManager {
   hasUnsavedChanges(project: Project): boolean {
     const projectWithSavedAt = project as Project & { lastSavedAt?: number };
     return (
-      !this.currentFileHandle ||
+      !this.projectFileHandles.has(project.id) ||
       project.modifiedAt > (projectWithSavedAt.lastSavedAt ?? 0)
     );
   }
