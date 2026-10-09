@@ -17,6 +17,18 @@ describe("buildMenuTemplate", () => {
     const item = file?.submenu?.find((s) => s.label === "New Project");
     expect(item?.accelerator).toBe("CmdOrCtrl+N");
   });
+  it("leaves customizable editor shortcuts to the renderer while keeping native New and Open", () => {
+    const file = buildMenuTemplate("darwin").find((m) => m.label === "File");
+    expect(file?.submenu?.find((item) => item.actionId === "newProject")?.accelerator).toBe("CmdOrCtrl+N");
+    expect(file?.submenu?.find((item) => item.actionId === "open")?.accelerator).toBe("CmdOrCtrl+O");
+    expect(file?.submenu?.find((item) => item.actionId === "export")?.accelerator).toBeUndefined();
+    const edit = buildMenuTemplate("darwin").find((m) => m.label === "Edit");
+    for (const actionId of ["undo", "redo", "cut", "copy", "paste"]) {
+      const item = edit?.submenu?.find((entry) => entry.actionId === actionId);
+      expect(item?.accelerator).toBeUndefined();
+      expect(item?.role).toBeUndefined();
+    }
+  });
   it("exposes settings with the platform shortcut", () => {
     const macApp = buildMenuTemplate("darwin")[0];
     expect(macApp.submenu?.find((item) => item.actionId === "settings")?.accelerator)

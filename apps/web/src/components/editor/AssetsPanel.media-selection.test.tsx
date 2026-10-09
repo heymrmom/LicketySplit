@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MediaItem } from "@openreel/core";
 import { AssetsPanel } from "./AssetsPanel";
@@ -56,6 +56,23 @@ describe("asset selection and insertion", () => {
     expect(precedingBlocks()).toEqual(beforeSelection);
     expect(mediaGallery.compareDocumentPosition(nextTools) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(view.getByRole("img", { name: media[1].name })).toBe(second);
+  });
+
+  it("labels timeline media even when its source track is hidden and muted, and updates after removal", () => {
+    const project = useProjectStore.getState().project;
+    const track = {
+      id: "hidden-muted-source",
+      type: "video" as const,
+      name: "Hidden camera",
+      clips: [{ id: "source-clip", mediaId: media[0].id, trackId: "hidden-muted-source", startTime: 0, duration: 5, inPoint: 0, outPoint: 5, effects: [], audioEffects: [], transform: { position: { x: 0, y: 0 }, scale: { x: 1, y: 1 }, rotation: 0, anchor: { x: 0, y: 0 }, opacity: 1 }, volume: 0, keyframes: [] }],
+      transitions: [], locked: false, hidden: true, muted: true, solo: false,
+    };
+    act(() => useProjectStore.setState({ project: { ...project, timeline: { ...project.timeline, tracks: [track] } } }));
+    const view = render(<AssetsPanel />);
+
+    expect(view.getAllByLabelText("Used on timeline").length).toBe(1);
+    act(() => useProjectStore.setState({ project: { ...project, timeline: { ...project.timeline, tracks: [] } } }));
+    expect(view.queryByLabelText("Used on timeline")).toBeNull();
   });
 });
 it('reports rejected filenames while continuing the selected batch',async()=>{const importMedia=vi.spyOn(useProjectStore.getState(),'importMedia').mockResolvedValueOnce({success:false,error:{code:'DECODE_ERROR',message:'Original unchanged; conversion needs approval'}}).mockResolvedValueOnce({success:true});const view=render(<AssetsPanel/>);fireEvent.change(view.container.querySelector('input[aria-label="Import media"]')!,{target:{files:[new File(['x'],'unsupported.mov',{type:'video/quicktime'}),new File(['y'],'ready.mp4',{type:'video/mp4'})]}});await vi.waitFor(()=>expect(importMedia).toHaveBeenCalledTimes(2));await vi.waitFor(()=>expect(view.getByRole('alert').textContent).toContain('unsupported.mov'));expect(view.getByRole('alert').textContent).toContain('conversion needs approval');});

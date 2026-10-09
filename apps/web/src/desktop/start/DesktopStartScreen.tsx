@@ -42,6 +42,7 @@ export function DesktopStartScreen(): JSX.Element {
   const [recents, setRecents] = useState<RecentEntry[]>([]);
   const [loadingRecents, setLoadingRecents] = useState<boolean>(true);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [startMode, setStartMode] = useState<"manual" | "podcast" | "narrative">("manual");
   const setDesktopPage = useUIStore((state) => state.setDesktopPage);
 
   useEffect(() => {
@@ -74,9 +75,14 @@ export function DesktopStartScreen(): JSX.Element {
   const handleStartProject = useCallback((format: NewProjectFormat) => {
     setDesktopPage("edit");
     startNewProject(format);
-  }, [setDesktopPage]);
+    if (startMode === "podcast") {
+      window.dispatchEvent(new CustomEvent("openreel:podcast:open"));
+    } else if (startMode === "narrative") {
+      useUIStore.getState().setInspectorActiveTab("lickety-narrative");
+    }
+  }, [setDesktopPage, startMode]);
 
-  const formatModeLabel = "Video Editor";
+  const formatModeLabel = startMode === "podcast" ? "Podcast preparation" : startMode === "narrative" ? "Narrative project" : "Video Editor";
 
   return (
     <div className="h-full overflow-y-auto bg-bg text-fg">
@@ -89,6 +95,16 @@ export function DesktopStartScreen(): JSX.Element {
           <Text type="supporting" display="block" className="mt-1">
             Choose a format. You can change this later.
           </Text>
+          <fieldset className="mt-5">
+            <legend className="mb-2 text-sm font-medium text-fg-2">How would you like to start?</legend>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Project starting workflow">
+              {([
+                ["manual", "Blank edit", "Add and arrange media yourself."],
+                ["podcast", "Podcast preparation", "Group recordings and review sync."],
+                ["narrative", "Narrative", "Open the existing transcript-based panel."],
+              ] as const).map(([value, label, description]) => <button key={value} type="button" aria-pressed={startMode === value} onClick={() => setStartMode(value)} className={`min-h-10 rounded border px-3 py-2 text-left text-sm ${startMode === value ? "border-accent bg-accent-soft text-fg" : "border-border bg-bg-1 text-fg-2"}`}><span className="block font-medium">{label}</span><span className="mt-0.5 block text-xs">{description}</span></button>)}
+            </div>
+          </fieldset>
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {DESKTOP_FORMATS.map((format) => {
               const FormatIcon = FORMAT_ICONS[format.id] ?? Film;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import type React from "react";
 import { Button } from "@astryxdesign/core/Button";
 
@@ -21,6 +21,10 @@ vi.mock("./editor/EditorBootstrapGate", () => ({
 
 vi.mock("./pages/EditPage", () => ({
   EditPage: () => null,
+}));
+
+vi.mock("./podcast/PodcastSetupDialog", () => ({
+  PodcastSetupDialog: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div role="dialog" aria-label="Podcast preparation test dialog"><input aria-label="Podcast dialog text field" /></div> : null,
 }));
 
 vi.mock("./editor/DesktopExportButton", () => ({
@@ -55,6 +59,7 @@ beforeEach(() => {
   };
 });
 afterEach(() => {
+  delete (mockedUseProjectStore as unknown as { getState?: unknown }).getState;
   delete (window as unknown as { openreel?: unknown }).openreel;
   vi.clearAllMocks();
 });
@@ -90,6 +95,59 @@ describe("DesktopApp", () => {
     const motionView = render(<DesktopApp />);
     expect(motionView.getByRole("button", { name: "Video Export" })).toBeTruthy();
     expect(motionView.getByRole("button", { name: "AI Editor" })).toBeTruthy();
+  });
+
+  it("mounts shortcut help only for an open project and opens it from the title bar", () => {
+    mockHasProject(false);
+    const start = render(<DesktopApp />);
+    expect(start.queryByRole("button", { name: "Keyboard shortcuts" })).toBeNull();
+    start.unmount();
+
+    mockHasProject(true);
+    const editor = render(<DesktopApp />);
+    fireEvent.click(editor.getByRole("button", { name: "Keyboard shortcuts" }));
+    expect(editor.getByText("Keyboard Shortcuts")).toBeTruthy();
+  });
+
+  it("opens podcast preparation from the existing-project launch event", () => {
+    mockHasProject(true);
+    const editor = render(<DesktopApp />);
+    act(() => window.dispatchEvent(new CustomEvent("openreel:podcast:open")));
+    expect(editor.getByRole("dialog", { name: "Podcast preparation test dialog" })).toBeTruthy();
+  });
+
+  it("blocks native editor and file commands behind a dialog but preserves focused text editing", async () => {
+    const { projectManager } = await import("../services/project-manager");
+    const openProject = vi.spyOn(projectManager, "openProject").mockResolvedValue(null);
+    const undo = vi.fn(); const redo = vi.fn(); const loadProject = vi.fn();
+    Object.assign(mockedUseProjectStore, { getState: () => ({ hasOpenProject: true, undo, redo, loadProject }) });
+    let menuAction: ((id: string) => void) | undefined;
+    Object.assign(window.openreel!, { onMenuAction: (callback: (id: string) => void) => { menuAction = callback; return () => { menuAction = undefined; }; } });
+    const execCommand = vi.fn();
+    const originalExecCommand = Object.getOwnPropertyDescriptor(document, "execCommand");
+    Object.defineProperty(document, "execCommand", { configurable: true, value: execCommand });
+    const exportEvent = vi.fn();
+    window.addEventListener("openreel:menu:export", exportEvent);
+    mockHasProject(true);
+    const view = render(<DesktopApp />);
+    act(() => window.dispatchEvent(new CustomEvent("openreel:podcast:open")));
+    const input = view.getByRole("textbox", { name: "Podcast dialog text field" });
+    input.focus();
+    menuAction?.("cut");
+    expect(execCommand).toHaveBeenCalledWith("cut");
+
+    input.blur();
+    for (const action of ["undo", "redo", "cut", "open", "newProject", "export"]) menuAction?.(action);
+    expect(undo).not.toHaveBeenCalled();
+    expect(redo).not.toHaveBeenCalled();
+    expect(openProject).not.toHaveBeenCalled();
+    expect(exportEvent).not.toHaveBeenCalled();
+    expect(view.queryByRole("dialog", { name: "Start a new project" })).toBeNull();
+    window.removeEventListener("openreel:menu:export", exportEvent);
+    if (originalExecCommand) Object.defineProperty(document, "execCommand", originalExecCommand);
+    else delete (document as unknown as { execCommand?: unknown }).execCommand;
+    openProject.mockRestore();
+    view.unmount();
   });
 
   it("toggles the AI Editor side panel from the desktop title bar", () => {

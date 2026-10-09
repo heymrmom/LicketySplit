@@ -36,6 +36,7 @@ import { useKieAIStore } from "../../stores/kieai-store";
 import { StickerPickerPanel } from "./inspector/StickerPickerPanel";
 import { insertTimelineOverlay } from "../../stores/project/insert-timeline-overlay";
 import { PreviewProxyBadge, PreviewProxyControls } from "./PreviewProxyControls";
+import { getTimelineMediaIds, readPodcastWizardCheckpoint } from "../../desktop/podcast/podcast-ui-model";
 
 const formatDuration = (seconds: number): string => {
   const mins = Math.floor(seconds / 60);
@@ -252,6 +253,7 @@ const MediaThumbnail: React.FC<{
   onAddToTimeline: () => void;
   onKieAI?: () => void;
   onRetryKieAI?: () => void;
+  isUsedOnTimeline?: boolean;
 }> = ({
   item,
   isSelected,
@@ -263,6 +265,7 @@ const MediaThumbnail: React.FC<{
   onAddToTimeline,
   onKieAI,
   onRetryKieAI,
+  isUsedOnTimeline = false,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -421,6 +424,8 @@ const MediaThumbnail: React.FC<{
           </div>
         </div>
 
+        {isUsedOnTimeline && <span aria-label="Used on timeline" title="Used on timeline" className="shrink-0 rounded border border-accent/30 px-1.5 py-0.5 text-[9px] text-accent">Used</span>}
+
         {/* Hover actions */}
         {isHovered && (
           <div className="flex items-center gap-1 flex-shrink-0">
@@ -528,6 +533,7 @@ const MediaThumbnail: React.FC<{
             ))}
           </div>
         )}
+        {isUsedOnTimeline && <span aria-label="Used on timeline" title="Used on timeline" className="absolute left-1 top-1 z-10 rounded bg-bg/90 px-1.5 py-0.5 text-[9px] text-accent">Used on timeline</span>}
 
         {/* KieAI Error Badge */}
         {item.kieaiError && (
@@ -674,6 +680,8 @@ export const AssetsPanel: React.FC = () => {
     setKieAIItemState,
   } = useProjectStore();
   const mediaItems = project.mediaLibrary.items;
+  const timelineMediaIds = getTimelineMediaIds(project);
+  const hasPodcastDraft = Boolean(readPodcastWizardCheckpoint(project)?.setupId || project.lickety?.podcastSetup?.setupId);
 
   // KieAI store
   const { retryTask } = useKieAIStore();
@@ -1103,12 +1111,10 @@ export const AssetsPanel: React.FC = () => {
               onDragLeave={handleDragLeave}
             >
               <div className="px-4 pb-[18px] relative">
-                {filteredItems.length > 0 && (
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[13px] font-semibold text-fg-2">Project Media</span>
-                    <span className="text-[12px] font-medium text-fg-muted">{filteredItems.length}</span>
-                  </div>
-                )}
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <span className="text-[13px] font-semibold text-fg-2">Project Media <span className="text-[12px] font-medium text-fg-muted">{filteredItems.length}</span></span>
+                  <button type="button" aria-label={hasPodcastDraft ? "Resume podcast setup" : "Open podcast setup"} onClick={() => window.dispatchEvent(new CustomEvent("openreel:podcast:open"))} className="min-h-8 shrink-0 rounded border border-border px-2 text-[11px] text-fg-2 hover:border-accent/50 hover:text-accent">{hasPodcastDraft ? "Resume podcast setup" : "Podcast setup"}</button>
+                </div>
                 {filteredItems.length === 0 ? (
                   <EmptyState onImport={triggerFileInput} />
                 ) : (
@@ -1117,6 +1123,7 @@ export const AssetsPanel: React.FC = () => {
                       <MediaThumbnail
                         key={item.id}
                         item={item}
+                        isUsedOnTimeline={timelineMediaIds.has(item.id)}
                         isSelected={isSelected(item.id)}
                         viewMode="large"
                         onSelect={() => handleSelectItem(item.id)}

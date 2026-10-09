@@ -9,6 +9,7 @@ import { deriveSourceExportMatch } from "../../services/export-source-match";
 import { useExportRunner, extForFormat, exportFilename } from "../../services/export-runner";
 import { NativeFFmpegBackend } from "../../services/native-ffmpeg-backend";
 import { Icon } from "@/icons/Icon";
+import { useUIStore } from "../../stores/ui-store";
 
 const NO_DRAG = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
 
@@ -42,6 +43,8 @@ function shouldUseWebCodecs(settings: VideoExportSettings): boolean {
 
 export function DesktopExportButton(): JSX.Element {
   const project = useProjectStore((state) => state.project);
+  const exportRequested = useUIStore((state) => state.activeModal === "export");
+  const closeModal = useUIStore((state) => state.closeModal);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const {
@@ -60,6 +63,12 @@ export function DesktopExportButton(): JSX.Element {
     window.addEventListener("openreel:menu:export", open);
     return () => window.removeEventListener("openreel:menu:export", open);
   }, []);
+
+  useEffect(() => {
+    if (!exportRequested) return;
+    setIsDialogOpen(true);
+    closeModal();
+  }, [exportRequested, closeModal]);
 
   const handleExport = useCallback(
     async (settings: VideoExportSettings) => {
