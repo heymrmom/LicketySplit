@@ -131,7 +131,7 @@ function createWindow(): void {
     titleBarStyle: isMac ? "hiddenInset" : "hidden",
     titleBarOverlay: false,
     trafficLightPosition: isMac ? { x: 16, y: 14 } : undefined,
-    icon: isMac ? undefined : path.join(__dirname, "../../build/icon.png"),
+    icon: isMac ? undefined : path.join(rendererRoot(), "icons", "licketysplit-mark.png"),
     vibrancy: isMac ? "under-window" : undefined,
     visualEffectState: isMac ? "active" : undefined,
     webPreferences: {

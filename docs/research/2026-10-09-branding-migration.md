@@ -10,7 +10,7 @@ The origin migration uses the restricted top-level legacy reader and sequential 
 
 The protected key file is copied byte-for-byte from `openreel-keys.json` to `licketysplit-keys.json`; destination-wins behavior is verified before inspecting a stale source. The existing crash reporter logs locally and sends nowhere unless `LICKETYSPLIT_CRASH_ENDPOINT` explicitly names a valid HTTP(S) endpoint. Its regression test keeps `OPENREEL_CRASH_ENDPOINT` as an old, ignored fixture value.
 
-The exact original transparent mark and original ICNS are copied without transformation. SHA-256 values: PNG `fd61f7dd4e2958d63be51ccc76c766b918a3a1e4731e39056dc4bf2d5e25e2f4`; ICNS `34fafa461b9ad1fc5bfbe4d182d0421733791e6239651d6d39322810741ae202`. Active light, dark, and desktop themes now use the LicketySplit purple palette; white text uses a darker purple control fill. The media panel uses a compact accessible “Used on timeline” icon and responsive card sizing. The exact local output `apps/desktop/release-takeover-alpha2/` is ignored.
+The exact original transparent mark and original ICNS are copied without transformation. SHA-256 values: PNG `fd61f7dd4e2958d63be51ccc76c766b918a3a1e4731e39056dc4bf2d5e25e2f4`; ICNS `34fafa461b9ad1fc5bfbe4d182d0421733791e6239651d6d39322810741ae202`. Active light, dark, and desktop themes now use the LicketySplit purple palette; white text uses a darker purple control fill. The media panel uses a compact accessible “Used on timeline” icon and responsive card sizing. The non-macOS runtime window icon also resolves that original PNG from the renderer resources; macOS packaging uses the original ICNS. The unused inherited favicon SVG, generic favicon/PWA PNGs and desktop build icon were removed after a reference scan, along with stale Vite rewrite rules. Their history is preserved in Git. The exact local output `apps/desktop/release-takeover-alpha2/` is ignored.
 
 ## Migration verification
 
@@ -32,7 +32,11 @@ Commands used the pinned local Node 22/pnpm 11.7 toolchain.
 - Web, desktop, and core TypeScript checks each passed; the coordinator also reports the complete integrated workspace typecheck passed after the final identity changes.
 - `git diff --check` passed after the final source edits then present. Manifest JSON parsed successfully; both approved asset hashes match.
 
-The origin-copy runtime evidence above belongs to the `540e9fd` development checkpoint. The complete renamed namespace and updated theme still require the subsequent integrated rebuild and packaged checks. Earlier package-proof unit tests and viewport evidence do not establish that final runtime result.
+The initial origin-copy evidence above belongs to the `540e9fd` development checkpoint. The integrated `97d066b` build subsequently verified the renamed namespace in both existing isolated profiles. All five hour-profile database schemas/counts and three stored preferences matched their preserved old-name sources. The rich profile matched its three existing mapped databases and settings/custom bindings; its 2 MiB Blob hash, usable nonextractable key, encrypted browser vault under `licketysplit-secure`, and native key retrieval all passed again. Both protected-key files retained the same SHA-256 and mode 0600. The active bridge is `window.licketysplit`; `window.openreel` is absent.
+
+Normal controls opened a blank project in the rich profile. Its migrated custom `Cmd+9` binding appeared in the Fit Timeline tooltip/help and toggled the actual overview control from “Restore previous zoom” to “Full Extent Zoom.” The preset label is LicketySplit Default. A first probe correctly triggered the toggle but timed out because its fixed accessible-name lookup expected the old label; the corrected receipt records the changed control explicitly.
+
+Receipts are in `verification/namespace-verification-1791583614050/` and `verification/migration-retry-1791583691999/`, relative to the ignored takeover evidence directory. The development MCP shim also initialized as `licketysplit` version `0.1.0-alpha.2`, exposed 311 tools, used a mode-0600 endpoint, and successfully read the real reopened hour project (8 media, 9 tracks, 533 clip nodes, duration 3602.027995 seconds). Packaged runtime proof remains separate.
 
 ## Integrated source checks
 
@@ -42,6 +46,7 @@ Every workspace TypeScript check passed. All configured lint workspaces passed, 
 
 ## Remaining old identifiers and explicit exceptions
 
+- The service worker recognizes old `openreel-*` cache names only when cleaning regenerable application caches; it does not rename or delete project databases.
 - `app://openreel` is the read-only migration source origin. Old IndexedDB/localStorage names appear only in `apps/web/src/desktop/migration/namespace.ts` and legacy fixtures; current consumers use the mapped LicketySplit names. `OPENREEL_CRASH_ENDPOINT` appears only in the negative compatibility test.
 - The previous `.openreel-build` GPU-cache marker is read without deleting or changing it; the current marker is `.licketysplit-build`.
 - The old native key filename `openreel-keys.json`, secure-vault verifier `openreel-verify-v1`, old `.oreel` project suffix, and four old `openreel-*/v1` specs are read/migration compatibility values. `.orma` remains the stable interchange extension.

@@ -12,9 +12,7 @@ function desktopHtmlPlugin() {
     transformIndexHtml(html: string) {
       if (!isDesktop) return html;
       let out = html
-        .replace(/href="\/favicon\.svg"/g, 'href="./favicon.svg"')
-        .replace(/href="\/manifest\.json"/g, 'href="./manifest.json"')
-        .replace(/href="\/icons\/icon-192\.png"/g, 'href="./icons/icon-192.png"');
+        .replace(/href="\/manifest\.json"/g, 'href="./manifest.json"');
       out = out.replace(
         /<link rel="preconnect"[^>]*>\s*/g,
         "",
