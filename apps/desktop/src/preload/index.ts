@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { CHANNELS } from "../shared/channels";
 import type { McpBridgeRequest } from "../shared/mcp";
+import type {
+  PodcastAnalyzeRequest, PodcastApprovalRequest, PodcastBridge, PodcastCancelRequest, PodcastInspectRequest,
+  PodcastProgressEvent, PodcastReviseRequest, PodcastSetupRequest, PodcastUpdateRequest, PodcastWaveformRequest,
+} from "../../../../packages/core/src/lickety/podcast-types";
 
 contextBridge.exposeInMainWorld("openreel", {
   platform: "desktop",
@@ -21,10 +25,25 @@ contextBridge.exposeInMainWorld("openreel", {
     registerPath: (mediaId: string, path: string) => ipcRenderer.invoke(CHANNELS.licketyRegisterAsset, {mediaId,path,managed:true}),
     findAsset: (mediaId: string) => ipcRenderer.invoke(CHANNELS.licketyFindAsset, {mediaId}),
     resolve: (assetId: string, purpose: string) => ipcRenderer.invoke(CHANNELS.licketyResolve, {assetId,purpose}),
-    ensureAudioStream: (assetId:string,trackIndex:number) => ipcRenderer.invoke(CHANNELS.licketyEnsureAudioStream,{assetId,trackIndex}),
+    ensureAudioStream: (assetId:string,trackIndex:number,sourceChannelIndex?:number) => ipcRenderer.invoke(CHANNELS.licketyEnsureAudioStream,{assetId,trackIndex,sourceChannelIndex}),
     ensureProxy: (assetId: string) => ipcRenderer.invoke(CHANNELS.licketyEnsureProxy, {assetId}),
     cancelMedia: (assetId: string) => ipcRenderer.invoke(CHANNELS.licketyCancelMedia, {assetId}),
   },
+  podcast: {
+    inspect: (args: PodcastInspectRequest) => ipcRenderer.invoke(CHANNELS.podcastInspect, args),
+    revise: (args: PodcastReviseRequest) => ipcRenderer.invoke(CHANNELS.podcastRevise, args),
+    analyze: (args: PodcastAnalyzeRequest) => ipcRenderer.invoke(CHANNELS.podcastAnalyze, args),
+    update: (args: PodcastUpdateRequest) => ipcRenderer.invoke(CHANNELS.podcastUpdate, args),
+    get: (args: PodcastSetupRequest) => ipcRenderer.invoke(CHANNELS.podcastGet, args),
+    getWaveform: (args: PodcastWaveformRequest) => ipcRenderer.invoke(CHANNELS.podcastWaveform, args),
+    cancel: (args: PodcastCancelRequest) => ipcRenderer.invoke(CHANNELS.podcastCancel, args),
+    approve: (args: PodcastApprovalRequest) => ipcRenderer.invoke(CHANNELS.podcastApprove, args),
+    onProgress: (listener: (event: PodcastProgressEvent) => void) => {
+      const handler = (_event: unknown, payload: PodcastProgressEvent) => listener(payload);
+      ipcRenderer.on(CHANNELS.podcastProgress, handler);
+      return () => ipcRenderer.removeListener(CHANNELS.podcastProgress, handler);
+    },
+  } satisfies PodcastBridge,
   publicOrigin: "https://app.openreel.video",
   probeHardware: () => ipcRenderer.invoke(CHANNELS.probeHardware, undefined),
   onMenuAction: (cb: (id: string) => void) => {

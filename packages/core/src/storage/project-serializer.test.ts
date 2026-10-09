@@ -18,12 +18,14 @@ import type {
 import {
   ProjectSerializer,
   SCHEMA_VERSION,
+  assertReaderCompatibility,
   normalizeMotionComposition,
   normalizeProjectCreationFields,
   normalizeProjectMotionFields,
 } from "./project-serializer";
 import { createCreationScene, createEmptyCreationState } from "../creation";
 import { UNIVERSAL_TRACKS_CAPABILITY } from "../timeline/timeline-items";
+import { makeWorkflowFixture } from "../lickety/test-fixtures";
 
 const makeVideoLayer = (
   overrides: Partial<MotionVideoLayer> = {},
@@ -270,6 +272,45 @@ describe("normalizeProjectCreationFields", () => {
 });
 
 describe("ProjectSerializer round-trip", () => {
+  it("requires reader 1.4 for selected source channels and segmented camera angles, then round-trips them", () => {
+    const serializer = new ProjectSerializer(new MemoryStorageEngine());
+    const fixture = makeWorkflowFixture();
+    const clip = { ...fixture.timeline.tracks[1]!.clips[0]!, sourceChannelIndex: 1 };
+    const project: Project = {
+      ...fixture,
+      timeline: { ...fixture.timeline, tracks: fixture.timeline.tracks.map((track, index) => index === 1 ? { ...track, clips: [clip] } : track) },
+      multicamGroups: [{
+        id: "podcast-group", name: "Episode",
+        angles: [{
+          id: "angle-main", name: "Main", clipId: "clip-source", trackId: "source-main", offset: 0,
+          color: "#ef4444", isActive: true,
+          sourceSegments: [{ mediaId: "cam-a", clipId: "clip-source", trackId: "source-main", sourceStartSeconds: 0, sourceEndSeconds: 20, episodeMapping: { scale: 1, offsetSeconds: 0 } }],
+        }],
+        activeAngleId: "angle-main", syncPoint: 0, duration: 20, createdAt: 1,
+      }],
+    };
+    const json = serializer.exportToJson(project);
+    const file = JSON.parse(json) as { version: string; minimumReaderVersion?: string; capabilities?: string[] };
+    const imported = serializer.importFromJson(json);
+
+    expect(SCHEMA_VERSION).toBe("1.4.0");
+    expect(file).toMatchObject({ version: "1.4.0", minimumReaderVersion: "1.4.0" });
+    expect(file.capabilities).toContain("licketysplit-podcast-assembly-v1");
+    expect(imported.timeline.tracks[1]?.clips[0]?.sourceChannelIndex).toBe(1);
+    expect(imported.multicamGroups?.[0]?.angles[0]?.sourceSegments?.[0]?.mediaId).toBe("cam-a");
+    expect(() => assertReaderCompatibility({ version: "1.3.0", minimumReaderVersion: "1.4.0", project }, "1.3.0")).toThrow(/requires OpenReel project reader 1\.4\.0 or newer/);
+  });
+
+  it("keeps the 1.3 minimum for older plain and workflow projects", () => {
+    const serializer = new ProjectSerializer(new MemoryStorageEngine());
+    const workflow = makeProject({ lickety: { schemaVersion: 1 } });
+    const plainFile = JSON.parse(serializer.exportToJson(makeProject())) as { version: string; minimumReaderVersion?: string };
+    const workflowFile = JSON.parse(serializer.exportToJson(workflow)) as { version: string; minimumReaderVersion?: string };
+    expect(plainFile.version).toBe("1.4.0");
+    expect(plainFile.minimumReaderVersion).toBeUndefined();
+    expect(workflowFile.minimumReaderVersion).toBe("1.3.0");
+  });
+
   it("writes the universal-track reader requirement and preserves it", () => {
     const serializer = new ProjectSerializer(new MemoryStorageEngine());
     const project = makeProject({

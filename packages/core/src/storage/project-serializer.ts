@@ -84,7 +84,8 @@ export interface ProjectFile {
   readonly project: Project;
 }
 
-export const SCHEMA_VERSION = "1.3.0";
+export const SCHEMA_VERSION = "1.4.0";
+export const PODCAST_ASSEMBLY_CAPABILITY = "licketysplit-podcast-assembly-v1";
 
 function compareVersions(left: string, right: string): number {
   const parse = (value: string): number[] =>
@@ -105,23 +106,34 @@ function getProjectFileCompatibility(project: Project): Pick<
   ProjectFile,
   "minimumReaderVersion" | "capabilities"
 > {
-  const capabilities = [...new Set([...(project.capabilities ?? []), ...(project.lickety ? ["licketysplit-workflows-v1"] : [])])];
+  const hasPodcastFeatures = !!project.lickety?.podcastSetup || !!project.lickety?.podcastAssembly ||
+    project.timeline.tracks.some((track) => track.clips.some((clip) => clip.sourceChannelIndex !== undefined || !!clip.metadata?.podcast)) ||
+    project.multicamGroups?.some((group) => group.angles.some((angle) => !!angle.sourceSegments?.length)) === true;
+  const capabilities = [...new Set([
+    ...(project.capabilities ?? []),
+    ...(project.lickety ? ["licketysplit-workflows-v1"] : []),
+    ...(hasPodcastFeatures ? [PODCAST_ASSEMBLY_CAPABILITY] : []),
+  ])];
+  const requiredReaderVersion = hasPodcastFeatures ? "1.4.0" : project.lickety ? "1.3.0" : projectUsesUniversalTracks(project) ? UNIVERSAL_TRACKS_MIN_READER_VERSION : undefined;
+  const minimumReaderVersion = [project.minimumReaderVersion, requiredReaderVersion]
+    .filter((version): version is string => !!version)
+    .reduce<string | undefined>((maximum, version) => !maximum || compareVersions(version, maximum) > 0 ? version : maximum, undefined);
   return {
-    minimumReaderVersion: project.lickety ? "1.3.0" : projectUsesUniversalTracks(project)
-      ? UNIVERSAL_TRACKS_MIN_READER_VERSION
-      : project.minimumReaderVersion,
+    minimumReaderVersion: minimumReaderVersion || undefined,
     capabilities: capabilities.length > 0 ? capabilities : undefined,
   };
 }
 
-export function assertReaderCompatibility(projectFile: ProjectFile): void {
-  const minimumReaderVersion = projectFile.minimumReaderVersion ?? projectFile.project?.minimumReaderVersion;
+export function assertReaderCompatibility(projectFile: ProjectFile, readerVersion = SCHEMA_VERSION): void {
+  const minimumReaderVersion = [projectFile.minimumReaderVersion, projectFile.project?.minimumReaderVersion]
+    .filter((version): version is string => !!version)
+    .reduce<string | undefined>((maximum, version) => !maximum || compareVersions(version, maximum) > 0 ? version : maximum, undefined);
   if (
     minimumReaderVersion &&
-    compareVersions(minimumReaderVersion, SCHEMA_VERSION) > 0
+    compareVersions(minimumReaderVersion, readerVersion) > 0
   ) {
     throw new Error(
-      `This project requires OpenReel project reader ${minimumReaderVersion} or newer. Current reader: ${SCHEMA_VERSION}.`,
+      `This project requires OpenReel project reader ${minimumReaderVersion} or newer. Current reader: ${readerVersion}.`,
     );
   }
 }

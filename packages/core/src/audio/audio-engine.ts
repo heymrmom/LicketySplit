@@ -127,6 +127,7 @@ export class AudioEngine {
   private config: AudioEngineConfig;
   private trackNodes: Map<string, AudioTrackNodes> = new Map();
   private mediaBuffers: Map<string, AudioBuffer> = new Map();
+  private selectedAudioChannels = new WeakMap<AudioBuffer, number>();
   private noAudioMedia: Set<string> = new Set();
   private segmentedAudioDecoders: Map<string, SegmentedAudioDecoder> = new Map();
   private effectsEngine: AudioEffectsEngine | null = null;
@@ -348,7 +349,8 @@ export class AudioEngine {
     const clipStart = Math.max(clip.startTime, rangeStart);
     const clipEnd = Math.min(clip.startTime + clip.duration, rangeEnd);
     const offsetInClip = clipStart - clip.startTime;
-    const sourceTime = clip.inPoint + offsetInClip;
+    const speed = clip.speed ?? 1;
+    const sourceTime = clip.inPoint + offsetInClip * speed;
     const clipAudioEffects = resolveClipAudioEffects(clip, timeline);
     const pan = getPanFromAudioEffects(
       clipAudioEffects.length > 0 ? clipAudioEffects : clip.effects,
@@ -371,9 +373,10 @@ export class AudioEngine {
       effects: clipAudioEffects,
       fadeIn: Math.max(clip.fade?.fadeIn ?? 0, transitionFades.fadeIn),
       fadeOut: Math.max(clip.fade?.fadeOut ?? 0, transitionFades.fadeOut),
-      speed: (clip as any).speed || 1,
-      reversed: (clip as any).reversed || false,
+      speed,
+      reversed: clip.reversed ?? false,
       audioTrackIndex: clip.audioTrackIndex,
+      sourceChannelIndex: clip.sourceChannelIndex,
     };
   }
 
@@ -381,8 +384,9 @@ export class AudioEngine {
     mediaItem: MediaItem,
     context: BaseAudioContext,
     audioTrackIndex: number = 0,
+    sourceChannelIndex?: number,
   ): Promise<AudioBuffer | null> {
-    const cacheKey = `${mediaItem.id}:${audioTrackIndex}`;
+    const cacheKey = `${mediaItem.id}:${audioTrackIndex}:${sourceChannelIndex === undefined ? "mix" : `channel-${sourceChannelIndex}`}`;
     const cached = this.mediaBuffers.get(cacheKey);
     if (cached) return cached;
     if (this.noAudioMedia.has(cacheKey)) return null;
@@ -392,11 +396,13 @@ export class AudioEngine {
       if (mediaItem.metadata.duration >= 120) throw new Error("Render and relink a stem before processing stateful effects on long recordings.");
       const original = await prepareNativeOriginal(mediaItem);
       const frames = Math.ceil(mediaItem.metadata.duration * 48000);
-      const buffer = context.createBuffer(2, frames, 48000);
+      const channels = sourceChannelIndex === undefined ? 2 : 1;
+      const buffer = context.createBuffer(channels, frames, 48000);
       for (let offset = 0; offset < mediaItem.metadata.duration; offset += 10) {
-        const window = await managed.audioWindow({assetId: original.nativeSource!.identity.assetId, trackIndex: audioTrackIndex, startMs: offset * 1000, durationMs: Math.min(10, mediaItem.metadata.duration-offset)*1000, sampleRate:48000, channels:2});
+        const window = await managed.audioWindow({assetId: original.nativeSource!.identity.assetId, trackIndex: audioTrackIndex, startMs: offset * 1000, durationMs: Math.min(10, mediaItem.metadata.duration-offset)*1000, sampleRate:48000, channels, ...(sourceChannelIndex === undefined ? {} : { sourceChannelIndex })});
         for (let channel=0;channel<window.channels.length;channel++) buffer.getChannelData(channel).set(window.channels[channel].subarray(0, frames-offset*48000),offset*48000);
       }
+      if (sourceChannelIndex !== undefined) this.selectedAudioChannels.set(buffer, sourceChannelIndex);
       this.mediaBuffers.set(cacheKey, buffer);
       return buffer;
     }
@@ -472,9 +478,9 @@ export class AudioEngine {
       if(stateful.length)throw new Error(`Long native audio with ${stateful.map(e=>e.type).join(", ")} requires a rendered stem to preserve filter continuity. Render/relink the affected audio track before export.`);
       const original=await prepareNativeOriginal(mediaItem);const {volumeGainNode,fadeGainNode}=this.createClipOutputNodes(context,clipInfo);const contextStartTime=Math.max(0,clipInfo.timelineStartTime-renderStartTime);this.applyVolumeAutomation(volumeGainNode,clipInfo,contextStartTime);this.applyFades(fadeGainNode,clipInfo,contextStartTime);
       const speed=clipInfo.speed||1;const sourceDuration=clipInfo.duration*speed;
-      for(let offset=0;offset<sourceDuration;offset+=10){const duration=Math.min(10,sourceDuration-offset);signal?.throwIfAborted();const requestId=crypto.randomUUID();const abort=()=>{void managed.cancelMedia?.(requestId);};signal?.addEventListener("abort",abort,{once:true});let window;try{window=await managed.audioWindow!({requestId,assetId:original.nativeSource!.identity.assetId,trackIndex:clipInfo.audioTrackIndex??0,startMs:(clipInfo.sourceTime+offset)*1000,durationMs:duration*1000,sampleRate:48000,channels:2});}finally{signal?.removeEventListener("abort",abort);}signal?.throwIfAborted();if(!window.channels[0]?.length)continue;
+      for(let offset=0;offset<sourceDuration;offset+=10){const duration=Math.min(10,sourceDuration-offset);signal?.throwIfAborted();const requestId=crypto.randomUUID();const abort=()=>{void managed.cancelMedia?.(requestId);};signal?.addEventListener("abort",abort,{once:true});let window;try{window=await managed.audioWindow!({requestId,assetId:original.nativeSource!.identity.assetId,trackIndex:clipInfo.audioTrackIndex??0,startMs:(clipInfo.sourceTime+offset)*1000,durationMs:duration*1000,sampleRate:48000,channels:2,sourceChannelIndex:clipInfo.sourceChannelIndex});}finally{signal?.removeEventListener("abort",abort);}signal?.throwIfAborted();if(!window.channels[0]?.length)continue;
         const buffer=context.createBuffer(window.channels.length,window.channels[0].length,window.sampleRate);for(let c=0;c<window.channels.length;c++)buffer.getChannelData(c).set(window.channels[c]);
-        const processed=clipInfo.effects.some(e=>e.enabled)?await this.processClipBuffer(buffer,{...clipInfo,sourceTime:0,duration}):{buffer};const source=context.createBufferSource();source.buffer=processed.buffer;source.playbackRate.value=speed;source.connect(volumeGainNode);source.start(contextStartTime+offset/speed,0,duration);}
+        const processed=clipInfo.effects.some(e=>e.enabled)?await this.processClipBuffer(buffer,{...clipInfo,sourceTime:0,duration,speed:1}):{buffer};const source=context.createBufferSource();source.buffer=processed.buffer;source.playbackRate.value=speed;source.connect(volumeGainNode);source.start(contextStartTime+offset/speed,0,duration);}
       return;
     }
     if (this.shouldUseSegmentedAudioDecoding(mediaItem, clipInfo)) {
@@ -489,10 +495,15 @@ export class AudioEngine {
       }
     }
 
-    const audioBuffer = await this.getAudioBuffer(mediaItem, context, clipInfo.audioTrackIndex ?? 0);
-    if (!audioBuffer) {
+    const rawAudioBuffer = await this.getAudioBuffer(mediaItem, context, clipInfo.audioTrackIndex ?? 0, clipInfo.sourceChannelIndex);
+    if (!rawAudioBuffer) {
       return;
     }
+    const audioBuffer = clipInfo.sourceChannelIndex === undefined
+      ? rawAudioBuffer
+      : this.selectedAudioChannels.get(rawAudioBuffer) === clipInfo.sourceChannelIndex
+        ? rawAudioBuffer
+        : this.extractAudioChannel(rawAudioBuffer, clipInfo.sourceChannelIndex, context);
 
     const { volumeGainNode, fadeGainNode } = this.createClipOutputNodes(
       context,
@@ -503,7 +514,12 @@ export class AudioEngine {
     const speed = clipInfo.speed || 1;
     const reversed = clipInfo.reversed || false;
 
-    const processedClip = await this.processClipBuffer(audioBuffer, clipInfo);
+    const sourceDuration = clipInfo.duration * speed;
+    const processedClip = await this.processClipBuffer(audioBuffer, {
+      ...clipInfo,
+      duration: sourceDuration,
+      speed: 1,
+    });
 
     source.buffer = processedClip.buffer;
 
@@ -524,7 +540,7 @@ export class AudioEngine {
     source.start(
       contextStartTime,
       Math.max(0, startOffset),
-      Math.min(clipInfo.duration, processedClip.renderDuration),
+      Math.min(clipInfo.duration * speed, processedClip.renderDuration),
     );
   }
 
@@ -534,7 +550,8 @@ export class AudioEngine {
   ): boolean {
     return (
       mediaItem.metadata.duration >= SEGMENTED_AUDIO_DECODE_THRESHOLD_SECONDS &&
-      (clipInfo.speed || 1) === 1 &&
+      Number.isFinite(clipInfo.speed || 1) &&
+      (clipInfo.speed || 1) > 0 &&
       !clipInfo.reversed &&
       !clipInfo.effects.some((effect) => effect.enabled)
     );
@@ -562,7 +579,7 @@ export class AudioEngine {
       return {
         buffer: audioBuffer,
         startOffset: clipInfo.sourceTime,
-        renderDuration: clipInfo.duration,
+        renderDuration: clipInfo.duration * (clipInfo.speed ?? 1),
       };
     }
 
@@ -631,6 +648,15 @@ export class AudioEngine {
     return segmentBuffer;
   }
 
+  private extractAudioChannel(source: AudioBuffer, channelIndex: number, context: BaseAudioContext): AudioBuffer {
+    if (!Number.isInteger(channelIndex) || channelIndex < 0 || channelIndex >= source.numberOfChannels) {
+      throw new Error(`Source audio channel ${channelIndex} is unavailable.`);
+    }
+    const mono = context.createBuffer(1, source.length, source.sampleRate);
+    mono.getChannelData(0).set(source.getChannelData(channelIndex));
+    return mono;
+  }
+
   private async renderClipToContextFromSegments(
     context: OfflineAudioContext,
     mediaItem: MediaItem,
@@ -643,7 +669,8 @@ export class AudioEngine {
     }
 
     const rangeStart = Math.max(0, clipInfo.sourceTime);
-    const rangeEnd = rangeStart + clipInfo.duration;
+    const speed = clipInfo.speed ?? 1;
+    const rangeEnd = rangeStart + clipInfo.duration * speed;
     if (rangeEnd <= rangeStart) {
       return false;
     }
@@ -672,10 +699,13 @@ export class AudioEngine {
       }
 
       const source = context.createBufferSource();
-      source.buffer = wrapped.buffer;
+      source.buffer = clipInfo.sourceChannelIndex === undefined
+        ? wrapped.buffer
+        : this.extractAudioChannel(wrapped.buffer, clipInfo.sourceChannelIndex, context);
       source.connect(volumeGainNode);
+      source.playbackRate.value = speed;
       source.start(
-        contextStartTime + (overlapStart - rangeStart),
+        contextStartTime + (overlapStart - rangeStart) / speed,
         overlapStart - bufferStart,
         overlapEnd - overlapStart,
       );

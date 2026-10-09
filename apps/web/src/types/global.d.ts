@@ -1,4 +1,5 @@
 import type {ResourceProfile,RegisteredAsset,ProxyReceipt,AnalysisSnapshot,PreparedAudio,TranscriptDocument,JobState} from "@openreel/core/lickety/types";
+import type { PodcastBridge } from "@openreel/core/lickety/podcast-types";
 export {};
 
 export interface OpenReelHardwareInfo {
@@ -183,7 +184,7 @@ declare global {
         resumeTranscription(jobId:string):Promise<void>;
         prepareAudio(args:{snapshot:AnalysisSnapshot;options:{mode:"mixed"|"isolated-stereo";participants?:{channel:1|2;participantId:string}[]};requestId:string}):Promise<PreparedAudio>;
         getTranscription(jobId:string):Promise<{state:JobState;providerJobId?:string;transcript?:TranscriptDocument;error?:string}>;
-        audioWindow(args:{requestId?:string;assetId:string;trackIndex:number;startMs:number;durationMs:number;sampleRate:1000|16000|48000;channels:1|2}):Promise<{channels:Float32Array[];sampleRate:number}>;
+        audioWindow(args:{requestId?:string;assetId:string;trackIndex:number;startMs:number;durationMs:number;sampleRate:1000|16000|48000;channels:1|2;sourceChannelIndex?:number}):Promise<{channels:Float32Array[];sampleRate:number}>;
         resourceProfile():Promise<ResourceProfile>;
         referenceFile(mediaId:string,file:File):Promise<{originalUri:string}|null>;
         referencePath(mediaId:string,path:string):Promise<{originalUri:string}>;
@@ -192,10 +193,11 @@ declare global {
         registerPath(mediaId:string,path:string):Promise<RegisteredAsset>;
         findAsset(mediaId:string):Promise<RegisteredAsset|undefined>;
         resolve(assetId:string,purpose:"original"|"proxy"):Promise<string>;
-        ensureAudioStream(assetId:string,trackIndex:number):Promise<string>;
+        ensureAudioStream(assetId:string,trackIndex:number,sourceChannelIndex?:number):Promise<string>;
         ensureProxy(assetId:string):Promise<ProxyReceipt>;
         cancelMedia(assetId:string):Promise<void>;
       };
+      podcast?: PodcastBridge;
       publicOrigin: string;
       probeHardware(): Promise<OpenReelHardwareInfo>;
       onMenuAction(cb: (id: string) => void): () => void;

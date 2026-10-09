@@ -58,6 +58,9 @@ import {
   buildMulticamManifest,
   findMulticamCalibrationRanges,
   getMulticamAnalysisDuration,
+  buildMulticamSourceClipMap,
+  hasGroupedPodcastSources,
+  mapPodcastProgramAudio,
   prepareMulticamAnalysisAudio,
   resolveMulticamSources,
   updateAlignedSourceOffsets,
@@ -67,6 +70,56 @@ interface MultiCameraPanelProps {
   onClose?: () => void;
 }
 
+async function loadPodcastProgramAudio(
+  project: import("@openreel/core").Project,
+  group: MultiCamGroup,
+  signal: AbortSignal,
+  onProgress: (message: string) => void,
+): Promise<Array<{ angleId: string; samples: Float32Array; sampleRate: number }>> {
+  const setupId = project.lickety?.podcastAssembly?.setupId;
+  if (!setupId) throw new Error("The grouped camera does not have a saved podcast assembly.");
+  if (!desktopMediaAvailable()) throw new Error("Podcast microphone planning requires native original-source audio.");
+  const inputs: Array<{ participantId?: string; startTime: number; duration: number; speed: number; volume: number; samples: Float32Array }> = [];
+  for (const track of project.timeline.tracks) {
+    if (track.muted) continue;
+    for (const clip of track.clips) {
+      const metadata = clip.metadata?.podcast as { setupId?: string; role?: string; participantId?: string } | undefined;
+      if (metadata?.setupId !== setupId || metadata.role !== "dialogue" || clip.volume === 0) continue;
+      signal.throwIfAborted();
+      const media = project.mediaLibrary.items.find((item) => item.id === clip.mediaId);
+      if (!media) throw new Error(`Relink microphone source ${clip.mediaId} before planning camera coverage.`);
+      const speed = clip.speed ?? 1;
+      if (clip.reversed || !Number.isFinite(speed) || speed <= 0 || clip.speedKeyframes?.length || clip.freezeFrames?.length) {
+        throw new Error(`Microphone clip ${clip.id} uses an unsupported speed mapping for activity planning.`);
+      }
+      const sourceStart = Math.max(0, clip.inPoint);
+      const sourceEnd = Math.min(media.metadata.duration, clip.outPoint, clip.inPoint + clip.duration * speed);
+      if (sourceEnd <= sourceStart) continue;
+      onProgress(`Reading original microphone · ${track.name}`);
+      const parts: Float32Array[] = [];
+      let sampleCount = 0;
+      for await (const samples of readDesktopAudio(media, 1_000, { startMs: sourceStart * 1_000, endMs: sourceEnd * 1_000 }, signal, clip.audioTrackIndex ?? 0, clip.sourceChannelIndex)) {
+        parts.push(samples);
+        sampleCount += samples.length;
+      }
+      const samples = new Float32Array(sampleCount);
+      let offset = 0;
+      for (const part of parts) { samples.set(part, offset); offset += part.length; }
+      inputs.push({
+        participantId: metadata.participantId,
+        startTime: clip.startTime,
+        duration: Math.min(clip.duration, (sourceEnd - sourceStart) / speed),
+        speed,
+        volume: clip.volume,
+        samples,
+      });
+    }
+  }
+  const sources = mapPodcastProgramAudio(group.duration, 1_000, inputs);
+  if (!sources.length) throw new Error("No routed podcast microphone audio is available for camera planning.");
+  return sources;
+}
+
 const AngleCard: React.FC<{
   angle: CameraAngle;
   isActive: boolean;
@@ -74,7 +127,8 @@ const AngleCard: React.FC<{
   onRename: (name: string) => void;
   onRemove: () => void;
   onOffsetChange: (offset: number) => void;
-}> = ({ angle, isActive, onSelect, onRename, onRemove, onOffsetChange }) => {
+  offsetDisabled?: boolean;
+}> = ({ angle, isActive, onSelect, onRename, onRemove, onOffsetChange, offsetDisabled = false }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(angle.name);
 
@@ -144,6 +198,7 @@ const AngleCard: React.FC<{
           onClick={(e) => e.stopPropagation()}
           className="w-16 px-1 py-0.5 text-[8px] bg-bg-1 rounded border border-border focus:border-primary focus:outline-none"
           step={0.1}
+          isDisabled={offsetDisabled}
         />
         <span className="text-[8px] text-fg-3">sec</span>
       </div>
@@ -226,16 +281,18 @@ const GroupSection: React.FC<{
               onRename={(name) => onRenameAngle(angle.id, name)}
               onRemove={() => onRemoveAngle(angle.id)}
               onOffsetChange={(offset) => onOffsetChange(angle.id, offset)}
+              offsetDisabled={hasGroupedPodcastSources(group)}
             />
           ))}
         </div>
+        {hasGroupedPodcastSources(group) && <Text className="text-[9px] text-fg-3">Podcast timing stays tied to the original sources. Sync is disabled; Auto Edit analyzes routed microphones on the episode clock.</Text>}
         <div className="flex gap-1 pt-2 border-t border-border">
           <Button
             label="Sync Audio"
             variant="ghost"
             icon={<Link size={10} />}
             onClick={onSync}
-            isDisabled={isProcessing}
+            isDisabled={isProcessing || hasGroupedPodcastSources(group)}
             className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] text-fg-2 hover:text-fg bg-bg-2 rounded transition-colors"
           />
           <Button
@@ -476,6 +533,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
 
   const decodeGroupAudio = useCallback(
     async (group: MultiCamGroup) => {
+      if (hasGroupedPodcastSources(group)) throw new Error("Podcast source placement is already aligned. Use Podcast Setup to change grouped camera timing.");
       const currentProject = useProjectStore.getState().project;
       const sources = resolveMulticamSources(currentProject, group);
       const unsupportedSource = sources.find(
@@ -598,6 +656,11 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
   const handleOffsetChange = useCallback(
     (groupId: string, angleId: string, offset: number) => {
       if (!multiCamEngine) return;
+      const group = multiCamEngine.getGroup(groupId);
+      if (group && hasGroupedPodcastSources(group)) {
+        toast.error("Podcast source timing is locked", "Change original-source placements in Podcast Setup.");
+        return;
+      }
       multiCamEngine.setAngleOffset(groupId, angleId, offset);
       void persistGroups().catch((error) =>
         toast.error("Could not save offset", error instanceof Error ? error.message : undefined),
@@ -611,6 +674,10 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
       if (!multiCamEngine) return;
       const group = multiCamEngine.getGroup(groupId);
       if (!group || busyRef.current) return;
+      if (hasGroupedPodcastSources(group)) {
+        toast.error("Podcast sync is already applied", "Change original-source placements in Podcast Setup.");
+        return;
+      }
       busyRef.current = true;
       analysisAbort.current=new AbortController();
       setProcessingGroupId(groupId);
@@ -685,6 +752,65 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
         }
       };
       try {
+        if (hasGroupedPodcastSources(group)) {
+          const currentProject = useProjectStore.getState().project;
+          const sources = resolveMulticamSources(currentProject, group);
+          const programAudio = await loadPodcastProgramAudio(currentProject, group, analysisAbort.current.signal, (message) => setStatus(groupId, message));
+          ensureCurrent();
+          const manifest = buildMulticamManifest(currentProject, group, sources, {
+            min_shot_ms: editPolicy.minShotMs,
+            max_shot_ms: Math.max(editPolicy.minShotMs, editPolicy.maxShotMs),
+            cut_lead_ms: editPolicy.cutLeadMs,
+            reaction_shot_after_ms: editPolicy.reactionShotAfterMs,
+            forbid_jump_cut_same_subject: editPolicy.forbidJumpCutSameSubject,
+          });
+          const sharedOnly = manifest.participants.length > 0 && manifest.participants.every((participant) => participant.audioMode === "shared-mix");
+          const activity = analyzeMulticamActivity(programAudio, { durationSeconds: group.duration });
+          const shotPlan = planMulticamShots(activity, manifest, {
+            strategy: sharedOnly ? "wide" : overlapStrategy,
+            escalateTo: sharedOnly ? "wide" : overlapEscalation,
+          });
+          if (!shotPlan.shots.length) throw new Error("No usable microphone activity was detected.");
+          const liveGroup = multiCamEngine.getGroup(groupId);
+          if (!liveGroup) throw new Error("Camera group is no longer available.");
+          liveGroup.manifest = manifest;
+          liveGroup.shotPlan = shotPlan;
+          multiCamEngine.applyAutomaticEdit(groupId, {
+            duration: shotPlan.durationMs / 1_000,
+            segments: shotPlan.shots.map((shot) => ({
+              angleId: shot.layout.panels[0]?.cameraId ?? manifest.sync.reference,
+              startTime: shot.startMs / 1_000,
+              endTime: shot.endMs / 1_000,
+              reason: shot.reason,
+              confidence: shot.confidence,
+            })),
+          }, editPolicy, activity.windowMs);
+          const podcastSetupId = currentProject.lickety?.podcastAssembly?.setupId;
+          const microphoneMedia = [...new Map(currentProject.timeline.tracks.flatMap((track) => track.clips.flatMap((clip) => {
+            const podcast = clip.metadata?.podcast as { setupId?: string; role?: string } | undefined;
+            const item = podcast?.setupId === podcastSetupId && podcast?.role === "dialogue" ? currentProject.mediaLibrary.items.find((media) => media.id === clip.mediaId) : undefined;
+            return item ? [[item.id, item] as const] : [];
+          }))).values()];
+          const artifact = createOrmaArtifact({
+            manifest,
+            media: microphoneMedia.map((media) => ({ id: media.id, name: media.sourceFile?.name ?? media.name, size: media.sourceFile?.size ?? media.blob?.size ?? 0, lastModified: media.sourceFile?.lastModified ?? 0 })),
+            activity,
+          });
+          ensureCurrent();
+          liveGroup.analysisArtifactId = await saveMulticamArtifact(currentProject.id, groupId, artifact);
+          const outputTrackId = liveGroup.outputTrackId ?? `multicam-output-${groupId}`;
+          const outputTracks = multiCamEngine.buildShotPlanTracks(groupId, outputTrackId, buildMulticamSourceClipMap(sources), currentProject.settings);
+          if (!outputTracks.length || outputTracks.every((track) => !track.clips.length)) throw new Error("The microphone plan could not be mapped to current camera segments.");
+          multiCamEngine.setOutputTracks(groupId, outputTracks.map((track) => track.id));
+          const updatedGroup = multiCamEngine.getGroup(groupId);
+          if (!updatedGroup) throw new Error("Camera group is no longer available.");
+          ensureCurrent();
+          const result = await useProjectStore.getState().executeAction(createMulticamApplyTracksAction({ project: currentProject, group: updatedGroup, groups: multiCamEngine.getAllGroups(), outputTracks }));
+          if (!result.success) throw new Error(result.error?.message ?? "Could not apply the microphone-based camera edit.");
+          setStatus(groupId, `${shotPlan.shots.length} shots created from routed original microphones · one undo step`);
+          toast.success("Microphone-based camera edit created", `${Math.max(0, shotPlan.shots.length - 1)} cuts · one undo step`);
+          return;
+        }
         const { buffers, sources } = await decodeGroupAudio(group);
         updateGroupSourceLayout(groupId, sources);
         setStatus(groupId, "Synchronizing camera audio…");
@@ -838,9 +964,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
         );
 
         const outputTrackId = liveGroup.outputTrackId ?? `multicam-output-${groupId}`;
-        const sourceClips = new Map(
-          alignedSources.map((source) => [source.clip.id, source.clip]),
-        );
+        const sourceClips = buildMulticamSourceClipMap(alignedSources);
         const outputTracks = multiCamEngine.buildShotPlanTracks(
           groupId,
           outputTrackId,
@@ -1018,7 +1142,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
       const outputTrackId = group.outputTrackId ?? `multicam-output-${groupId}`;
       const currentProject = useProjectStore.getState().project;
       const sources = resolveMulticamSources(currentProject, group);
-      const sourceClips = new Map(sources.map((source) => [source.clip.id, source.clip]));
+      const sourceClips = buildMulticamSourceClipMap(sources);
       const outputTracks = group.shotPlan
         ? multiCamEngine.buildShotPlanTracks(
             groupId,

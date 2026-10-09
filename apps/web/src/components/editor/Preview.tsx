@@ -880,15 +880,15 @@ export const Preview: React.FC = () => {
   const processedAudioBufferCacheRef = useRef<Map<string, AudioBuffer>>(new Map());
   const noAudioBufferRef = useRef<Set<string>>(new Set());
 
-  const getAudioBufferCacheKey = (mediaId: string, audioTrackIndex?: number): string =>
-    `${mediaId}:${audioTrackIndex ?? 0}`;
+  const getAudioBufferCacheKey = (mediaId: string, audioTrackIndex?: number, sourceChannelIndex?: number): string =>
+    `${mediaId}:${audioTrackIndex ?? 0}${sourceChannelIndex === undefined ? "" : `:channel-${sourceChannelIndex}`}`;
 
-  const prepareNativeAudio = useCallback(async (item:MediaItem,index:number):Promise<string|undefined> => {
+  const prepareNativeAudio = useCallback(async (item:MediaItem,index:number,sourceChannelIndex?:number):Promise<string|undefined> => {
     const bridge=getManagedBridge();if(!bridge?.ensureAudioStream)return;
-    const original=await prepareNativeOriginal(item);const key=getAudioBufferCacheKey(item.id,index);
-    const pendingKey=`${original.nativeSource!.identity.sha256}:${index}`;
+    const original=await prepareNativeOriginal(item);const key=getAudioBufferCacheKey(item.id,index,sourceChannelIndex);
+    const pendingKey=`${original.nativeSource!.identity.sha256}:${index}:${sourceChannelIndex===undefined?"mix":`channel-${sourceChannelIndex}`}`;
     let pending=nativeAudioPendingRef.current.get(pendingKey);
-    if(!pending){pending=bridge.ensureAudioStream(original.nativeSource!.identity.assetId,index);nativeAudioPendingRef.current.set(pendingKey,pending);pending.catch(()=>nativeAudioPendingRef.current.delete(pendingKey));}
+    if(!pending){pending=bridge.ensureAudioStream(original.nativeSource!.identity.assetId,index,sourceChannelIndex);nativeAudioPendingRef.current.set(pendingKey,pending);pending.catch(()=>nativeAudioPendingRef.current.delete(pendingKey));}
     const uri=await pending;nativeAudioUriRef.current.set(key,uri);return uri;
   },[]);
   const nativeSchedule = (clip:Track['clips'][number],track:Track,uri:string):AudioClipSchedule => {
@@ -2079,7 +2079,7 @@ export const Preview: React.FC = () => {
           ) {
             const mediaItem = getOriginalMediaItem(audioClip.mediaId);
             if (mediaItem && getManagedBridge()?.ensureAudioStream) {
-              const uri=await prepareNativeAudio(mediaItem,audioClip.audioTrackIndex??0);
+              const uri=await prepareNativeAudio(mediaItem,audioClip.audioTrackIndex??0,audioClip.sourceChannelIndex);
               if(uri)scheduledClips.push(nativeSchedule(audioClip,audioTrack,uri));
               continue;
             }
@@ -2090,6 +2090,7 @@ export const Preview: React.FC = () => {
             const audioCacheKey = getAudioBufferCacheKey(
               audioClip.mediaId,
               audioClip.audioTrackIndex,
+              audioClip.sourceChannelIndex,
             );
             let audioBuffer = audioBufferCacheRef.current.get(audioCacheKey);
             if (!audioBuffer) {
@@ -2203,8 +2204,8 @@ export const Preview: React.FC = () => {
         if (!mediaClipHasAudio(clip)) {
           continue;
         }
-        const cacheKey = getAudioBufferCacheKey(clip.mediaId, clip.audioTrackIndex);
-        if(getManagedBridge()?.ensureAudioStream){const item=getOriginalMediaItem(clip.mediaId);if(item)await prepareNativeAudio(item,clip.audioTrackIndex??0);continue;}
+        const cacheKey = getAudioBufferCacheKey(clip.mediaId, clip.audioTrackIndex, clip.sourceChannelIndex);
+        if(getManagedBridge()?.ensureAudioStream){const item=getOriginalMediaItem(clip.mediaId);if(item)await prepareNativeAudio(item,clip.audioTrackIndex??0,clip.sourceChannelIndex);continue;}
         let audioBuffer: AudioBuffer | null | undefined =
           audioBufferCacheRef.current.get(cacheKey);
 
@@ -2328,10 +2329,10 @@ export const Preview: React.FC = () => {
             continue;
           }
 
-          const nativeUri=nativeAudioUriRef.current.get(getAudioBufferCacheKey(clip.mediaId,clip.audioTrackIndex));
+          const nativeUri=nativeAudioUriRef.current.get(getAudioBufferCacheKey(clip.mediaId,clip.audioTrackIndex,clip.sourceChannelIndex));
           if(nativeUri){schedules.push(nativeSchedule(clip,track,nativeUri));continue;}
           const audioBuffer = audioBufferCacheRef.current.get(
-            getAudioBufferCacheKey(clip.mediaId, clip.audioTrackIndex),
+            getAudioBufferCacheKey(clip.mediaId, clip.audioTrackIndex, clip.sourceChannelIndex),
           );
           if (!audioBuffer) {
             continue;
@@ -2350,6 +2351,7 @@ export const Preview: React.FC = () => {
             const processedCacheKey = `${getAudioBufferCacheKey(
               clip.mediaId,
               clip.audioTrackIndex,
+              clip.sourceChannelIndex,
             )}:profile-denoise:${getAudioEffectSignature(profileAwareNoiseEffects)}`;
             const processedAudioBuffer =
               processedAudioBufferCacheRef.current.get(processedCacheKey);

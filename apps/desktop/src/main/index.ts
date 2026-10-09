@@ -1,5 +1,6 @@
 import {inspectOriginal} from "./lickety/import-inspection";
 import { installLicketyIpc } from "./ipc/lickety";
+import { installPodcastIpc } from "./ipc/podcast";
 import { getDesktopProfilePath } from "./lickety/resource-policy";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
@@ -147,6 +148,7 @@ app.whenReady().then(() => {
   if (!hasSingleInstanceLock) return;
   handleAppScheme(rendererRoot());
   installLicketyIpc();
+  installPodcastIpc();
   handle(CHANNELS.probeHardware, z.undefined(), () => collectHardwareInfo());
   handle(CHANNELS.fsShowSaveDialog, saveDialogArgsSchema, showSaveDialog);
   handle(CHANNELS.fsShowOpenDialog, openDialogArgsSchema, showOpenDialog);

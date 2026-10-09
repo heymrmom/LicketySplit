@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "electron-updater": "^6.3.9",
+    "fft.js": "4.0.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {

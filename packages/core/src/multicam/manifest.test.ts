@@ -29,6 +29,14 @@ describe("validateMulticamManifest", () => {
     expect(validateMulticamManifest(manifest())).toEqual({ valid: true, errors: [] });
   });
 
+  it("accepts explicitly unknown podcast framing without inventing a participant subject", () => {
+    const value = manifest();
+    value.cameras[0] = { id: "a", type: "unknown", subject: "unmapped", file: "A001.mp4" };
+    value.participants[0]!.audioWindows = [{ trackId: "track-1", clipId: "mic-1", mediaId: "media-1", startTime: 2, duration: 4, inPoint: 0, outPoint: 4, speed: 1, volume: 1, sourceChannelIndex: 0 }];
+
+    expect(validateMulticamManifest(value)).toEqual({ valid: true, errors: [] });
+  });
+
   it("requires isolated mics, valid subjects, a wide shot, and a sync reference", () => {
     const invalid = manifest();
     invalid.participants = invalid.participants.slice(0, 1);
@@ -43,7 +51,7 @@ describe("validateMulticamManifest", () => {
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual(
       expect.arrayContaining([
-        "participants must contain at least two isolated microphones",
+        "participants must contain at least one routed microphone",
         "cameras[0].subject references unknown participant missing",
         "camera id a is duplicated",
         "cameras must include at least one locked-off wide shot",

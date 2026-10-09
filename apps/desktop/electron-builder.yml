@@ -29,6 +29,10 @@ extraResources:
     to: bin
     filter:
       - "**/*"
+  - from: resources/native-inspector
+    to: native-inspector
+    filter:
+      - "**/*"
   - from: resources/rigging
     to: rigging
     filter:

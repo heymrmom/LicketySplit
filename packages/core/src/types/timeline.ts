@@ -156,6 +156,8 @@ export interface Clip {
   /** Zero-based index of the audio track within the source media file to use for this clip.
    * Undefined or 0 means the primary/first audio track. */
   readonly audioTrackIndex?: number;
+  /** Zero-based channel within the selected source audio stream. */
+  readonly sourceChannelIndex?: number;
   readonly metadata?: ClipMetadata;
 }
 

@@ -12,10 +12,14 @@ import { useProjectStore } from "../../stores/project-store";
 import { useEngineStore } from "../../stores/engine-store";
 import { loadMulticamArtifact } from "../multicam-analysis-store";
 import {
+  buildMulticamManifest,
+  buildMulticamSourceClipMap,
   createMulticamApplyTracksAction,
+  hasCurrentGroupedPodcastActivity,
+  hasGroupedPodcastSources,
   resolveMulticamSources,
 } from "../../components/editor/inspector/multicam-workflow";
-import { extractMulticamSocialClips } from "@openreel/core";
+import { DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS, extractMulticamSocialClips } from "@openreel/core";
 
 function selectGroup(groupId?: string): MultiCamGroup {
   const groups = useProjectStore.getState().project.multicamGroups ?? [];
@@ -52,7 +56,7 @@ async function applyEngineGroup(
   const outputTracks = engine.buildShotPlanTracks(
     groupId,
     group.outputTrackId,
-    new Map(sources.map((source) => [source.clip.id, source.clip])),
+    buildMulticamSourceClipMap(sources),
     project.settings,
   );
   if (!outputTracks.length) throw new Error("The multicam shot plan produced no timeline tracks");
@@ -80,13 +84,23 @@ export function createMulticamHostBridge(
 ): MulticamHostBridge {
   return {
     async getManifest(groupId) {
+      const project = useProjectStore.getState().project;
       const group = selectGroup(groupId);
-      if (!group.manifest) throw new Error(`Manifest is unavailable for ${group.name}`);
-      return { groupId: group.id, manifest: group.manifest };
+      const sources = resolveMulticamSources(project, group);
+      const refreshed = buildMulticamManifest(
+        project,
+        group,
+        sources,
+        group.manifest?.constraints ?? DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
+      );
+      return { groupId: group.id, manifest: group.manifest ? { ...group.manifest, sync: refreshed.sync, participants: refreshed.participants, cameras: refreshed.cameras } : refreshed };
     },
 
     async getActivityMap(groupId, range = {}) {
       const value = await artifact(groupId);
+      if (hasGroupedPodcastSources(value.group) && !hasCurrentGroupedPodcastActivity(value.project, value.group, value.artifact)) {
+        throw new Error(`The microphone activity for ${value.group.name} is stale. Rerun Auto Edit with the current routed microphones.`);
+      }
       const points = value.artifact.activity.points.filter(
         (point) =>
           point.endTime * 1_000 > (range.startMs ?? 0) &&
@@ -121,21 +135,58 @@ export function createMulticamHostBridge(
 
     async setEditPolicy(groupId, updates) {
       const value = await artifact(groupId);
+      const groupedPodcast = hasGroupedPodcastSources(value.group);
+      if (groupedPodcast) {
+        if (!hasCurrentGroupedPodcastActivity(value.project, value.group, value.artifact)) {
+          throw new Error(`The microphone activity for ${value.group.name} is stale. Rerun Auto Edit with the current routed microphones.`);
+        }
+        const sources = resolveMulticamSources(value.project, value.group);
+        const liveManifest = buildMulticamManifest(
+          value.project,
+          value.group,
+          sources,
+          value.group.manifest?.constraints ?? DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
+        );
+        const expectedActivityIds = liveManifest.participants.map((participant) => participant.id).sort();
+        const actualActivityIds = [...value.artifact.activity.angleIds].sort();
+        if (expectedActivityIds.length === 0 || JSON.stringify(expectedActivityIds) !== JSON.stringify(actualActivityIds)) {
+          throw new Error(`The activity artifact for ${value.group.name} does not match its current microphone routes. Rerun Auto Edit.`);
+        }
+        if (liveManifest.cameras.every((camera) => camera.type !== "wide")) {
+          throw new Error(`The camera setup for ${value.group.name} has no confirmed wide view for silent sections.`);
+        }
+      }
       const engine = await liveEngine();
       const group = engine.getGroup(value.group.id);
-      if (!group?.manifest) throw new Error("The multicam manifest is unavailable");
+      if (!group) throw new Error("The multicam group is unavailable");
+      if (!group.manifest && !groupedPodcast) throw new Error("The multicam manifest is unavailable");
+      if (groupedPodcast) {
+        const latestProject = useProjectStore.getState().project;
+        const latestGroup = latestProject.multicamGroups?.find((entry) => entry.id === value.group.id);
+        if (latestProject.id !== value.project.id || !latestGroup || !hasCurrentGroupedPodcastActivity(latestProject, latestGroup, value.artifact)) {
+          throw new Error(`The microphone activity for ${value.group.name} changed while planning. Rerun Auto Edit with the current routed microphones.`);
+        }
+        group.manifest = buildMulticamManifest(
+          latestProject,
+          latestGroup,
+          resolveMulticamSources(latestProject, latestGroup),
+          latestGroup.manifest?.constraints ?? DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
+        );
+      }
+      const liveManifest = group.manifest;
+      if (!liveManifest) throw new Error("The multicam manifest is unavailable");
       const policy: MulticamShotPolicy = {
         ...DEFAULT_MULTICAM_SHOT_POLICY,
         ...group.editPolicy,
         ...updates,
       };
-      const participantIds = new Set(group.manifest.participants.map((entry) => entry.id));
+      const participantIds = new Set(liveManifest.participants.map((entry) => entry.id));
       const unknownPriority = policy.priorityParticipantIds.find((id) => !participantIds.has(id));
       if (unknownPriority) throw new Error(`Unknown priority participant: ${unknownPriority}`);
       group.editPolicy = policy;
       group.shotPlan = incorporateMulticamReactionCues(
-        planMulticamShots(value.artifact.activity, group.manifest, policy),
-        group.manifest,
+        planMulticamShots(value.artifact.activity, liveManifest, policy),
+        liveManifest,
         value.artifact.reactions ?? [],
       );
       engine.applyAutomaticEdit(
@@ -143,7 +194,7 @@ export function createMulticamHostBridge(
         {
           duration: group.shotPlan.durationMs / 1_000,
           segments: group.shotPlan.shots.map((shot) => ({
-            angleId: shot.layout.panels[0]?.cameraId ?? group.manifest!.sync.reference,
+            angleId: shot.layout.panels[0]?.cameraId ?? liveManifest.sync.reference,
             startTime: shot.startMs / 1_000,
             endTime: shot.endMs / 1_000,
             reason: shot.reason,
@@ -152,13 +203,13 @@ export function createMulticamHostBridge(
         },
         group.automaticEdit?.policy ?? {
           overlapStrategy: "hold",
-          minShotMs: group.manifest.constraints.min_shot_ms,
-          maxShotMs: group.manifest.constraints.max_shot_ms,
+          minShotMs: liveManifest.constraints.min_shot_ms,
+          maxShotMs: liveManifest.constraints.max_shot_ms,
           reactionShotMs: 1_800,
-          cutLeadMs: group.manifest.constraints.cut_lead_ms,
+          cutLeadMs: liveManifest.constraints.cut_lead_ms,
           backchannelMaxMs: 700,
-          reactionShotAfterMs: group.manifest.constraints.reaction_shot_after_ms,
-          forbidJumpCutSameSubject: group.manifest.constraints.forbid_jump_cut_same_subject,
+          reactionShotAfterMs: liveManifest.constraints.reaction_shot_after_ms,
+          forbidJumpCutSameSubject: liveManifest.constraints.forbid_jump_cut_same_subject,
         },
         value.artifact.activity.windowMs,
       );
