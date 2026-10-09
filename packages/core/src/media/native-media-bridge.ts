@@ -124,6 +124,11 @@ export async function probeAudioStreamCountViaNative(file: File | Blob): Promise
   return streams.length;
 }
 
+// Compatibility previews retain the File selected by the user as their analysis/export original.
+const nativeOriginalFiles=new WeakMap<Blob,Blob>();
+export function bindNativeOriginalFile(runtime:Blob,original:Blob):void {nativeOriginalFiles.set(runtime,original);}
+export function getNativeOriginalFile(runtime:Blob):Blob|undefined {return nativeOriginalFiles.get(runtime);}
+
 // Disk URLs are local runtime bindings, never portable media replacements.
 const nativeSources = new WeakMap<Blob, {original:Promise<string>;preview:Promise<string>}>();
 export function bindNativeMediaSources(blob:Blob,original:Promise<string>,preview:Promise<string>):void {
@@ -145,10 +150,12 @@ export interface ManagedRendererBridge {
 export function getManagedBridge():ManagedRendererBridge|undefined {return (globalThis as unknown as {openreel?:{platform?:string;lickety?:ManagedRendererBridge}}).openreel?.lickety;}
 export async function prepareNativeOriginal(item:import('../types/project').MediaItem):Promise<import('../types/project').MediaItem>{
  const managed=getManagedBridge();if(!managed)return item;
- const blob=item.blob??await item.fileHandle?.getFile();
- let asset=(blob&&typeof File!=="undefined"&&blob instanceof File&&!nativeSources.has(blob))?await managed.registerFile(item.id,blob):item.nativeSource??await managed.findAsset(item.id);
+ const runtimeBlob=item.blob??await item.fileHandle?.getFile();
+ const blob=runtimeBlob?(getNativeOriginalFile(runtimeBlob)??runtimeBlob):undefined;
+ let asset=item.nativeSource??await managed.findAsset(item.id);
+ if(blob&&typeof File!=="undefined"&&blob instanceof File&&!nativeSources.has(runtimeBlob??blob)){try{asset=await managed.registerFile(item.id,blob);}catch(error){const bridge=getBridge();if(!bridge)throw error;asset=await managed.registerPath(item.id,await materializeToTemp(bridge,blob));}}
  if(!asset){if(!blob)throw new Error(`Relink original ${item.name} before exporting`);try{asset=await managed.registerFile(item.id,blob);}catch(e){const bridge=getBridge();if(!bridge)throw e;asset=await managed.registerPath(item.id,await materializeToTemp(bridge,blob));}}
- const uri=await managed.resolve(asset.identity.assetId,'original');const runtimeBlob=blob??new Blob([]);
- if(!nativeSources.has(runtimeBlob))bindNativeMediaSources(runtimeBlob,Promise.resolve(uri),Promise.resolve(uri));
- return {...item,blob:runtimeBlob,nativeSource:asset,isPlaceholder:false};
+ const uri=await managed.resolve(asset.identity.assetId,'original');const bindingBlob=runtimeBlob??blob??new Blob([]);
+ if(!nativeSources.has(bindingBlob))bindNativeMediaSources(bindingBlob,Promise.resolve(uri),Promise.resolve(uri));
+ return {...item,blob:bindingBlob,nativeSource:asset,isPlaceholder:false};
 }

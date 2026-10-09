@@ -117,3 +117,4 @@ describe("DesktopApp", () => {
     expect(view.getByTestId("desktop-settings-dialog")).toBeTruthy();
   });
 });
+it('native Open menu loads an editable saved project',async()=>{const {projectManager}=await import('../services/project-manager');const fixture={id:'opened',name:'Opened',settings:{},timeline:{tracks:[],duration:0},mediaLibrary:{items:[]}};const open=vi.spyOn(projectManager,'openProject').mockResolvedValue(fixture as never);const loadProject=vi.fn();let action:((id:string)=>void)|undefined;Object.assign(window.openreel!,{onMenuAction:(callback:(id:string)=>void)=>{action=callback;return ()=>{};}});mockHasProject(false);Object.assign(mockedUseProjectStore,{getState:()=>({loadProject})});const view=render(<DesktopApp/>);action?.('open');await vi.waitFor(()=>expect(loadProject).toHaveBeenCalledWith(fixture));expect(open).toHaveBeenCalledOnce();view.unmount();open.mockRestore();});

@@ -1745,6 +1745,7 @@ export const useProjectStore = create<ProjectState>()(
       },
 
       loadProject: (incomingProject: Project) => {
+        projectManager.activateProjectFile(incomingProject.id);
         const motionNormalized = normalizeProjectMotionFields(incomingProject);
         const project: Project = {
           ...motionNormalized,

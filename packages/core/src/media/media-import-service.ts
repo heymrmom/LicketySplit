@@ -21,6 +21,7 @@ import {
   type TranscodeOptions,
 } from "./ffmpeg-fallback";
 import {
+  bindNativeOriginalFile,
   nativeMediaAvailable,
   proxyViaNative,
   transcodeViaNative,
@@ -351,6 +352,8 @@ export class MediaImportService {
       file.name.replace(/\.[^.]+$/, ext),
       { type: mime },
     );
+
+    bindNativeOriginalFile(compatibleFile,file);
 
     // Now process with MediaBunny
     const metadata = await this.mediaEngine.extractMetadata(compatibleFile);

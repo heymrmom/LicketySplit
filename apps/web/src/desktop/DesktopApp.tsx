@@ -1,3 +1,4 @@
+import { projectManager } from "../services/project-manager";
 import type { JSX } from "react";
 import { useEffect } from "react";
 import { DesktopTitleBar } from "./shell/DesktopTitleBar";
@@ -48,8 +49,10 @@ export function DesktopApp(): JSX.Element {
         case "redo":
           void useProjectStore.getState().redo();
           break;
-        case "newProject":
         case "open":
+          void projectManager.openProject().then(project=>{if(project){useProjectStore.getState().loadProject(project);useUIStore.getState().setDesktopPage('edit');}}).catch(error=>reportRendererCrash(error));
+          break;
+        case "newProject":
         case "export":
           window.dispatchEvent(new CustomEvent(`openreel:menu:${id}`));
           break;

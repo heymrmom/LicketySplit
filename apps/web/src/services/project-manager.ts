@@ -183,6 +183,17 @@ class ProjectManager {
   private db: IDBDatabase | null = null;
   private listeners: Map<ProjectManagerEvent, Set<EventCallback>> = new Map();
   private currentFileHandle: ProjectFileRef | null = null;
+  private projectFileHandles = new Map<string,ProjectFileRef>();
+
+  activateProjectFile(projectId:string):void {
+    this.currentFileHandle=this.projectFileHandles.get(projectId)??null;
+  }
+
+  adoptVerifiedNativeFile(projectId:string,filePath:string):void {
+    this.currentFileHandle={kind:'native',path:filePath};
+    this.projectFileHandles.set(projectId,this.currentFileHandle);
+  }
+
 
   private parseProjectContent(content: string): Project {
     const trimmed = content.trim();
@@ -327,8 +338,8 @@ class ProjectManager {
         filePath,
         serializeProjectFile(project),
       );
-      this.currentFileHandle = { kind: "native", path: filePath };
-      await this.addToRecent(project, this.currentFileHandle);
+      this.adoptVerifiedNativeFile(project.id,filePath);
+      await this.addToRecent(project, this.currentFileHandle!);
       this.emit("projectSaved", { project });
       return true;
     }
@@ -364,6 +375,7 @@ class ProjectManager {
     // must reject so callers can distinguish failure and report it to the user.
     await this.saveToFileHandle(project, handle);
     this.currentFileHandle = handle;
+    this.projectFileHandles.set(project.id,handle);
     await this.addToRecent(project, handle);
     return true;
   }
@@ -427,8 +439,8 @@ class ProjectManager {
         console.error("[ProjectManager] Open (native) failed:", error);
         return null;
       }
-      this.currentFileHandle = { kind: "native", path: filePath };
-      await this.addToRecent(project, this.currentFileHandle);
+      this.adoptVerifiedNativeFile(project.id,filePath);
+      await this.addToRecent(project, this.currentFileHandle!);
       this.emit("projectOpened", { project });
       return project;
     }
@@ -451,6 +463,7 @@ class ProjectManager {
         const project = this.parseProjectContent(content);
 
         this.currentFileHandle = handle;
+        this.projectFileHandles.set(project.id,handle);
         await this.addToRecent(project, handle);
         this.emit("projectOpened", { project });
 
@@ -507,6 +520,7 @@ class ProjectManager {
           );
           const project = this.parseProjectContent(content);
           this.currentFileHandle = recentProject.fileHandle;
+          this.projectFileHandles.set(project.id,recentProject.fileHandle);
           await this.updateRecentTimestamp(recentProject.id);
           this.emit("projectOpened", { project });
           return project;
@@ -532,6 +546,7 @@ class ProjectManager {
         const project = this.parseProjectContent(content);
 
         this.currentFileHandle = handle;
+        this.projectFileHandles.set(project.id,handle);
         await this.updateRecentTimestamp(recentProject.id);
         this.emit("projectOpened", { project });
 
