@@ -12,7 +12,7 @@ const fakeSafe = (available = true): SafeStorageLike => ({
 
 let file: string;
 beforeEach(() => {
-  file = path.join(tmpdir(), `openreel-kc-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+  file = path.join(tmpdir(), `licketysplit-kc-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
 });
 afterEach(async () => {
   await fs.rm(file, { force: true });

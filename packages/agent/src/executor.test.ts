@@ -5791,7 +5791,7 @@ describe("executeTool", () => {
         key: "brand-mark",
         partId: "brand-mark",
         targetPartId: "shell",
-        text: "OPENREEL",
+        text: "LICKETYSPLIT",
         normalZ: 1,
         offset: 0.09,
         width: 0.6,
@@ -5844,7 +5844,7 @@ describe("executeTool", () => {
         targetPartIds: ["shell"],
         normal: { x: 0, y: 0, z: 1 },
         offset: 0.09,
-        text: "OPENREEL",
+        text: "LICKETYSPLIT",
         tint: "#f8fafc",
         opacity: 0.92,
         wrap: "flat",
@@ -5862,7 +5862,7 @@ describe("executeTool", () => {
       (object) => object.id === "obj-scene-decal-detail-brand-mark",
     );
     expect(renderObject).toMatchObject({
-      object: { kind: "text3d", text: "OPENREEL", extrude: 0.015 },
+      object: { kind: "text3d", text: "LICKETYSPLIT", extrude: 0.015 },
       material: {
         color: "#f8fafc",
         emissive: "#f8fafc",
@@ -5904,7 +5904,7 @@ describe("executeTool", () => {
       ?.layers.find((candidate) => candidate.type === "scene3d")
       ?.objects?.find((object) => object.id === "obj-scene-decal-detail-brand-mark");
     expect(recoveredDecal).toMatchObject({
-      object: { kind: "text3d", text: "OPENREEL" },
+      object: { kind: "text3d", text: "LICKETYSPLIT" },
       material: { color: "#f8fafc", emissive: "#f8fafc" },
       opacity: 0.92,
     });
@@ -6587,7 +6587,7 @@ describe("executeTool", () => {
             key: "label",
             kind: "text3d",
             name: "Panel label",
-            text: "OPENREEL",
+            text: "LICKETYSPLIT",
             x: 0.32,
             y: 0.26,
             z: 0.12,
@@ -6727,7 +6727,7 @@ describe("executeTool", () => {
     expect(recoveredObjects[1]).toMatchObject({
       object: {
         kind: "text3d",
-        text: "OPENREEL",
+        text: "LICKETYSPLIT",
         size: 0.24,
         extrude: 0.04,
       },
