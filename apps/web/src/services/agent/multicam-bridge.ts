@@ -1,3 +1,4 @@
+import {existingShortCandidates} from "../lickety/shorts";
 import {desktopMediaAvailable} from "../lickety/desktop-media";
 import type { JobResult, MulticamHostBridge } from "@openreel/agent";
 import {
@@ -209,7 +210,7 @@ export function createMulticamHostBridge(
           return counts;
         }, {}) ?? {},
         annotations: group.annotations ?? [],
-        socialCandidates: extractMulticamSocialClips(value.artifact),
+        socialCandidates: desktopMediaAvailable()?await existingShortCandidates(value.project):extractMulticamSocialClips(value.artifact),
       };
     },
 

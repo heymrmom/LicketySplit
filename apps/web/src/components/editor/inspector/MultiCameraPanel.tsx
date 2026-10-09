@@ -1,3 +1,4 @@
+import {SemanticShorts} from "../lickety/SemanticShorts";
 import {desktopMediaAvailable} from "../../../services/lickety/desktop-media";
 import {getCompactSourceBuffer,readDesktopAudio,type AnalysisSamples} from "../../../services/lickety/analysis-audio";
 import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
@@ -1368,7 +1369,7 @@ export const MultiCameraPanel: React.FC<MultiCameraPanelProps> = () => {
       <Text type="supporting" color="secondary" className="text-[9px] text-fg-3 text-center">
         Automatic edits create an editable timeline track and undo in one step
       </Text>
-    </fieldset></>
+    </fieldset>{desktopMediaAvailable()&&<SemanticShorts/>}</>
   );
 };
 

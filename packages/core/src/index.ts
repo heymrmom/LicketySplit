@@ -102,3 +102,5 @@ export {planPauseCuts,applyPauseCuts} from "./lickety/pacing";
 export {scanProductionCues,associateCueMarkers} from "./lickety/cues";
 
 export {validatePublishingPackage} from "./lickety/publishing";
+
+export {validateSemanticShorts} from "./lickety/shorts";
