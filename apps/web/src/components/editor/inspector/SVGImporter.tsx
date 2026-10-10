@@ -1,8 +1,8 @@
 import React, { useCallback, useState, useRef } from "react";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftFileDropControl as FileInput } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftFileDropControl as FileInput } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { Upload, FileImage, AlertCircle, Check, X } from "@/icons/lucide-compat";
 import { getGraphicsBridge } from "../../../bridges";
 

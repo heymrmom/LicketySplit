@@ -1,1 +1,1 @@
-export * from '@openreel/image-core/mask';
+export * from '@licketysplit/image-core/mask';

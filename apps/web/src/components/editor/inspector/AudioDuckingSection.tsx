@@ -17,11 +17,11 @@ import {
   type Clip,
   type Project,
   type Track,
-} from "@openreel/core";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+} from "@licketysplit/core";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { PropertySlider } from "./shell/PropertySlider";
 import { MockToggle } from "./shell/InspectorControls";
 import { useProjectStore } from "../../../stores/project-store";
@@ -365,7 +365,7 @@ export const AudioDuckingSection: React.FC<AudioDuckingSectionProps> = ({
         throw new Error("Failed to persist ducking on this clip.");
       }
 
-      window.dispatchEvent(new CustomEvent("openreel:preview-invalidate"));
+      window.dispatchEvent(new CustomEvent("licketysplit:preview-invalidate"));
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Failed to apply ducking.",
@@ -385,7 +385,7 @@ export const AudioDuckingSection: React.FC<AudioDuckingSectionProps> = ({
 
     setSettings(DEFAULT_SETTINGS);
     setErrorMessage(null);
-    window.dispatchEvent(new CustomEvent("openreel:preview-invalidate"));
+    window.dispatchEvent(new CustomEvent("licketysplit:preview-invalidate"));
   }, [audioTargetClip?.id, clearClipAudioDucking, clipId]);
 
   return (

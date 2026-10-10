@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { EditingHost, MulticamHostBridge } from "./host";
 import { executeTool } from "./executor";
 import { getTool, toMcpTools } from "./registry";
-import type { MulticamManifest } from "@openreel/core";
+import type { MulticamManifest } from "@licketysplit/core";
 
 function bridge(): MulticamHostBridge {
   const manifest: MulticamManifest = {
-    spec: "openreel-multicam/v1",
+    spec: "licketysplit-multicam/v1",
     fps: 25,
     sync: { method: "audio-crosscorr", reference: "wide" },
     participants: [
@@ -57,6 +57,10 @@ describe("multicam agent and MCP tools", () => {
     expect(names.every((name) => toMcpTools().some((tool) => tool.name === name))).toBe(true);
     expect(getTool("set_edit_policy")?.destructive).toBe(true);
     expect(getTool("override_cut")?.destructive).toBe(true);
+  });
+
+  it("documents the current exported manifest spec", () => {
+    expect(getTool("get_project_manifest")?.description).toContain("licketysplit-multicam/v1");
   });
 
   it("routes manifest reads through the host bridge", async () => {

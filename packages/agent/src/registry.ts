@@ -1,4 +1,4 @@
-import type { Action } from "@openreel/core/types/actions";
+import type { Action } from "@licketysplit/core/types/actions";
 import {
   DEFAULT_SHAPE_STYLE,
   SHAPE_TYPES,
@@ -8,8 +8,8 @@ import {
   type ShadowStyle,
   type CornerRadii,
   type ShapeStyle,
-} from "@openreel/core/graphics/types";
-import { motionEngine } from "@openreel/core/motion/motion-engine";
+} from "@licketysplit/core/graphics/types";
+import { motionEngine } from "@licketysplit/core/motion/motion-engine";
 import {
   detectMotionBeatMarkersFromPeaks,
   generateMotionBeatMarkersAtBpm,
@@ -19,7 +19,7 @@ import {
   updateMotionCompositionMarker,
   removeMotionCompositionMarker,
   applyMotionAnimationPresetToBeats,
-} from "@openreel/core/motion/motion-markers";
+} from "@licketysplit/core/motion/motion-markers";
 import {
   isMotionAnimatableProperty,
   upsertMotionLayerKeyframe,
@@ -42,41 +42,41 @@ import {
   setMotionKeyframeRoving,
   MOTION_ANIMATABLE_PROPERTIES,
   type MotionAnimatableProperty,
-} from "@openreel/core/motion/motion-keyframes";
-import { getMotionPreset } from "@openreel/core/motion/motion-presets";
+} from "@licketysplit/core/motion/motion-keyframes";
+import { getMotionPreset } from "@licketysplit/core/motion/motion-presets";
 import {
   createMotionVariable,
   updateMotionCompositionVariable,
   removeMotionCompositionVariable,
   coerceMotionVariableValue,
-} from "@openreel/core/motion/motion-variables";
+} from "@licketysplit/core/motion/motion-variables";
 import {
   addMotionLayerVariableBinding,
   removeMotionLayerVariableBinding,
   isMotionVariableBindingCompatible,
   getCompatibleMotionVariableBindingTargets,
-} from "@openreel/core/motion/motion-variable-bindings";
-import { createMotionAdjustmentLayer } from "@openreel/core/motion/motion-adjustment-layers";
-import { createMotionNullLayer } from "@openreel/core/motion/motion-null-layers";
-import { createMotionParticleLayer } from "@openreel/core/motion/motion-particles";
+} from "@licketysplit/core/motion/motion-variable-bindings";
+import { createMotionAdjustmentLayer } from "@licketysplit/core/motion/motion-adjustment-layers";
+import { createMotionNullLayer } from "@licketysplit/core/motion/motion-null-layers";
+import { createMotionParticleLayer } from "@licketysplit/core/motion/motion-particles";
 import {
   getMotionShaderFillDefs,
   getMotionShaderEffectDefs,
   getMotionShaderTextDefs,
   getMotionShaderDef,
   listGeneratedMotionShaders,
-} from "@openreel/core/motion/shaders/index";
+} from "@licketysplit/core/motion/shaders/index";
 import type {
   MotionShaderDef,
   MotionShaderParamDef,
   MotionShaderParamType,
   MotionShaderCategory,
-} from "@openreel/core/motion/shaders/index";
-import { validateMotionShaderSource } from "@openreel/core/motion/motion-shader-validator";
+} from "@licketysplit/core/motion/shaders/index";
+import { validateMotionShaderSource } from "@licketysplit/core/motion/motion-shader-validator";
 import {
   createMotionScene3DLayer,
   MOTION_OBJECT_3D_KINDS,
-} from "@openreel/core/motion/motion-scene3d";
+} from "@licketysplit/core/motion/motion-scene3d";
 import {
   buildMotionPathData,
   upsertMotionShapePathKeyframe,
@@ -88,12 +88,12 @@ import {
   getEditableMotionShapePathPoints,
   parseMotionPathSegments,
   type MotionShapePathPoint,
-} from "@openreel/core/motion/motion-shape-path";
-import { buildMotionShapePolyline } from "@openreel/core/motion/motion-shape-modifiers";
+} from "@licketysplit/core/motion/motion-shape-path";
+import { buildMotionShapePolyline } from "@licketysplit/core/motion/motion-shape-modifiers";
 import {
   createMotionImageLayerFromAsset,
   createMotionImageAssetFromMediaItem,
-} from "@openreel/core/motion/motion-assets";
+} from "@licketysplit/core/motion/motion-assets";
 import {
   buildMotionShapeStyle,
   buildMotionUiLayers,
@@ -111,20 +111,20 @@ import {
   type MotionUiShapeStyleSpec,
   type MotionUiTextStyleSpec,
   type BuildMotionUiLayerContext,
-} from "@openreel/core/motion/motion-ui-builder";
+} from "@licketysplit/core/motion/motion-ui-builder";
 import {
   alignMotionLayers,
   distributeMotionLayers,
   type MotionLayerAlignment,
   type MotionLayerDistributionAxis,
-} from "@openreel/core/motion/motion-layout";
+} from "@licketysplit/core/motion/motion-layout";
 import {
   MOTION_ANIMATION_PRESETS,
   applyMotionAnimationPreset,
   getMotionAnimationPreset,
   canApplyMotionAnimationPreset,
   type MotionAnimationPresetId,
-} from "@openreel/core/motion/motion-animation-presets";
+} from "@licketysplit/core/motion/motion-animation-presets";
 import {
   createMotionExpression,
   addMotionLayerExpression,
@@ -133,7 +133,7 @@ import {
   toggleMotionLayerExpression,
   getMotionExpressionError,
   evaluateMotionPropertyValueAtTime,
-} from "@openreel/core/motion/motion-expressions";
+} from "@licketysplit/core/motion/motion-expressions";
 import {
   createMotionEffect,
   createMotionShaderEffect,
@@ -147,7 +147,7 @@ import {
   nextMotionControlName,
   type MotionEffectNumericParameter,
   type MotionEffectParameterName,
-} from "@openreel/core/motion/motion-effects";
+} from "@licketysplit/core/motion/motion-effects";
 import {
   createMotionMask,
   addMotionLayerMask,
@@ -156,19 +156,19 @@ import {
   upsertMotionMaskPathKeyframe,
   normalizeMaskKeyframeTime,
   transferMotionMaskStack,
-} from "@openreel/core/motion/motion-masks";
+} from "@licketysplit/core/motion/motion-masks";
 import {
   setMotionLayerTrackMatte,
   clearMotionLayerTrackMatte,
-} from "@openreel/core/motion/motion-track-mattes";
-import { MOTION_BLEND_MODE_OPTIONS } from "@openreel/core/motion/motion-blend-modes";
+} from "@licketysplit/core/motion/motion-track-mattes";
+import { MOTION_BLEND_MODE_OPTIONS } from "@licketysplit/core/motion/motion-blend-modes";
 import {
   setMotionLayerParent,
   canParentMotionLayer,
   groupMotionLayers,
   ungroupMotionLayers,
   createMotionNullControllerForLayers,
-} from "@openreel/core/motion/motion-hierarchy";
+} from "@licketysplit/core/motion/motion-hierarchy";
 import {
   precomposeMotionLayers,
   addMotionComponentInstance,
@@ -177,15 +177,15 @@ import {
   isMotionCompositionLayer,
   getMotionCompositionById,
   MOTION_COMPOSITION_TIME_PROPERTY,
-} from "@openreel/core/motion/motion-precomps";
-import { disintegrateMotionLayer } from "@openreel/core/motion/motion-disintegrate";
-import { morphMotionLayers } from "@openreel/core/motion/motion-morph";
-import { createCursorClick } from "@openreel/core/motion/motion-cursor";
+} from "@licketysplit/core/motion/motion-precomps";
+import { disintegrateMotionLayer } from "@licketysplit/core/motion/motion-disintegrate";
+import { morphMotionLayers } from "@licketysplit/core/motion/motion-morph";
+import { createCursorClick } from "@licketysplit/core/motion/motion-cursor";
 import {
   setMotionLayersVisible,
   setMotionLayersLocked,
   duplicateMotionLayers,
-} from "@openreel/core/motion/motion-layer-commands";
+} from "@licketysplit/core/motion/motion-layer-commands";
 import {
   updateMotionCompositionLayerTiming,
   moveMotionLayerInTime,
@@ -194,13 +194,13 @@ import {
   splitMotionLayerAtTime,
   rippleDeleteMotionLayer,
   rippleMotionLayers,
-} from "@openreel/core/motion/motion-layer-timing";
+} from "@licketysplit/core/motion/motion-layer-timing";
 import {
   createMotionGuide,
   addMotionCompositionGuide,
   moveMotionCompositionGuide,
   removeMotionCompositionGuide,
-} from "@openreel/core/motion/motion-guides";
+} from "@licketysplit/core/motion/motion-guides";
 import {
   createMotionShapeModifier,
   addMotionShapeModifier,
@@ -210,7 +210,7 @@ import {
   getMotionShapeModifierPropertyDescriptors,
   MOTION_SHAPE_MODIFIER_PROPERTY_NAMES,
   type MotionShapeModifierPropertyName,
-} from "@openreel/core/motion/motion-shape-modifiers";
+} from "@licketysplit/core/motion/motion-shape-modifiers";
 import {
   getMotionShapeContents,
   hasExplicitShapeContents,
@@ -222,7 +222,7 @@ import {
   moveShapeItem,
   createShapeGroupItem,
   createShapePathItem,
-} from "@openreel/core/motion/motion-shape-contents";
+} from "@licketysplit/core/motion/motion-shape-contents";
 import {
   createMotionTextAnimator,
   addMotionTextAnimator,
@@ -230,7 +230,7 @@ import {
   toggleMotionTextAnimator,
   getMotionTextShaderAnimator,
   removeMotionTextAnimator,
-} from "@openreel/core/motion/motion-text-animators";
+} from "@licketysplit/core/motion/motion-text-animators";
 import {
   createDefaultMotionCamera,
   normalizeMotionCamera,
@@ -239,7 +239,7 @@ import {
   isMotionCameraProperty,
   upsertMotionCameraKeyframe,
   type MotionCameraProperty,
-} from "@openreel/core/motion/motion-camera";
+} from "@licketysplit/core/motion/motion-camera";
 import {
   createMotionLight,
   addMotionCompositionLight,
@@ -250,10 +250,10 @@ import {
   upsertMotionLightKeyframe,
   normalizeMotionLight,
   type MotionLightProperty,
-} from "@openreel/core/motion/motion-lights";
-import { importSvgAsMotionComposition } from "@openreel/core/motion/importers/svg-importer";
-import { importLottieAsMotionComposition } from "@openreel/core/motion/importers/lottie-importer";
-import { importFigmaJsonAsMotionComposition } from "@openreel/core/motion/importers/figma-json-importer";
+} from "@licketysplit/core/motion/motion-lights";
+import { importSvgAsMotionComposition } from "@licketysplit/core/motion/importers/svg-importer";
+import { importLottieAsMotionComposition } from "@licketysplit/core/motion/importers/lottie-importer";
+import { importFigmaJsonAsMotionComposition } from "@licketysplit/core/motion/importers/figma-json-importer";
 import {
   DEFAULT_MOTION_TRANSFORM,
   MOTION_SHAPE_MODIFIER_TYPES as MOTION_SHAPE_MODIFIER_TYPE_LIST,
@@ -304,17 +304,17 @@ import {
   type MotionScene3DLighting,
   type MotionScene3DRoom,
   type MotionRotation3D,
-} from "@openreel/core/motion/types";
-import type { Keyframe, Marker } from "@openreel/core/types/timeline";
+} from "@licketysplit/core/motion/types";
+import type { Keyframe, Marker } from "@licketysplit/core/types/timeline";
 import {
   AUDIO_EFFECT_TYPES,
   TRANSITION_TYPES,
-} from "@openreel/core/types/effects";
-import { normalizeMotionBlurSettings } from "@openreel/core/motion/motion-blur";
-import type { BlendMode } from "@openreel/core/video/types";
-import type { LottieAnimation } from "@openreel/core/types/lottie";
-import type { MediaItem } from "@openreel/core/types/project";
-import { EASING_TYPES, type EasingType } from "@openreel/core/types/timeline";
+} from "@licketysplit/core/types/effects";
+import { normalizeMotionBlurSettings } from "@licketysplit/core/motion/motion-blur";
+import type { BlendMode } from "@licketysplit/core/video/types";
+import type { LottieAnimation } from "@licketysplit/core/types/lottie";
+import type { MediaItem } from "@licketysplit/core/types/project";
+import { EASING_TYPES, type EasingType } from "@licketysplit/core/types/timeline";
 import type {
   EditingHost,
   JobKind,
@@ -364,6 +364,7 @@ import {
   humanoidAnimationPose,
   type HumanoidAnimation,
   skinMesh,
+  LEGACY_PARTICLE_DEFAULT_SEED,
   spawnParticles,
   stepParticles,
   makeRigidBody,
@@ -390,7 +391,7 @@ import {
   type CreationProjectState,
   type CreationValidationIssue,
   type Transform3D,
-} from "@openreel/core/creation/index";
+} from "@licketysplit/core/creation/index";
 
 export type ToolHandler = (
   args: Record<string, unknown>,
@@ -6752,7 +6753,7 @@ function buildParticleMeshFrames(
   worldSize: number,
 ): MotionObjectMeshFrames {
   const count = Math.round(clampNumber(optionalNumber(args.count) ?? 90, 1, 600));
-  const seed = optionalString(args.seed) ?? "openreel-particles";
+  const seed = optionalString(args.seed) ?? LEGACY_PARTICLE_DEFAULT_SEED;
   const speed = Math.max(0, optionalNumber(args.speed) ?? worldSize * 1.1);
   const spread = clampNumber(optionalNumber(args.spread) ?? 0.7, 0, Math.PI);
   const gravity = optionalNumber(args.gravity) ?? 2.5;
@@ -6848,7 +6849,7 @@ function updateCreationAssetParticleBake(
     gravity: optionalNumber(args.gravity) ?? 2.5,
     drag: clampNumber(optionalNumber(args.drag) ?? 0.04, 0, 1),
     lifetime: clampNumber(optionalNumber(args.lifetime) ?? 2.4, 0.2, 8),
-    seed: optionalString(args.seed) ?? "openreel-particles",
+    seed: optionalString(args.seed) ?? LEGACY_PARTICLE_DEFAULT_SEED,
     fps: Math.round(clampNumber(optionalNumber(args.fps) ?? 24, 8, 30)),
   });
   const particleNode = {
@@ -8379,7 +8380,7 @@ function hashStringToUint32(value: string): number {
 }
 
 function createSeededRandom(seed: unknown): () => number {
-  let state = hashStringToUint32(optionalString(seed) ?? String(seed ?? "openreel"));
+  let state = hashStringToUint32(optionalString(seed) ?? String(seed ?? "licketysplit"));
   return () => {
     state = Math.imul(state ^ (state >>> 15), 1 | state);
     state ^= state + Math.imul(state ^ (state >>> 7), 61 | state);
@@ -11344,7 +11345,7 @@ const TOOLS: RegisteredTool[] = [
   readTool(
     "list_creation_assets",
     "List creation assets",
-    "Compact list of persisted OpenReel creation assets/recipes generated or edited by agents.",
+    "Compact list of persisted LicketySplit creation assets/recipes generated or edited by agents.",
     obj({}),
     (_a, h) => {
       const state = creationState(h);
@@ -16120,7 +16121,7 @@ const TOOLS: RegisteredTool[] = [
     domain: "motion",
     title: "Create agent-native 3D creation scene",
     description:
-      "Create a semantic OpenReel creation scene and a renderable Motion Creator scene3d composition in one call. Use this for arbitrary agent-built 3D worlds, product stages, environment layouts, UI-in-3D mockups, props, labels, and cinematic setups that must remain editable. `objects` uses the same fields as add_motion_3d_scene plus optional key, objectId, assetId, assetKind, materialId, materialModel, tags, and parentKey. insertIntoEditor defaults to false so the scene stays in Motion Creator; set it true ONLY when the user explicitly wants the rendered scene placed on the main video-editor timeline. Returns semantic object ids and render object ids for follow-up set_creation_object_transform, set_creation_object_material, animate_creation_object, and set_creation_camera calls.",
+      "Create a semantic LicketySplit creation scene and a renderable Motion Creator scene3d composition in one call. Use this for arbitrary agent-built 3D worlds, product stages, environment layouts, UI-in-3D mockups, props, labels, and cinematic setups that must remain editable. `objects` uses the same fields as add_motion_3d_scene plus optional key, objectId, assetId, assetKind, materialId, materialModel, tags, and parentKey. insertIntoEditor defaults to false so the scene stays in Motion Creator; set it true ONLY when the user explicitly wants the rendered scene placed on the main video-editor timeline. Returns semantic object ids and render object ids for follow-up set_creation_object_transform, set_creation_object_material, animate_creation_object, and set_creation_camera calls.",
     inputSchema: obj({
       sceneId: str,
       compositionId: str,
@@ -16514,7 +16515,7 @@ const TOOLS: RegisteredTool[] = [
     domain: "motion",
     title: "Sync creation scene to Motion",
     description:
-      "Create, repair, or refresh the Motion Creator scene3d composition/layer for a persisted semantic OpenReel creation scene. Use this when a creation scene exists but is not rendering, after project import/load recovery, after stale binding issues, or when agents need to regenerate the native scene3d layer from editable creation assets/objects/cameras/lights. Reuses an existing motion-scene3d render binding unless forceNew=true, and can insert the synced composition into the editor timeline.",
+      "Create, repair, or refresh the Motion Creator scene3d composition/layer for a persisted semantic LicketySplit creation scene. Use this when a creation scene exists but is not rendering, after project import/load recovery, after stale binding issues, or when agents need to regenerate the native scene3d layer from editable creation assets/objects/cameras/lights. Reuses an existing motion-scene3d render binding unless forceNew=true, and can insert the synced composition into the editor timeline.",
     inputSchema: obj({
       sceneId: str,
       compositionId: str,
@@ -16729,7 +16730,7 @@ const TOOLS: RegisteredTool[] = [
     domain: "motion",
     title: "Add object to creation scene",
     description:
-      "Append one editable semantic object to an existing OpenReel creation scene and sync the bound Motion Creator scene3d layer when a render binding exists. Uses the same object fields as create_creation_3d_scene/add_motion_3d_scene plus optional key, objectId, renderObjectId, assetId, assetKind, materialId, materialModel, tags, parentId, and parentKey. Returns the creation object id and render object id for set_creation_object_transform, set_creation_object_material, and animate_creation_object.",
+      "Append one editable semantic object to an existing LicketySplit creation scene and sync the bound Motion Creator scene3d layer when a render binding exists. Uses the same object fields as create_creation_3d_scene/add_motion_3d_scene plus optional key, objectId, renderObjectId, assetId, assetKind, materialId, materialModel, tags, parentId, and parentKey. Returns the creation object id and render object id for set_creation_object_transform, set_creation_object_material, and animate_creation_object.",
     inputSchema: obj({
       sceneId: str,
       key: str,
@@ -23855,7 +23856,7 @@ const TOOLS: RegisteredTool[] = [
     domain: "motion",
     title: "Render creation preview",
     description:
-      "Render a still preview image for a semantic OpenReel creation scene by resolving its bound Motion Creator scene3d composition/layer. Use this after create_creation_3d_scene, sync_creation_scene_to_motion, or product cinematic creation to visually inspect agent-native creation work. If the binding/composition/layer is missing, call sync_creation_scene_to_motion first.",
+      "Render a still preview image for a semantic LicketySplit creation scene by resolving its bound Motion Creator scene3d composition/layer. Use this after create_creation_3d_scene, sync_creation_scene_to_motion, or product cinematic creation to visually inspect agent-native creation work. If the binding/composition/layer is missing, call sync_creation_scene_to_motion first.",
     inputSchema: obj({
       sceneId: str,
       compositionId: str,
@@ -31916,7 +31917,7 @@ const TOOLS: RegisteredTool[] = [
     domain: "multicam",
     title: "Get multicam project manifest",
     description:
-      "Return the exact openreel-multicam/v1 manifest for a camera group, including participants, camera subjects, sync reference, and hard constraints.",
+      "Return the exact licketysplit-multicam/v1 manifest for a camera group, including participants, camera subjects, sync reference, and hard constraints.",
     inputSchema: obj({ groupId: str }),
     readOnly: true,
     destructive: false,
@@ -31955,7 +31956,7 @@ const TOOLS: RegisteredTool[] = [
     domain: "multicam",
     title: "Get multicam transcript",
     description:
-      "Read optional per-participant local Whisper transcript segments from the separate .orma artifact.",
+      "Read the saved current-timeline AssemblyAI transcript on desktop, retaining word/channel/speaker timing. Browser reads optional artifact transcripts. This read never purchases transcription.",
     inputSchema: obj({ groupId: str, startMs: num, endMs: num }),
     readOnly: true,
     destructive: false,
@@ -32229,7 +32230,7 @@ export function toCapabilityDoc(names?: Iterable<string>): string {
     arr.push(t);
     byDomain.set(t.domain, arr);
   }
-  let out = "# OpenReel Agent Tools\n";
+  let out = "# LicketySplit Agent Tools\n";
   for (const [domain, tools] of byDomain) {
     out += `\n## ${domain}\n`;
     for (const t of tools) {

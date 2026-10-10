@@ -11,7 +11,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     id: "welcome",
     target: null,
-    title: "Welcome to OpenReel",
+    title: "Welcome to LicketySplit",
     description:
       "A quick map of the current editor layout: tools on the left, playback in the center, timeline below, and properties on the right.",
     position: "center",
@@ -79,4 +79,4 @@ export const TOUR_STEPS: TourStep[] = [
   },
 ];
 
-export const ONBOARDING_KEY = "openreel-onboarding-complete";
+export const ONBOARDING_KEY = "licketysplit-onboarding-complete";

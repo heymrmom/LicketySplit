@@ -11,13 +11,13 @@ import {
   Shield,
   KeyRound,
 } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftLink as Link } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextInputControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftLink as Link } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextInputControl } from "@licketysplit/ui";
 import { useSettingsStore, SERVICE_REGISTRY } from "../../../stores/settings-store";
 import {
   isMasterPasswordSet,
@@ -59,11 +59,11 @@ export const ApiKeysPanel: React.FC = () => {
 
     if (isSessionUnlocked()) {
       const keys =
-        typeof window !== "undefined" && window.openreel?.platform === "desktop"
+        typeof window !== "undefined" && window.licketysplit?.platform === "desktop"
           ? (
               await Promise.all(
                 SERVICE_REGISTRY.map(async (service) =>
-                  (await hasSecret(service.id))
+                  (service.id === "assemblyai" ? await window.licketysplit?.lickety?.assemblyKeyStatus() : await hasSecret(service.id))
                     ? {
                         id: service.id,
                         label: service.label,
@@ -160,6 +160,7 @@ export const ApiKeysPanel: React.FC = () => {
   );
 
   const handleRevealKey = useCallback(async (serviceId: string) => {
+    if(serviceId==="assemblyai"&&window.licketysplit?.platform==="desktop")return;
     if (revealedKeys[serviceId]) {
       setShowKey((prev) => ({ ...prev, [serviceId]: !prev[serviceId] }));
       return;
@@ -185,7 +186,7 @@ export const ApiKeysPanel: React.FC = () => {
   }, []);
 
   const availableServices = SERVICE_REGISTRY.filter(
-    (s) => !storedKeys.some((k) => k.id === s.id),
+    (s) => (s.id !== "assemblyai" || window.licketysplit?.platform === "desktop") && !storedKeys.some((k) => k.id === s.id),
   );
 
   // Not set up yet
@@ -316,6 +317,7 @@ export const ApiKeysPanel: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <IconButton
                     label={isRevealed ? "Hide key" : "Show key"}
+                    disabled={stored.id === "assemblyai" && window.licketysplit?.platform === "desktop"}
                     onClick={() => handleRevealKey(stored.id)}
                     variant="ghost"
                     size="sm"

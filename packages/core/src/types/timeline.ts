@@ -37,7 +37,7 @@ export interface TimelineBeatAnalysis {
 export interface Track {
   readonly id: string;
   /**
-   * Legacy serialization hint retained for older OpenReel readers. New code
+   * Legacy serialization hint retained for older LicketySplit readers. New code
    * must resolve behavior from the timeline item, not from this value.
    */
   readonly type: "video" | "audio" | "image" | "text" | "graphics";
@@ -156,6 +156,8 @@ export interface Clip {
   /** Zero-based index of the audio track within the source media file to use for this clip.
    * Undefined or 0 means the primary/first audio track. */
   readonly audioTrackIndex?: number;
+  /** Zero-based channel within the selected source audio stream. */
+  readonly sourceChannelIndex?: number;
   readonly metadata?: ClipMetadata;
 }
 

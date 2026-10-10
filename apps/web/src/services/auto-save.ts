@@ -1,4 +1,4 @@
-import type { Project } from "@openreel/core";
+import { normalizeProjectStoredFields, type Project } from "@licketysplit/core";
 
 export interface AutoSaveConfig {
   interval: number;
@@ -32,12 +32,13 @@ const DEFAULT_CONFIG: AutoSaveConfig = {
   debounceTime: 2000, // 2 seconds
 };
 
-const AUTO_SAVE_DB_NAME = "openreel-autosave";
+const AUTO_SAVE_DB_NAME = "licketysplit-autosave";
 const AUTO_SAVE_DB_VERSION = 1;
 const AUTO_SAVE_STORE = "autosaves";
 
 export function serializeProjectForAutoSave(project: Project): string {
-  const mediaItems = project.mediaLibrary.items.map((item) => ({
+  const normalizedProject = normalizeProjectStoredFields(project);
+  const mediaItems = normalizedProject.mediaLibrary.items.map((item) => ({
     ...item,
     blob: null,
     fileHandle: null,
@@ -49,9 +50,9 @@ export function serializeProjectForAutoSave(project: Project): string {
   }));
 
   return JSON.stringify({
-    ...project,
+    ...normalizedProject,
     mediaLibrary: {
-      ...project.mediaLibrary,
+      ...normalizedProject.mediaLibrary,
       items: mediaItems,
     },
   });
@@ -406,7 +407,7 @@ export class AutoSaveManager {
         return null;
       }
 
-      const project = JSON.parse(record.data) as Project;
+      const project = normalizeProjectStoredFields(JSON.parse(record.data) as Project);
 
       this.emit("restored", { project, timestamp: record.timestamp });
       return project;

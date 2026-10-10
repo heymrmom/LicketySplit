@@ -7,7 +7,7 @@ export default defineConfig({
   target: "node18",
   // Workspace source packages are consumed as TS and must be inlined into the
   // standalone CLI bundle (only Node built-ins stay external).
-  noExternal: ["@openreel/agent", "@openreel/core"],
+  noExternal: ["@licketysplit/agent", "@licketysplit/core"],
   clean: true,
   sourcemap: true,
 });

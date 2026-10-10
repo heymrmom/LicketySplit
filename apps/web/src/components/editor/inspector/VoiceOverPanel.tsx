@@ -3,7 +3,7 @@ import {
   ToolcraftButton as Button,
   ToolcraftCard as Card,
   ToolcraftText as Text,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import { AlertCircle, Mic, Square } from "@/icons/lucide-compat";
 import { useProjectStore } from "../../../stores/project-store";
 import { useTimelineStore } from "../../../stores/timeline-store";

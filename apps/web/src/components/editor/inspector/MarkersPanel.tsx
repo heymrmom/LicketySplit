@@ -1,14 +1,16 @@
+import {CueDetails} from "../lickety/CueDetails";
+import {associateCueMarkers,scanProductionCues} from "@licketysplit/core";
 import React, { useState } from "react";
 import { Flag, Plus, Trash2, Edit2, Check, X } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextInputControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextInputControl } from "@licketysplit/ui";
 import { useProjectStore } from "../../../stores/project-store";
 import { getPlaybackBridge } from "../../../bridges/playback-bridge";
-import type { Marker } from "@openreel/core";
+import type { Marker } from "@licketysplit/core";
 
 export const MarkersPanel: React.FC = () => {
   const { project, addMarker, removeMarker, updateMarker } = useProjectStore();
@@ -86,6 +88,7 @@ export const MarkersPanel: React.FC = () => {
         />
       </div>
 
+      {project.lickety?.words&&<><Button label="Scan retained production promises" size="sm" variant="secondary" onClick={()=>{const current=useProjectStore.getState().project;const cues=scanProductionCues(current.lickety?.words??[]);const next=associateCueMarkers(current,[...cues,...(current.lickety?.cues?.filter(c=>c.kind==="broll")??[])]);void useProjectStore.getState().executeAction({type:"lickety/applyEdit",id:crypto.randomUUID(),timestamp:Date.now(),params:{projectId:current.id,expectedTimeline:JSON.stringify(current.timeline),snapshot:{timeline:next.timeline,lickety:next.lickety}}});}}/>{project.lickety.cues?.map(cue=><details key={cue.id} className="rounded border border-border p-2"><summary className="min-h-8 cursor-pointer text-xs">{cue.kind}: {(cue.startMs/1000).toFixed(2)} s</summary><CueDetails cue={cue}/></details>)}</>}
       {markers.length === 0 ? (
         <div className="py-8 text-center text-fg-3 text-xs">
           <Flag size={32} className="mx-auto mb-2 opacity-30" aria-hidden />

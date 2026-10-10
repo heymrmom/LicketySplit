@@ -104,8 +104,8 @@ function main(): void {
     endpoint = readEndpoint();
   } catch (error) {
     process.stderr.write(
-      `openreel-mcp: ${error instanceof Error ? error.message : String(error)}\n` +
-        "Is the OpenReel desktop app running?\n",
+      `licketysplit-mcp: ${error instanceof Error ? error.message : String(error)}\n` +
+        "Is the LicketySplit desktop app running?\n",
     );
     process.exit(1);
   }
@@ -119,7 +119,7 @@ function main(): void {
       })
       .catch((error) => {
         process.stderr.write(
-          `openreel-mcp: ${error instanceof Error ? error.message : String(error)}\n`,
+          `licketysplit-mcp: ${error instanceof Error ? error.message : String(error)}\n`,
         );
       });
   });

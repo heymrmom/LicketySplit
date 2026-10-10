@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { Project, MotionComposition } from "@openreel/core";
+import type { Project, MotionComposition } from "@licketysplit/core";
 import type {
   CreationAssetRecipe,
   CreationProjectState,
   CreationScene,
-} from "@openreel/core/creation/index";
+} from "@licketysplit/core/creation/index";
 import { planCreationCameraEdit } from "./creation-camera-editing";
 
 function asset(): CreationAssetRecipe {

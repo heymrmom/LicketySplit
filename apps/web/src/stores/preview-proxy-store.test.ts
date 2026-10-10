@@ -1,6 +1,6 @@
 import "../test/install-local-storage-mock";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MediaImportService, getMediaEngine, type MediaItem } from "@openreel/core";
+import { MediaImportService, getMediaEngine, type MediaItem } from "@licketysplit/core";
 import { createEmptyProject } from "./project/project-helpers";
 import { useProjectStore } from "./project-store";
 import { previewProxyCache } from "./preview-proxy-store";
@@ -55,3 +55,4 @@ describe("project/export proxy isolation", () => {
     expect(previewProxyCache.store.getState().projectId).toBeNull();
   });
 });
+it('desktop defers unused library identities until a current or selected clip needs preparation',async()=>{const {makeWorkflowFixture}=await import('@licketysplit/core/lickety/test-fixtures');const {useUIStore}=await import('./ui-store');const fixture=makeWorkflowFixture();const findAsset=vi.fn(async(mediaId:string)=>({identity:{assetId:mediaId,mediaId,sha256:'sha',byteLength:1},originalUri:`licketysplit-media://${mediaId}/original`,durationMs:20000}));Object.assign(window,{licketysplit:{platform:'desktop',lickety:{findAsset,originalUri:async(mediaId:string)=>`licketysplit-media://${mediaId}/original`,resourceProfile:async()=>({lowMemory:true}),resolve:async(id:string)=>`licketysplit-media://${id}/original`,ensureProxy:async(id:string)=>({assetId:id,sourceSha256:'sha',proxyUri:`licketysplit-media://${id}/proxy`,version:1,width:960,height:540,sourceStartPTS:0,proxyStartPTS:0,durationMs:20000})}}});useUIStore.setState({selectedItems:[]});useProjectStore.setState({hasOpenProject:true,project:{...fixture,timeline:{...fixture.timeline,tracks:[]}}});await new Promise(resolve=>setTimeout(resolve,20));expect(findAsset).not.toHaveBeenCalled();useUIStore.setState({selectedItems:[{type:'clip',id:'cam-b'}]});await vi.waitFor(()=>expect(findAsset).toHaveBeenCalledWith('cam-b'));expect(findAsset).not.toHaveBeenCalledWith('cam-a');await vi.waitFor(()=>expect(previewProxyCache.store.getState().entries['cam-b']?.status).toBe('ready'));delete window.licketysplit;useUIStore.setState({selectedItems:[]});});

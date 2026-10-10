@@ -1,19 +1,20 @@
 import type { JSX } from "react";
 import React, { useCallback, useEffect, useState } from "react";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import type { VideoExportSettings } from "@openreel/core";
-import { setEncoderBackendFactory, WebCodecsBackend } from "@openreel/core";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import type { VideoExportSettings } from "@licketysplit/core";
+import { setEncoderBackendFactory, WebCodecsBackend } from "@licketysplit/core";
 import { useProjectStore } from "../../stores/project-store";
 import { ExportDialog } from "../../components/editor/ExportDialog";
 import { deriveSourceExportMatch } from "../../services/export-source-match";
 import { useExportRunner, extForFormat, exportFilename } from "../../services/export-runner";
 import { NativeFFmpegBackend } from "../../services/native-ffmpeg-backend";
 import { Icon } from "@/icons/Icon";
+import { useUIStore } from "../../stores/ui-store";
 
 const NO_DRAG = { WebkitAppRegion: "no-drag" } as React.CSSProperties;
 
 const resolveExportOutputPath = (): string =>
-  (window as { __openreelExportPath?: string }).__openreelExportPath ?? "";
+  (window as { __licketysplitExportPath?: string }).__licketysplitExportPath ?? "";
 
 // Native ffmpeg writes the file itself via the resolved output path, so it does
 // not consume the writable stream — a no-op stream satisfies the interface.
@@ -42,6 +43,8 @@ function shouldUseWebCodecs(settings: VideoExportSettings): boolean {
 
 export function DesktopExportButton(): JSX.Element {
   const project = useProjectStore((state) => state.project);
+  const exportRequested = useUIStore((state) => state.activeModal === "export");
+  const closeModal = useUIStore((state) => state.closeModal);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const {
@@ -57,9 +60,15 @@ export function DesktopExportButton(): JSX.Element {
 
   useEffect(() => {
     const open = () => setIsDialogOpen(true);
-    window.addEventListener("openreel:menu:export", open);
-    return () => window.removeEventListener("openreel:menu:export", open);
+    window.addEventListener("licketysplit:menu:export", open);
+    return () => window.removeEventListener("licketysplit:menu:export", open);
   }, []);
+
+  useEffect(() => {
+    if (!exportRequested) return;
+    setIsDialogOpen(true);
+    closeModal();
+  }, [exportRequested, closeModal]);
 
   const handleExport = useCallback(
     async (settings: VideoExportSettings) => {

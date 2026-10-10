@@ -82,3 +82,27 @@ export {
   compressionPlanToExportSettings,
   COMPRESSION_SIZE_PRESETS,
 } from "./export/compression";
+
+export type { JobState, ResourceProfile, AssetIdentity, RegisteredAsset, ProxyReceipt, DialogueSpan, AnalysisSnapshot, PreparedAudio, TranscriptWord as LicketyTranscriptWord, TranscriptDocument, TimelineWord, NarrativeExcerpt, NarrativeProposal, TimelineRange, NarrativeResult, GapEvidence, PauseCut, Cue, PublishingPackage, SemanticShort, LicketyProjectState } from "./lickety/types";
+export { cloneProjectForWorkflow } from "./lickety/clone-project";
+
+export {getManagedBridge,prepareNativeOriginal,bindNativeMediaSources,getNativeMediaSource,nativeVideoUrl} from "./media/native-media-bridge";
+
+export {createAnalysisSnapshot,fullEditRevision,revisionHash} from "./lickety/snapshot";
+export * from "./lickety/podcast-types";
+export {buildPodcastAssembly} from "./lickety/podcast-assembly";
+export {normalizeAssemblyTranscript} from "./lickety/transcript";
+
+export {serializeProjectFile,assertReaderCompatibility} from "./storage/project-serializer";
+
+export {compileNarrative,sliceTimeline,deriveTimelineWords,projectTranscript,narrativeLimitations} from "./lickety/timeline-slicer";
+export {validateNarrativeProposal} from "./lickety/proposals";
+
+export {getOriginalFadePhase} from "./audio/clip-fade-envelope";
+
+export {planPauseCuts,applyPauseCuts} from "./lickety/pacing";
+export {scanProductionCues,associateCueMarkers} from "./lickety/cues";
+
+export {validatePublishingPackage} from "./lickety/publishing";
+
+export {validateSemanticShorts} from "./lickety/shorts";

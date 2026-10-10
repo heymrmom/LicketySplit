@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { splitCaptionIntoSingleLineCues } from "@openreel/core";
+import { splitCaptionIntoSingleLineCues } from "@licketysplit/core";
 import {
   ToolcraftButton as Button,
   ToolcraftCard as Card,
   ToolcraftSelectControl as Selector,
   ToolcraftText as Text,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import { Check, WrapText } from "@/icons/lucide-compat";
 import { useProjectStore } from "../../../stores/project-store";
 
@@ -204,7 +204,7 @@ export const CaptionEditorPanel: React.FC<CaptionEditorPanelProps> = ({
                       onClick={() => toggleCaption(caption.id)}
                       className={`grid h-4 w-4 place-items-center rounded border ${
                         selected
-                          ? "border-accent bg-accent text-white"
+                          ? "border-accent-strong bg-accent-strong text-white"
                           : "border-border bg-bg-1 text-transparent"
                       }`}
                     >

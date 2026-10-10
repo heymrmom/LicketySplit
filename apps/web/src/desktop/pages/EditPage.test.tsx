@@ -23,7 +23,9 @@ vi.mock("../../components/editor/chat/ChatPanel", () => ({
   ),
 }));
 
-import { EditPage } from "./EditPage";
+import { EditPage, getResponsiveTimelineHeight } from "./EditPage";
+
+const originalResizeObserver = globalThis.ResizeObserver;
 
 describe("EditPage AI Editor dock", () => {
   beforeEach(() => {
@@ -38,6 +40,7 @@ describe("EditPage AI Editor dock", () => {
 
   afterEach(() => {
     cleanup();
+    globalThis.ResizeObserver = originalResizeObserver;
     window.localStorage.clear();
   });
 
@@ -58,5 +61,48 @@ describe("EditPage AI Editor dock", () => {
     expect(screen.getByTestId("desktop-edit-page").style.gridTemplateAreas).not.toContain(
       "chat",
     );
+  });
+
+  it.each([
+    [1080, 680, 439, "220px minmax(0, 1fr) 260px 320px"],
+    [1440, 900, 640, "320px minmax(0, 1fr) 340px 380px"],
+  ])("fits the saved layout into a %i px editor viewport", async (width, height, expectedTimelineHeight, expectedColumns) => {
+    window.localStorage.setItem("licketysplit-desktop-timeline-h", "640");
+    const TestResizeObserver = class {
+      private callback: ConstructorParameters<typeof ResizeObserver>[0];
+      constructor(callback: ConstructorParameters<typeof ResizeObserver>[0]) { this.callback = callback; }
+      observe(target: Element) {
+        const contentRect = { width, height } as DOMRectReadOnly;
+        this.callback([{ target, contentRect } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      unobserve() {}
+      disconnect() {}
+    };
+    globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver;
+
+    render(<EditPage />);
+    const page = screen.getByTestId("desktop-edit-page");
+    await waitFor(() => {
+      expect(page.style.gridTemplateRows).toBe(`minmax(0, 1fr) ${expectedTimelineHeight}px`);
+    });
+
+    expect(page.style.gridTemplateColumns).toBe(expectedColumns);
+    expect(window.localStorage.getItem("licketysplit-desktop-timeline-h")).toBe("640");
+  });
+
+  it("clamps only the live timeline row and preserves the saved preference", () => {
+    expect(getResponsiveTimelineHeight(640, 680)).toBe(439);
+    expect(getResponsiveTimelineHeight(640, 900)).toBe(640);
+    expect(getResponsiveTimelineHeight(200, 680)).toBe(200);
+  });
+
+  it("suspends only the viewer preview while podcast review is open", () => {
+    render(<EditPage suspendPreview />);
+
+    expect(screen.getByText("Podcast review is open; viewer preview is paused.")).toBeTruthy();
+    expect(screen.queryByText("Preview panel")).toBeNull();
+    expect(screen.getByText("Media panel")).toBeTruthy();
+    expect(screen.getByText("Inspector panel")).toBeTruthy();
+    expect(screen.getByText("Timeline panel")).toBeTruthy();
   });
 });

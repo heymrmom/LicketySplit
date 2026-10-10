@@ -1,5 +1,5 @@
-import type { ExportProgress, MotionComposition } from "@openreel/core";
-import type { Project } from "@openreel/core/types/project";
+import type { ExportProgress, MotionComposition } from "@licketysplit/core";
+import type { Project } from "@licketysplit/core/types/project";
 import { exportMotionCompositionScene } from "./export-motion-frame";
 import {
   useMotionStore,

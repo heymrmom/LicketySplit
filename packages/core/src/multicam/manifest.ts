@@ -1,13 +1,15 @@
 import type { MulticamEditPolicy } from "./automatic-edit";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
-export const MULTICAM_MANIFEST_SPEC = "openreel-multicam/v1" as const;
+export const MULTICAM_MANIFEST_SPEC = "licketysplit-multicam/v1" as const;
+export const LEGACY_MULTICAM_MANIFEST_SPEC = "openreel-multicam/v1" as const;
 
 export type MulticamCameraType =
   | "closeup"
   | "wide"
   | "two-shot"
-  | "reaction";
+  | "reaction"
+  | "unknown";
 export type MulticamSeat = "left" | "center" | "right" | number;
 
 export interface MulticamManifestParticipant {
@@ -16,6 +18,24 @@ export interface MulticamManifestParticipant {
   /** Audio media/track identifier mapped to this isolated microphone. */
   audio: string;
   seat: MulticamSeat;
+  /** A single shared conversation mix is not evidence of isolated speakers. */
+  audioMode?: "isolated" | "shared-mix";
+  /** All source lanes when a participant is assembled from several original files. */
+  audioTracks?: string[];
+  bindings?: Array<{ trackId: string; streamIndex?: number; channel?: number }>;
+  /** Live clip windows used to invalidate activity after microphone edits. */
+  audioWindows?: Array<{
+    trackId: string;
+    clipId: string;
+    mediaId: string;
+    startTime: number;
+    duration: number;
+    inPoint: number;
+    outPoint: number;
+    speed: number;
+    volume: number;
+    sourceChannelIndex?: number;
+  }>;
 }
 
 export interface MulticamManifestCamera {
@@ -25,10 +45,12 @@ export interface MulticamManifestCamera {
   subject: string;
   /** Original file hint used to resolve/relink the camera source. */
   file: string;
-  /** Optional resolved OpenReel timeline clip id. */
+  /** Optional resolved LicketySplit timeline clip id. */
   clipId?: string;
   /** Runtime angle mapping; camera id/file remain the shoot-authored identity. */
   angleId?: string;
+  /** Ordered original-source coverage used by grouped podcast angles. */
+  sourceSegments?: import("../video/multicam-engine").CameraSourceSegment[];
 }
 
 export interface MulticamManifestSync {
@@ -96,14 +118,14 @@ export function validateMulticamManifest(
   if (!isRecord(value)) {
     return { valid: false, errors: ["Manifest must be an object"] };
   }
-  if (value.spec !== MULTICAM_MANIFEST_SPEC) {
-    errors.push(`spec must be ${MULTICAM_MANIFEST_SPEC}`);
+  if (value.spec !== MULTICAM_MANIFEST_SPEC && value.spec !== LEGACY_MULTICAM_MANIFEST_SPEC) {
+    errors.push(`spec must be ${MULTICAM_MANIFEST_SPEC} or ${LEGACY_MULTICAM_MANIFEST_SPEC}`);
   }
   positiveNumber(value.fps, "fps", errors);
 
   const participants = Array.isArray(value.participants) ? value.participants : [];
-  if (participants.length < 2) {
-    errors.push("participants must contain at least two isolated microphones");
+  if (participants.length < 2 && !(participants.length === 1 && isRecord(participants[0]) && (participants[0].audioMode === "shared-mix" || participants[0].audioMode === "isolated"))) {
+    errors.push("participants must contain at least one routed microphone");
   }
   const participantIds = new Set<string>();
   participants.forEach((entry, index) => {
@@ -118,6 +140,20 @@ export function validateMulticamManifest(
     }
     requiredString(entry.name, `${path}.name`, errors);
     requiredString(entry.audio, `${path}.audio`, errors);
+    if (entry.audioMode !== undefined && entry.audioMode !== "isolated" && entry.audioMode !== "shared-mix") errors.push(`${path}.audioMode is invalid`);
+    if (entry.audioTracks !== undefined && (!Array.isArray(entry.audioTracks) || entry.audioTracks.some((trackId) => typeof trackId !== "string" || !trackId))) errors.push(`${path}.audioTracks is invalid`);
+    if (entry.bindings !== undefined && (!Array.isArray(entry.bindings) || entry.bindings.some((binding) => {
+      if (!isRecord(binding)) return true;
+      return typeof binding.trackId !== "string" ||
+        (binding.streamIndex !== undefined && (typeof binding.streamIndex !== "number" || !Number.isInteger(binding.streamIndex) || binding.streamIndex < 0)) ||
+        (binding.channel !== undefined && (typeof binding.channel !== "number" || !Number.isInteger(binding.channel) || binding.channel < 0));
+    }))) errors.push(`${path}.bindings is invalid`);
+    if (entry.audioWindows !== undefined && (!Array.isArray(entry.audioWindows) || entry.audioWindows.some((window) => {
+      if (!isRecord(window)) return true;
+      return typeof window.trackId !== "string" || typeof window.clipId !== "string" || typeof window.mediaId !== "string" ||
+        [window.startTime, window.duration, window.inPoint, window.outPoint, window.speed, window.volume].some((field) => typeof field !== "number" || !Number.isFinite(field)) ||
+        (window.sourceChannelIndex !== undefined && (typeof window.sourceChannelIndex !== "number" || !Number.isInteger(window.sourceChannelIndex) || window.sourceChannelIndex < 0));
+    }))) errors.push(`${path}.audioWindows is invalid`);
     if (
       entry.seat !== "left" &&
       entry.seat !== "center" &&
@@ -143,14 +179,14 @@ export function validateMulticamManifest(
       cameraIds.add(entry.id);
     }
     if (
-      !(["closeup", "wide", "two-shot", "reaction"] as const).includes(
+      !(["closeup", "wide", "two-shot", "reaction", "unknown"] as const).includes(
         entry.type as MulticamCameraType,
       )
     ) {
       errors.push(`${path}.type is invalid`);
     }
     if (entry.type === "wide") hasWide = true;
-    if (requiredString(entry.subject, `${path}.subject`, errors)) {
+    if (requiredString(entry.subject, `${path}.subject`, errors) && entry.type !== "unknown") {
       const subjects = entry.subject === "all" ? [] : entry.subject.split("+");
       for (const subject of subjects) {
         if (!participantIds.has(subject)) {
@@ -245,14 +281,15 @@ export function parseMulticamManifest(
   if (!validation.valid) {
     throw new Error(`Invalid multicam manifest: ${validation.errors.join("; ")}`);
   }
-  return parsed as MulticamManifest;
+  return { ...(parsed as MulticamManifest), spec: MULTICAM_MANIFEST_SPEC };
 }
 
 export function serializeMulticamManifest(
   manifest: MulticamManifest,
   format: "json" | "yaml" = "json",
 ): string {
+  const current = { ...manifest, spec: MULTICAM_MANIFEST_SPEC };
   return format === "json"
-    ? JSON.stringify(manifest, null, 2)
-    : stringifyYaml(manifest);
+    ? JSON.stringify(current, null, 2)
+    : stringifyYaml(current);
 }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { analyzeSileroVad, ActionExecutor, multicamEngine, type Clip } from "@openreel/core";
+import { analyzeSileroVad, ActionExecutor, multicamEngine, type Clip } from "@licketysplit/core";
 import { useProjectStore } from "../../../stores/project-store";
 import { useEngineStore } from "../../../stores/engine-store";
 import { useUIStore } from "../../../stores/ui-store";
@@ -13,7 +13,7 @@ import { loadAudioBuffer } from "../../../utils/load-audio-buffer";
 import { analyzeMulticamSyncInWorker } from "./multicam-workflow";
 vi.mock("../../../utils/load-audio-buffer", () => ({ loadAudioBuffer: vi.fn() }));
 vi.mock("../../../services/multicam-analysis-store", () => ({ saveMulticamArtifact: vi.fn().mockResolvedValue("artifact"), loadMulticamArtifact: vi.fn() }));
-vi.mock("@openreel/core", async (original) => ({ ...await original<typeof import("@openreel/core")>(), analyzeSileroVad: vi.fn() }));
+vi.mock("@licketysplit/core", async (original) => ({ ...await original<typeof import("@licketysplit/core")>(), analyzeSileroVad: vi.fn() }));
 vi.mock("./multicam-workflow", async (original) => ({ ...await original<typeof import("./multicam-workflow")>(), analyzeMulticamSyncInWorker: vi.fn() }));
 
 const clip = (id: string): Clip => ({

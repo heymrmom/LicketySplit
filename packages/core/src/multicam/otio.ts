@@ -1,5 +1,6 @@
 import type { MulticamManifest } from "./manifest";
-import type { MulticamShotPlan } from "./shot-planner";
+import { MULTICAM_MANIFEST_SPEC } from "./manifest";
+import { MULTICAM_EDIT_SPEC, type MulticamShotPlan } from "./shot-planner";
 
 export interface OtioSerializable {
   OTIO_SCHEMA: string;
@@ -22,7 +23,7 @@ const timeRange = (start: number, duration: number, rate: number): OtioSerializa
 export function multicamPlanToOtio(
   plan: MulticamShotPlan,
   manifest: MulticamManifest,
-  name = "OpenReel Automatic Multicam Edit",
+  name = "LicketySplit Automatic Multicam Edit",
 ): OtioSerializable {
   const maximumPanels = plan.shots.reduce(
     (maximum, shot) => Math.max(maximum, shot.layout.panels.length),
@@ -45,10 +46,10 @@ export function multicamPlanToOtio(
           OTIO_SCHEMA: "ExternalReference.1",
           target_url: camera?.file ?? "",
           available_range: null,
-          metadata: { openreel_camera_id: panel.cameraId },
+          metadata: { licketysplit_camera_id: panel.cameraId },
         },
         metadata: {
-          openreel: {
+          licketysplit: {
             subject: panel.subject,
             layout: shot.layout.template,
             panel_rect: panel.rect,
@@ -83,10 +84,10 @@ export function multicamPlanToOtio(
       metadata: {},
     },
     metadata: {
-      openreel: {
-        spec: plan.spec,
+      licketysplit: {
+        spec: MULTICAM_EDIT_SPEC,
         duration_ms: plan.durationMs,
-        manifest_spec: manifest.spec,
+        manifest_spec: MULTICAM_MANIFEST_SPEC,
       },
     },
   };

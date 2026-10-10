@@ -5,10 +5,13 @@ import {
   type MediaItem,
   type MultiCamGroup,
   type Project,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   createMulticamApplyEditAction,
   buildMulticamManifest,
+  buildMulticamSourceClipMap,
+  hasCurrentGroupedPodcastActivity,
+  mapPodcastProgramAudio,
   findMulticamCalibrationRanges,
   getMulticamAnalysisDuration,
   prepareMulticamAnalysisAudio,
@@ -246,9 +249,103 @@ describe("multicam workflow", () => {
       forbid_jump_cut_same_subject: true,
     });
 
-    expect(value.spec).toBe("openreel-multicam/v1");
+    expect(value.spec).toBe("licketysplit-multicam/v1");
     expect(value.participants.map((participant) => participant.audio)).toEqual(["a", "b"]);
     expect(value.cameras.map((camera) => camera.clipId)).toEqual(["clip-a", "clip-b"]);
+  });
+
+  it("resolves every grouped original segment and exports current mic bindings", () => {
+    const base = project();
+    const target: Project = {
+      ...base,
+      mediaLibrary: { items: [...base.mediaLibrary.items, { ...media("mic-host"), type: "audio" }] },
+      timeline: {
+        ...base.timeline,
+        tracks: [
+          ...base.timeline.tracks.map((track) => ({ ...track, clips: track.clips.map((item) => ({ ...item, metadata: { podcast: { setupId: "podcast-setup", groupId: "camera", role: "camera" } } })) })),
+          { id: "mic-host-track", type: "audio", name: "Host mic", clips: [{ ...clip("host-audio", "mic-host-track", "mic-host"), metadata: { podcast: { setupId: "podcast-setup", groupId: "mic-host", role: "dialogue", participantId: "host", sourceStreamIndex: 2, sourceChannelIndex: 1 } } }], transitions: [], locked: false, hidden: false, muted: false, solo: false },
+        ],
+      },
+      lickety: { schemaVersion: 1, podcastSetup: { participants: [{ id: "host", name: "Host" }], groups: [{ id: "camera", framing: "person", participantIds: ["host"] }] } as never },
+    };
+    const cameraAngle = {
+      ...group.angles[0]!,
+      sourceSegments: [
+        { mediaId: "media-a", clipId: "clip-a", trackId: "source-a", sourceStartSeconds: 0, sourceEndSeconds: 8, episodeMapping: { scale: 1, offsetSeconds: 0 }, timelineStart: 2, timelineEnd: 10 },
+        { mediaId: "media-b", clipId: "clip-b", trackId: "source-b", sourceStartSeconds: 0, sourceEndSeconds: 8, episodeMapping: { scale: 1, offsetSeconds: 8 }, timelineStart: 10, timelineEnd: 18 },
+      ],
+    };
+    const grouped = { ...group, angles: [cameraAngle, group.angles[1]!] };
+    const sources = resolveMulticamSources(target, grouped);
+    const constraints = { min_shot_ms: 1_800, max_shot_ms: 25_000, cut_lead_ms: 120, reaction_shot_after_ms: 12_000, forbid_jump_cut_same_subject: true };
+    const manifest = buildMulticamManifest(target, grouped, sources, constraints);
+
+    expect(buildMulticamSourceClipMap(sources).size).toBe(2);
+    expect(manifest.cameras[0]).toMatchObject({ subject: "participant-host", sourceSegments: [expect.objectContaining({ clipId: "clip-a", timelineStart: 2 }), expect.objectContaining({ clipId: "clip-b", timelineStart: 2 })] });
+    expect(manifest.participants).toContainEqual(expect.objectContaining({ id: "participant-host", audio: "mic-host-track", audioTracks: ["mic-host-track"], bindings: [{ trackId: "mic-host-track", streamIndex: 2, channel: 1 }] }));
+  });
+
+  it("maps podcast framing only from explicit setup and fingerprints live mic edits", async () => {
+    const base = project();
+    const target: Project = {
+      ...base,
+      mediaLibrary: { items: [...base.mediaLibrary.items, { ...media("mic-host"), type: "audio" }] },
+      timeline: {
+        ...base.timeline,
+        tracks: [
+          ...base.timeline.tracks.map((track) => ({
+            ...track,
+            clips: track.clips.map((item) => ({ ...item, metadata: { podcast: { setupId: "setup", groupId: track.id === "source-a" ? "main-group" : "unknown-group", role: "camera" } } })),
+          })),
+          { id: "mic-host-track", type: "audio", name: "Host mic", clips: [{ ...clip("host-audio", "mic-host-track", "mic-host"), metadata: { podcast: { setupId: "setup", groupId: "mic-host", role: "dialogue", participantId: "host", sourceStreamIndex: 0, sourceChannelIndex: 0 } } }], transitions: [], locked: false, hidden: false, muted: false, solo: false },
+        ],
+      },
+      lickety: { schemaVersion: 1, podcastSetup: {
+        participants: [{ id: "host", name: "Host" }],
+        groups: [
+          { id: "main-group", name: "Main", framing: "everyone" },
+          { id: "unknown-group", name: "Cam C", framing: "other", participantIds: ["unmapped-speaker"] },
+        ],
+      } as never },
+    };
+    const grouped = {
+      ...group,
+      angles: [
+        { ...group.angles[0]!, name: "Main", sourceSegments: [{ mediaId: "media-a", clipId: "clip-a", trackId: "source-a", sourceStartSeconds: 0, sourceEndSeconds: 8, episodeMapping: { scale: 1, offsetSeconds: 0 }, timelineStart: 2, timelineEnd: 10 }] },
+        { ...group.angles[1]!, name: "Cam C", sourceSegments: [{ mediaId: "media-b", clipId: "clip-b", trackId: "source-b", sourceStartSeconds: 0, sourceEndSeconds: 8, episodeMapping: { scale: 1, offsetSeconds: 0 }, timelineStart: 2, timelineEnd: 10 }] },
+      ],
+    };
+    const constraints = { min_shot_ms: 1_800, max_shot_ms: 25_000, cut_lead_ms: 120, reaction_shot_after_ms: 12_000, forbid_jump_cut_same_subject: true };
+    const sources = resolveMulticamSources(target, grouped);
+    const manifest = buildMulticamManifest(target, grouped, sources, constraints);
+
+    expect(manifest.cameras).toMatchObject([
+      { id: "a", type: "wide", subject: "all" },
+      { id: "b", type: "unknown", subject: "unmapped" },
+    ]);
+    expect(manifest.cameras[1]?.subject).not.toBe("all");
+    expect(manifest.participants.map((entry) => entry.id)).toEqual(["participant-host"]);
+
+    const { createOrmaArtifact, fingerprintMulticamManifest } = await import("@licketysplit/core");
+    const artifact = createOrmaArtifact({ manifest, media: [], activity: { angleIds: ["participant-host"], duration: 8, windowMs: 50, points: [] } });
+    expect(artifact.manifestFingerprint).toBe(fingerprintMulticamManifest(manifest));
+    expect(hasCurrentGroupedPodcastActivity(target, grouped, artifact)).toBe(true);
+    const micTrack = target.timeline.tracks.find((track) => track.id === "mic-host-track")!;
+    micTrack.clips[0] = { ...micTrack.clips[0]!, startTime: micTrack.clips[0]!.startTime + 1 };
+    const changed = buildMulticamManifest(target, grouped, resolveMulticamSources(target, grouped), constraints);
+    expect(fingerprintMulticamManifest(changed)).not.toBe(artifact.manifestFingerprint);
+    expect(hasCurrentGroupedPodcastActivity(target, grouped, artifact)).toBe(false);
+  });
+
+  it("maps native microphone windows through current clip speed and episode time", () => {
+    const [host, shared] = mapPodcastProgramAudio(5, 1, [
+      { participantId: "host", startTime: 2, duration: 2, speed: 2, volume: 1, samples: new Float32Array([1, 2, 3, 4]) },
+      { startTime: 0, duration: 2, speed: 1, volume: 1, samples: new Float32Array([0.5, 0.5]) },
+    ]);
+    expect(host?.angleId).toBe("participant-host");
+    expect([...host!.samples]).toEqual([0, 0, 1, 3, 0]);
+    expect(shared?.angleId).toBe("shared-conversation");
+    expect([...shared!.samples]).toEqual([0.5, 0.5, 0, 0, 0]);
   });
 
   it("finds isolated speaker and room-silence calibration windows", () => {

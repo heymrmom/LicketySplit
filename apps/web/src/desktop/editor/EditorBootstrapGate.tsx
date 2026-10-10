@@ -1,7 +1,7 @@
 import type { JSX } from "react";
 import type React from "react";
 
-import { OpenReelMark } from "../brand/OpenReelMark";
+import { LicketySplitMark } from "../brand/LicketySplitMark";
 import { useDesktopEditorBootstrap } from "./useDesktopEditorBootstrap";
 
 export function EditorBootstrapGate({
@@ -21,7 +21,7 @@ export function EditorBootstrapGate({
     return (
       <div className="grid h-full place-items-center bg-bg">
         <div className="flex flex-col items-center gap-4">
-          <OpenReelMark
+          <LicketySplitMark
             size={48}
             className="animate-spin text-accent"
           />

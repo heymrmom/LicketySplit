@@ -1,9 +1,9 @@
 import { useTimelineTouchGesture, listenTimelineGesture } from "./touch-gestures";
 import { TimelineTouchMoveHandle } from "./TimelineTouchMoveHandle";
 import React, { useRef, useState, useEffect, useCallback } from "react";
-import { ToolcraftContextMenu as ContextMenu } from "@openreel/ui";
+import { ToolcraftContextMenu as ContextMenu } from "@licketysplit/ui";
 import { Box, Image, Layers } from "@/icons/lucide-compat";
-import type { Clip, Track, TransitionType } from "@openreel/core";
+import type { Clip, Track, TransitionType } from "@licketysplit/core";
 import { useProjectStore } from "../../../stores/project-store";
 import { useUIStore } from "../../../stores/ui-store";
 import { useTimelineStore } from "../../../stores/timeline-store";

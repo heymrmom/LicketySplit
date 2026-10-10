@@ -40,7 +40,7 @@ export function pruneFontsCss(css: string, removeFile: (woff2: string) => void):
 
 export function pruneFontsPlugin(isDesktop: boolean, outDir = "dist"): Plugin {
   return {
-    name: "openreel-prune-fonts",
+    name: "licketysplit-prune-fonts",
     apply: "build",
     closeBundle(): void {
       if (!isDesktop) return;

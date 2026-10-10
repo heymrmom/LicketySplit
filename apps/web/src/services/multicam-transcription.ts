@@ -1,4 +1,7 @@
-import type { MulticamTranscriptSegment } from "@openreel/core";
+import {desktopMediaAvailable} from "./lickety/desktop-media";
+import {useProjectStore} from "../stores/project-store";
+import type {AnalysisSamples} from "./lickety/analysis-audio";
+import type { MulticamTranscriptSegment } from "@licketysplit/core";
 import { audioBufferToWhisperSamples } from "../utils/whisper-audio";
 import type { WhisperModelKey } from "../workers/whisper-models";
 
@@ -20,13 +23,14 @@ export function whisperChunksToMulticamTranscript(
 }
 
 export async function transcribeMulticamChannels(
-  buffers: ReadonlyMap<string, AudioBuffer>,
+  buffers: ReadonlyMap<string, AnalysisSamples>,
   options: {
     model?: WhisperModelKey;
     language?: string;
     onStatus?: (angleId: string, message: string) => void;
   } = {},
 ): Promise<Record<string, MulticamTranscriptSegment[]>> {
+  if(desktopMediaAvailable()){const doc=useProjectStore.getState().project.lickety?.transcript;if(!doc)throw new Error("Create an AssemblyAI transcript in Captions first. Camera analysis makes no transcription purchase.");const result:Record<string,MulticamTranscriptSegment[]>={};for(const word of doc.words){const id=word.speaker??"unknown-speaker";(result[id]??=[]).push({startMs:word.startMs,endMs:word.endMs,text:word.text});}return result;}
   const worker = new Worker(
     new URL("../workers/whisper-worker.ts", import.meta.url),
     { type: "module" },

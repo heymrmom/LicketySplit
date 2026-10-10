@@ -5,7 +5,7 @@ import {
   type AudioExportSettings,
   type ExportResult,
   type Project,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 export interface ExportRunnerState {
   isExporting: boolean;
@@ -13,6 +13,8 @@ export interface ExportRunnerState {
   phase: string;
   error: string | null;
   complete: boolean;
+  publishingState?:"not-requested"|"generating"|"files-ready"|"failed";
+  publishingError?:string;
 }
 
 export type ExportContainer = "mp4" | "webm" | "mov" | "wav";
@@ -149,7 +151,7 @@ function triggerAnchorDownload(data: Blob, filename: string, onRelease?: () => v
   }
 }
 
-const OPFS_TMP_PREFIX = ".openreel-export-";
+const OPFS_TMP_PREFIX = ".licketysplit-export-";
 const OPFS_TMP_TTL_MS = 60 * 60 * 1000;
 
 type OpfsWriteHandle = FileSystemFileHandle & {
@@ -319,16 +321,16 @@ export async function createDownloadWritable(
   const ext = filename.split(".").pop() || "mp4";
   if (options?.delivery === "download") return createFallbackWritable(filename, mime);
 
-  if (typeof window.openreel?.fs?.showSaveDialog === "function") {
-    const chosen = await window.openreel.fs.showSaveDialog({
+  if (typeof window.licketysplit?.fs?.showSaveDialog === "function") {
+    const chosen = await window.licketysplit.fs.showSaveDialog({
       defaultPath: filename,
       filters: [{ name: "Media file", extensions: [ext] }],
     });
     if (!chosen) {
       throw new DOMException("User cancelled", "AbortError");
     }
-    (window as { __openreelExportPath?: string }).__openreelExportPath = chosen;
-    const handleId = await window.openreel.fs.openWrite(chosen);
+    (window as { __licketysplitExportPath?: string }).__licketysplitExportPath = chosen;
+    const handleId = await window.licketysplit.fs.openWrite(chosen);
     let cursor = 0;
     return {
       async seek(position: number) {
@@ -349,14 +351,14 @@ export async function createDownloadWritable(
         } else {
           return;
         }
-        await window.openreel!.fs.writeChunk(handleId, bytes, cursor);
+        await window.licketysplit!.fs.writeChunk(handleId, bytes, cursor);
         cursor += bytes.byteLength;
       },
       async close() {
-        await window.openreel!.fs.closeWrite(handleId);
+        await window.licketysplit!.fs.closeWrite(handleId);
       },
       async abort() {
-        await window.openreel!.fs.abortWrite(handleId);
+        await window.licketysplit!.fs.abortWrite(handleId);
       },
       async truncate() {},
     } as unknown as FileSystemWritableFileStream;
@@ -417,6 +419,7 @@ export interface UseExportRunner {
     videoSettings: Partial<VideoExportSettings>,
     ext: string,
     writableStream: FileSystemWritableFileStream,
+    options?: { generatePublishing: boolean; exportPath?: string },
   ) => Promise<void>;
   runAudioExport: (settings: Partial<AudioExportSettings>, writable: FileSystemWritableFileStream) => Promise<void>;
   showSavePicker: (filename: string, ext: string, opts?: { streamToFile?: boolean; delivery?: ExportDeliveryMode }) => Promise<FileSystemWritableFileStream>;
@@ -427,6 +430,7 @@ export interface UseExportRunner {
   finishExportSoon: () => void;
   failExport: (error: unknown) => void;
   cancel: () => void;
+  cancelPublishing:()=>void;
   resetError: () => void;
 }
 
@@ -437,6 +441,8 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
   const running = useRef(false);
   const cancelled = useRef(false);
   const activeWritable = useRef<FileSystemWritableFileStream | null>(null);
+  const publishingAbort=useRef<AbortController|null>(null);
+  const cancelPublishing=useCallback(()=>publishingAbort.current?.abort(new DOMException("Publishing generation cancelled; video export continues","AbortError")),[]);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const assertNotCancelled = useCallback(() => {
@@ -483,7 +489,7 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
   const finishExportSoon = useCallback(() => {
     const completedEpoch = epoch.current;
     resetTimer.current = setTimeout(() => {
-      if (epoch.current === completedEpoch) setState(INITIAL_STATE);
+      if (epoch.current === completedEpoch) setState(previous => ({ ...INITIAL_STATE, publishingState: previous.publishingState, publishingError: previous.publishingError }));
     }, 2000);
   }, []);
 
@@ -510,6 +516,7 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
       videoSettings: Partial<VideoExportSettings>,
       _ext: string,
       writableStream: FileSystemWritableFileStream,
+      options?:{generatePublishing:boolean;exportPath?:string},
     ): Promise<void> => {
       if (running.current) {
         await writableStream.abort().catch(() => undefined);
@@ -524,9 +531,11 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
       const engine = getExportEngine();
       let generator: ReturnType<typeof engine.exportVideo> | undefined;
       try {
+        let exportProject=project;
+        if(options?.generatePublishing){const {cloneProjectForWorkflow}=await import("@licketysplit/core/lickety/clone-project");exportProject=cloneProjectForWorkflow(project);setState(prev=>({...prev,publishingState:"generating",publishingError:undefined,phase:"Generating publishing files…"}));publishingAbort.current=new AbortController();try{const {preparePublishingForExport}=await import("./lickety/publishing");if(!options.exportPath)throw new Error("Select a native video destination for publishing files");await preparePublishingForExport(exportProject,{generatePublishing:true,exportPath:options.exportPath,signal:publishingAbort.current.signal});setState(prev=>({...prev,publishingState:"files-ready"}));}catch(error){setState(prev=>({...prev,publishingState:"failed",publishingError:error instanceof Error?error.message:"Publishing failed"}));}finally{publishingAbort.current=null;}checkCurrent();}
         await engine.initialize();
         checkCurrent();
-        generator = engine.exportVideo(project, videoSettings, writableStream);
+        generator = engine.exportVideo(exportProject, videoSettings, writableStream);
         let finalResult: ExportResult | undefined;
 
         while (true) {
@@ -596,21 +605,21 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
     ): Promise<FileSystemWritableFileStream> => {
       const mime = mimeForExt(ext);
 
-      if (typeof window.openreel?.fs?.showSaveDialog === "function") {
-        const chosen = await window.openreel.fs.showSaveDialog({
+      if (typeof window.licketysplit?.fs?.showSaveDialog === "function") {
+        const chosen = await window.licketysplit.fs.showSaveDialog({
           defaultPath: filename,
           filters: [{ name: "Media file", extensions: [ext] }],
         });
         if (!chosen) {
           throw new DOMException("User cancelled", "AbortError");
         }
-        (window as { __openreelExportPath?: string }).__openreelExportPath = chosen;
+        (window as { __licketysplitExportPath?: string }).__licketysplitExportPath = chosen;
 
         // The WAV path and any WebCodecs export (streamToFile) mux directly to
         // disk through the fs bridge. The native ffmpeg video path writes the
-        // file itself via __openreelExportPath, so it gets the no-op stub below.
+        // file itself via __licketysplitExportPath, so it gets the no-op stub below.
         if (ext === "wav" || opts?.streamToFile === true) {
-          const handleId = await window.openreel.fs.openWrite(chosen);
+          const handleId = await window.licketysplit.fs.openWrite(chosen);
           let cursor = 0;
           return {
             async seek(position: number) {
@@ -627,14 +636,14 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
               } else {
                 return;
               }
-              await window.openreel!.fs.writeChunk(handleId, bytes, cursor);
+              await window.licketysplit!.fs.writeChunk(handleId, bytes, cursor);
               cursor += bytes.byteLength;
             },
             async close() {
-              await window.openreel!.fs.closeWrite(handleId);
+              await window.licketysplit!.fs.closeWrite(handleId);
             },
             async abort() {
-              await window.openreel!.fs.abortWrite(handleId);
+              await window.licketysplit!.fs.abortWrite(handleId);
             },
             async truncate() {},
           } as unknown as FileSystemWritableFileStream;
@@ -655,6 +664,7 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
   );
 
   const cancel = useCallback(() => {
+    publishingAbort.current?.abort(new DOMException("Export cancelled","AbortError"));
     epoch.current += 1;
     cancelled.current = true;
     void activeWritable.current?.abort().catch(() => undefined);
@@ -670,6 +680,7 @@ export function useExportRunner(options: ExportRunnerOptions): UseExportRunner {
 
   return {
     state,
+    cancelPublishing,
     runExport,
     runAudioExport,
     showSavePicker,

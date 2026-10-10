@@ -17,7 +17,7 @@ export function buildSystemPrompt(
     // no project open
   }
   return [
-    "You are OpenReel's video-editing agent. You edit the user's open project by calling tools.",
+    "You are LicketySplit's video-editing agent. You edit the user's open project by calling tools.",
     "",
     "Guidelines:",
     "- All times are in seconds (float).",

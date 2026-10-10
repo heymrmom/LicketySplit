@@ -1,8 +1,21 @@
-import type { MediaItem } from "@openreel/core";
+import {
+  createBudgetedVideoElement,
+  getNativeMediaSource,
+  videoDecoderBudget,
+  type MediaItem,
+  type VideoDecoderBudget,
+} from "@licketysplit/core";
+
+interface ThumbnailOptions {
+  budget?: VideoDecoderBudget;
+  videoFactory?: () => HTMLVideoElement;
+  canvasFactory?: () => HTMLCanvasElement;
+}
 
 export async function generateThumbnailFromBlob(
   blob: Blob,
   type: "video" | "audio" | "image",
+  options: ThumbnailOptions = {},
 ): Promise<string | null> {
   if (!(blob instanceof Blob)) {
     return null;
@@ -16,24 +29,40 @@ export async function generateThumbnailFromBlob(
     return URL.createObjectURL(blob);
   }
 
-  return new Promise((resolve) => {
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "metadata";
+  const managed = await createBudgetedVideoElement(
+    async () => URL.createObjectURL(blob),
+    {
+      budget: options.budget ?? videoDecoderBudget,
+      preload: "metadata",
+      videoFactory: options.videoFactory,
+    },
+  );
+  if (!managed) return null;
 
-    const cleanup = () => {
-      URL.revokeObjectURL(video.src);
-      video.remove();
-    };
+  const { video, lease } = managed;
+  return new Promise((resolve) => {
+    let settled = false;
+    const timeout = setTimeout(() => finish(null), 5000);
+    function finish(thumbnailUrl: string | null) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      lease.release();
+      resolve(thumbnailUrl);
+    }
 
     video.onloadeddata = () => {
-      video.currentTime = 0.1;
+      try {
+        video.currentTime = 0.1;
+      } catch {
+        finish(null);
+      }
     };
 
     video.onseeked = () => {
+      if (settled) return;
       try {
-        const canvas = document.createElement("canvas");
+        const canvas = options.canvasFactory?.() ?? document.createElement("canvas");
         canvas.width = Math.min(video.videoWidth, 320);
         canvas.height = Math.min(
           video.videoHeight,
@@ -41,41 +70,35 @@ export async function generateThumbnailFromBlob(
         );
 
         const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob(
-            (thumbBlob) => {
-              cleanup();
-              if (thumbBlob) {
-                resolve(URL.createObjectURL(thumbBlob));
-              } else {
-                resolve(null);
-              }
-            },
-            "image/jpeg",
-            0.7,
-          );
-        } else {
-          cleanup();
-          resolve(null);
+        if (!ctx) {
+          finish(null);
+          return;
         }
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((thumbBlob) => {
+          if (settled || !thumbBlob) {
+            finish(null);
+            return;
+          }
+          try {
+            finish(URL.createObjectURL(thumbBlob));
+          } catch {
+            finish(null);
+          }
+        }, "image/jpeg", 0.7);
       } catch {
-        cleanup();
-        resolve(null);
+        finish(null);
       }
     };
 
-    video.onerror = () => {
-      cleanup();
-      resolve(null);
-    };
-
-    setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, 5000);
-
-    video.src = URL.createObjectURL(blob);
+    video.onerror = () => finish(null);
+    try {
+      video.src = managed.url;
+      video.load();
+    } catch {
+      finish(null);
+    }
   });
 }
 
@@ -106,6 +129,20 @@ export async function restoreMediaItem(
 
   if (!blob) {
     return createMissingMediaItem(item);
+  }
+
+  if (await getNativeMediaSource(blob, "preview")) {
+    return {
+      ...item,
+      fileHandle: null,
+      blob,
+      thumbnailUrl: item.thumbnailUrl?.startsWith("blob:")
+        ? null
+        : item.thumbnailUrl,
+      waveformData: null,
+      filmstripThumbnails: undefined,
+      isPlaceholder: false,
+    };
   }
 
   let thumbnailUrl = item.thumbnailUrl;

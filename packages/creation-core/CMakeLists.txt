@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(openreel_creation_core LANGUAGES CXX VERSION 0.1.0)
+project(licketysplit_creation_core LANGUAGES CXX VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,7 +11,7 @@ set_target_properties(creation_core PROPERTIES
   INSTALL_RPATH "@loader_path"
 )
 
-# Native desktop build produces a shared library loaded by @openreel/creation-bindings.
+# Native desktop build produces a shared library loaded by @licketysplit/creation-bindings.
 # WASM build (emscripten): exposes the C ABI to the browser/desktop WASM bridge.
 if(EMSCRIPTEN)
   set_target_properties(creation_core PROPERTIES

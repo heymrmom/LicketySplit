@@ -7,7 +7,7 @@ import {
   ToolcraftSelectControl as Selector,
   ToolcraftText as Text,
   ToolcraftTextInputControl as TextInput,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import { Settings2 } from "@/icons/lucide-compat";
 import {
   useSettingsStore,
@@ -111,7 +111,7 @@ export function ProviderModelPicker({
               Connect any compatible model
             </Text>
             <Text type="supporting" color="secondary" className="mt-0.5 block text-[10px] leading-relaxed">
-              Choose the API format, then use your own host and model. OpenReel does not select a vendor or model for you.
+              Choose the API format, then use your own host and model. LicketySplit does not select a vendor or model for you.
             </Text>
           </div>
 

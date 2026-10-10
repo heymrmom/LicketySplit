@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { createImageColorStorage, IMAGE_COLOR_KEY } from './color-storage';
 
 export interface CustomPalette {
   id: string;
@@ -112,7 +113,8 @@ export const useColorStore = create<ColorState & ColorActions>()(
       },
     }),
     {
-      name: 'openreel-image-colors',
+      name: IMAGE_COLOR_KEY,
+      storage: createJSONStorage(() => createImageColorStorage(localStorage)),
     }
   )
 );

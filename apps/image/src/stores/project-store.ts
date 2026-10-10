@@ -5,7 +5,7 @@ import {
   createProjectDocument,
   deserializeProject,
   duplicateLayerInProject,
-} from '@openreel/image-core/operations';
+} from '@licketysplit/image-core/operations';
 import {
   AddArtboardCommand,
   AddLayerCommand,
@@ -21,7 +21,7 @@ import {
   UpdateLayerStyleCommand,
   UpdateLayerTransformCommand,
   UpdateTextCommand,
-} from '@openreel/image-core/commands';
+} from '@licketysplit/image-core/commands';
 import {
   Project,
   Layer,

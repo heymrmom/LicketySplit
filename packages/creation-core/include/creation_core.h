@@ -1,15 +1,15 @@
 /*
- * OpenReel Creation Core - C ABI boundary.
+ * LicketySplit Creation Core - C ABI boundary.
  *
  * This header defines the stable C ABI that the native (C++20) creation engine
- * exposes to the TypeScript/Electron host via @openreel/creation-bindings.
+ * exposes to the TypeScript/Electron host via @licketysplit/creation-bindings.
  *
  * The deterministic CPU reference implementation of every function here lives in
- * the TypeScript package @openreel/core/creation (geometry/sdf/rig/sim/render).
+ * the TypeScript package @licketysplit/core/creation (geometry/sdf/rig/sim/render).
  * The native build must produce bit-compatible results for the golden tests.
  */
-#ifndef OPENREEL_CREATION_CORE_H
-#define OPENREEL_CREATION_CORE_H
+#ifndef LICKETYSPLIT_CREATION_CORE_H
+#define LICKETYSPLIT_CREATION_CORE_H
 
 #include <stdint.h>
 
@@ -63,7 +63,7 @@ const char* orc_version(void);
 
 /*
  * Bake a centered box primitive and return its mesh statistics.
- * Reference: buildBox() + computeMeshStats() in @openreel/core/creation/geometry.
+ * Reference: buildBox() + computeMeshStats() in @licketysplit/core/creation/geometry.
  */
 orc_mesh_stats orc_bake_box(float width, float height, float depth);
 
@@ -89,4 +89,4 @@ orc_render_stats orc_render_mesh_rgba(const float* positions,
 }
 #endif
 
-#endif /* OPENREEL_CREATION_CORE_H */
+#endif /* LICKETYSPLIT_CREATION_CORE_H */

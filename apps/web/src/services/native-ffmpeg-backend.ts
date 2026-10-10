@@ -1,8 +1,9 @@
+import { splitFrame } from "../../../desktop/src/shared/frame-chunks";
 import type {
   EncoderBackend,
   VideoExportSettings,
   Project,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 type ExportPortMessage =
   | { type: "progress"; frame: number }
@@ -133,7 +134,7 @@ export class NativeFFmpegBackend implements EncoderBackend {
     settings: VideoExportSettings,
     project: Project,
   ): Promise<void> {
-    const bridge = window.openreel;
+    const bridge = window.licketysplit;
     if (!bridge) {
       throw new Error("NativeFFmpegBackend requires the desktop bridge");
     }
@@ -221,8 +222,8 @@ export class NativeFFmpegBackend implements EncoderBackend {
       }, 15000);
 
       const handler = (event: MessageEvent) => {
-        const data = event.data as { __openreelExportPort?: boolean } | null;
-        if (data?.__openreelExportPort && event.ports.length > 0) {
+        const data = event.data as { __licketysplitExportPort?: boolean } | null;
+        if (data?.__licketysplitExportPort && event.ports.length > 0) {
           clearTimeout(timeout);
           window.removeEventListener("message", handler);
           resolve(event.ports[0]);
@@ -235,7 +236,7 @@ export class NativeFFmpegBackend implements EncoderBackend {
 
   async addAudioBuffer(buffer: AudioBuffer): Promise<void> {
     await this.ensureAudioHeader(buffer);
-    const bridge = window.openreel;
+    const bridge = window.licketysplit;
     if (!bridge || !this.jobId) {
       throw new Error("NativeFFmpegBackend not started");
     }
@@ -250,7 +251,7 @@ export class NativeFFmpegBackend implements EncoderBackend {
     if (!this.jobId) {
       throw new Error("NativeFFmpegBackend not started");
     }
-    const bridge = window.openreel;
+    const bridge = window.licketysplit;
     if (!bridge) {
       throw new Error("NativeFFmpegBackend requires the desktop bridge");
     }
@@ -299,7 +300,7 @@ export class NativeFFmpegBackend implements EncoderBackend {
     // The renderer<->MessagePortMain bridge does not deliver a message whose
     // payload is sent in the transfer list (it arrives as null on the main
     // side), so the RGBA buffer is structured-cloned rather than transferred.
-    port.postMessage({ type: "frame", ts: timestampSec, buffer: rgba });
+    for(const chunk of splitFrame(rgba,this.frameCount,timestampSec))port.postMessage(chunk);
   }
 
   async finalize(): Promise<void> {
@@ -323,8 +324,8 @@ export class NativeFFmpegBackend implements EncoderBackend {
   }
 
   async abort(): Promise<void> {
-    if (this.jobId && window.openreel) {
-      await window.openreel.export.cancel(this.jobId);
+    if (this.jobId && window.licketysplit) {
+      await window.licketysplit.export.cancel(this.jobId);
     }
     this.releaseReadbackBuffers();
   }
@@ -374,7 +375,7 @@ export class NativeFFmpegBackend implements EncoderBackend {
     }
     if (this.audioHeaderWritten) return;
 
-    const bridge = window.openreel;
+    const bridge = window.licketysplit;
     if (!bridge || !this.jobId) {
       throw new Error("NativeFFmpegBackend not started");
     }
@@ -388,7 +389,7 @@ export class NativeFFmpegBackend implements EncoderBackend {
   }
 
   private async writeSilentAudio(): Promise<void> {
-    const bridge = window.openreel;
+    const bridge = window.licketysplit;
     if (!bridge || !this.jobId) {
       throw new Error("NativeFFmpegBackend not started");
     }

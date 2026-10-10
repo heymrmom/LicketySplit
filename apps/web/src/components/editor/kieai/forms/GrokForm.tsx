@@ -1,7 +1,7 @@
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextAreaControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextAreaControl } from "@licketysplit/ui";
 import type { GrokInput } from "../../../../services/kieai/image-generation";
 
 interface Props {

@@ -24,12 +24,12 @@ import { probeEncoders, selectEncoder } from "../src/main/sidecar/encoder-probe"
 
 const run = promisify(execFile);
 const stamp = Date.now();
-const out = path.join(tmpdir(), `openreel-export-${stamp}.mp4`);
-const wav = path.join(tmpdir(), `openreel-export-${stamp}.wav`);
-const proresOut = path.join(tmpdir(), `openreel-export-prores-${stamp}.mov`);
-const proresWav = path.join(tmpdir(), `openreel-export-prores-${stamp}.wav`);
-const hiResOut = path.join(tmpdir(), `openreel-export-hires-${stamp}.mp4`);
-const hiResWav = path.join(tmpdir(), `openreel-export-hires-${stamp}.wav`);
+const out = path.join(tmpdir(), `licketysplit-export-${stamp}.mp4`);
+const wav = path.join(tmpdir(), `licketysplit-export-${stamp}.wav`);
+const proresOut = path.join(tmpdir(), `licketysplit-export-prores-${stamp}.mov`);
+const proresWav = path.join(tmpdir(), `licketysplit-export-prores-${stamp}.wav`);
+const hiResOut = path.join(tmpdir(), `licketysplit-export-hires-${stamp}.mp4`);
+const hiResWav = path.join(tmpdir(), `licketysplit-export-hires-${stamp}.wav`);
 
 function ffprobePathFor(ffmpeg: string): string {
   return path.join(path.dirname(ffmpeg), process.platform === "win32" ? "ffprobe.exe" : "ffprobe");
@@ -144,6 +144,8 @@ describe.skipIf(!HAS_FFMPEG)("native export integration", () => {
         let stderr = "";
         proc.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
         proc.on("error", reject);
+        // A rejected hardware encoder may close stdin before the feeder finishes.
+        proc.stdin.on("error", reject);
         proc.on("close", (code) => {
           if (code === 0) resolve();
           else reject(new Error(`ffmpeg (${encoder}) exited with code ${code}\n${stderr.slice(-2000)}`));

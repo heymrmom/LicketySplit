@@ -35,7 +35,7 @@ app.route('/', crash);
 
 app.get('/', (c) => {
   return c.json({
-    name: 'OpenReel Cloud API',
+    name: 'LicketySplit Cloud API',
     version: '1.0.0',
     endpoints: {
       marketplace: {

@@ -1,5 +1,5 @@
 import { createStore } from "zustand/vanilla";
-import type { MediaItem, Project } from "@openreel/core";
+import type { MediaItem, Project } from "@licketysplit/core";
 
 export type PreviewProxyPreset = "low" | "medium" | "high";
 export interface PreviewProxyEntry {

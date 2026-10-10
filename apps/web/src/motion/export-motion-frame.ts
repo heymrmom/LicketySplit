@@ -7,8 +7,8 @@ import type {
   Project,
   Track,
   VideoExportSettings,
-} from "@openreel/core";
-import type { CreationProjectState } from "@openreel/core/creation/index";
+} from "@licketysplit/core";
+import type { CreationProjectState } from "@licketysplit/core/creation/index";
 import {
   DEFAULT_MOTION_INSTANCE_TRANSFORM,
   DEFAULT_VIDEO_SETTINGS,
@@ -19,8 +19,8 @@ import {
   MotionHighQualityRenderer,
   motionEngine,
   motionRenderer,
-} from "@openreel/core";
-import { resolveCreationMotionSceneBinding } from "@openreel/core/creation/index";
+} from "@licketysplit/core";
+import { resolveCreationMotionSceneBinding } from "@licketysplit/core/creation/index";
 import {
   createDownloadWritable,
   mimeForExt,
@@ -286,7 +286,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 function hasNativeMotionExportBackend(): boolean {
-  return typeof window !== "undefined" && window.openreel?.platform === "desktop";
+  return typeof window !== "undefined" && window.licketysplit?.platform === "desktop";
 }
 
 function motionExportFormatRequiresNative(
@@ -353,7 +353,7 @@ interface NativeAuroraExportCandidate {
 
 function getDesktopAuroraSequenceBridge() {
   const bridge =
-    window.openreel?.platform === "desktop" ? window.openreel.aurora : undefined;
+    window.licketysplit?.platform === "desktop" ? window.licketysplit.aurora : undefined;
   if (
     !bridge?.startSequenceSession ||
     !bridge.cancelSequenceSession ||
@@ -452,7 +452,7 @@ async function prepareNativeAuroraOutputPath(
   filename: string,
   extension: MotionExportFormatDescriptor["extension"],
 ): Promise<void> {
-  const showSaveDialog = window.openreel?.fs?.showSaveDialog;
+  const showSaveDialog = window.licketysplit?.fs?.showSaveDialog;
   if (typeof showSaveDialog !== "function") {
     throw new Error("Native Aurora export is only available in the desktop app.");
   }
@@ -463,7 +463,7 @@ async function prepareNativeAuroraOutputPath(
   if (!chosen) {
     throw new DOMException("User cancelled", "AbortError");
   }
-  (window as { __openreelExportPath?: string }).__openreelExportPath = chosen;
+  (window as { __licketysplitExportPath?: string }).__licketysplitExportPath = chosen;
 }
 
 async function encodeMotionSceneAudioToNativeBackend(
@@ -538,7 +538,7 @@ async function exportMotionCompositionSceneWithNativeAurora(
     Math.ceil(composition.duration * composition.frameRate),
   );
   const backend = new NativeFFmpegBackend(
-    () => (window as { __openreelExportPath?: string }).__openreelExportPath ?? "",
+    () => (window as { __licketysplitExportPath?: string }).__licketysplitExportPath ?? "",
   );
   const requestedSessionId = `aurora-export-${composition.id}-${Math.random()
     .toString(36)

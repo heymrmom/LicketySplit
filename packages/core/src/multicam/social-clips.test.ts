@@ -10,7 +10,7 @@ describe("multicam social clip extraction", () => {
       scores: { a: index % 2, b: (index + 1) % 2 },
     }));
     const result = extractMulticamSocialClips({
-      spec: "openreel-activity/v1",
+      spec: "licketysplit-activity/v1",
       manifestFingerprint: "m",
       mediaFingerprint: "f",
       createdAt: 1,

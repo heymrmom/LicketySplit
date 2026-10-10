@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { StoreApi } from "zustand";
-import type { Action, MediaItem } from "@openreel/core";
+import type { Action, MediaItem } from "@licketysplit/core";
 import type { ProjectState } from "../project-store";
 import { getMediaBridge, initializeMediaBridge } from "../../bridges/media-bridge";
 import { saveMediaBlob, deleteMediaBlob } from "../../services/media-storage";
@@ -8,6 +8,9 @@ import { toast } from "../notification-store";
 
 type Get = StoreApi<ProjectState>["getState"];
 type Set = StoreApi<ProjectState>["setState"];
+type ImportMediaResult = Awaited<ReturnType<ProjectState["importMedia"]>>;
+type OriginalFileIdentity = { identity: string; size: number; mtimeMs: number };
+const pendingImports = new Map<string, Promise<ImportMediaResult>>();
 
 export type MediaSlice = Pick<
   ProjectState,
@@ -24,24 +27,85 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
   return {
     importMedia: async (file: File) => {
       const { project } = get();
+      const desktop=typeof window!=="undefined"&&window.licketysplit?.platform==="desktop";
+      let sourceIdentity: OriginalFileIdentity | null = null;
+      let pendingKey: string | null = null;
+      let resolvePending: ((result: ImportMediaResult) => void) | undefined;
+      const finish = (result: ImportMediaResult) => { resolvePending?.(result); resolvePending = undefined; return result; };
 
       try {
+        const nativeBridge = desktop ? window.licketysplit?.lickety : undefined;
+        sourceIdentity = await nativeBridge?.identifyOriginalFile(file) ?? null;
+        if (sourceIdentity) {
+          const currentProject = get().project;
+          if (currentProject.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+          const sameIdentity = (item: MediaItem) => {
+            const identity = item.sourceFile?.identity;
+            return identity?.id === sourceIdentity?.identity && identity?.size === sourceIdentity?.size && identity?.mtimeMs === sourceIdentity?.mtimeMs;
+          };
+          let existingItem = currentProject.mediaLibrary.items.find((item) => !item.isPlaceholder && sameIdentity(item));
+          if (!existingItem && nativeBridge?.findOriginalMediaId) {
+            const mediaIds = currentProject.mediaLibrary.items.filter((item) => !item.isPlaceholder).map((item) => item.id);
+            const existingId = await nativeBridge.findOriginalMediaId(file, mediaIds);
+            const afterLookup = get().project;
+            if (afterLookup.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+            if (existingId) existingItem = afterLookup.mediaLibrary.items.find((item) => item.id === existingId);
+          }
+          if (!existingItem && nativeBridge?.identifyOriginalFile) {
+            for (const item of currentProject.mediaLibrary.items) {
+              if (item.isPlaceholder || item.sourceFile?.identity) continue;
+              const candidate = item.blob instanceof File ? item.blob : await item.fileHandle?.getFile().catch(() => undefined);
+              if (get().project.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+              if (!candidate) continue;
+              const candidateIdentity = await nativeBridge.identifyOriginalFile(candidate);
+              const afterLookup = get().project;
+              if (afterLookup.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+              if (afterLookup.mediaLibrary.items.some((current) => current.id === item.id) && candidateIdentity?.identity === sourceIdentity.identity && candidateIdentity.size === sourceIdentity.size && candidateIdentity.mtimeMs === sourceIdentity.mtimeMs) {
+                existingItem = item;
+                break;
+              }
+            }
+          }
+          if (existingItem) {
+            const latestProject = get().project;
+            if (latestProject.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+            if (!latestProject.mediaLibrary.items.some((item) => item.id === existingItem!.id)) existingItem = undefined;
+          }
+          if (existingItem) {
+            const latestProject = get().project;
+            const items = latestProject.mediaLibrary.items.map((item) => item.id === existingItem!.id ? {
+              ...item,
+              sourceFile: { ...item.sourceFile, name: item.sourceFile?.name ?? item.name, size: sourceIdentity!.size, lastModified: item.sourceFile?.lastModified ?? 0, identity: { id: sourceIdentity!.identity, size: sourceIdentity!.size, mtimeMs: sourceIdentity!.mtimeMs } },
+            } : item);
+            set({ project: { ...latestProject, mediaLibrary: { ...latestProject.mediaLibrary, items }, modifiedAt: Date.now() } });
+            return finish({ success: true, actionId: existingItem.id });
+          }
+          const latestProject = get().project;
+          if (latestProject.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+          const concurrentExisting = latestProject.mediaLibrary.items.find((item) => !item.isPlaceholder && sameIdentity(item));
+          if (concurrentExisting) return finish({ success: true, actionId: concurrentExisting.id });
+          pendingKey = `${project.id}:${sourceIdentity.identity}:${sourceIdentity.size}:${sourceIdentity.mtimeMs}`;
+          const pending = pendingImports.get(pendingKey);
+          if (pending) { pendingKey = null; return pending; }
+          const coalesced = new Promise<ImportMediaResult>((resolve) => { resolvePending = resolve; });
+          pendingImports.set(pendingKey, coalesced);
+        }
         const mediaBridge = getMediaBridge();
         if (!mediaBridge.isInitialized()) {
           await initializeMediaBridge();
         }
 
         const isLargeFile = file.size > 50 * 1024 * 1024;
-        const importResult = await mediaBridge.importFile(file, true, isLargeFile);
+        const importResult = await mediaBridge.importFile(file, true, desktop||isLargeFile);
 
         if (!importResult.success || !importResult.media) {
-          return {
+          return finish({
             success: false,
             error: {
               code: "DECODE_ERROR" as const,
               message: importResult.error || "Failed to import media",
             },
-          };
+          });
         }
 
         const processedMedia = importResult.media;
@@ -92,7 +156,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           mediaType = "image";
         }
 
-        if (mediaType === "video" && !thumbnailUrl) {
+        if (!desktop && mediaType === "video" && !thumbnailUrl) {
           try {
             const thumbs = await mediaBridge.generateThumbnailsForMedia(
               processedMedia.blob ?? file,
@@ -129,41 +193,49 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
             fileSize: file.size,
             hasVideo: processedMedia.metadata.hasVideo,
             hasAudio: processedMedia.metadata.hasAudio,
+            audioTrackCount:processedMedia.metadata.audioTrackCount,
+            canDecode:processedMedia.metadata.canDecode,
+            canDecodeVideo:processedMedia.metadata.canDecodeVideo,
           },
           thumbnailUrl,
           waveformData: processedMedia.waveformData?.peaks || null,
           filmstripThumbnails:
             filmstripThumbnails.length > 0 ? filmstripThumbnails : undefined,
-          sourceFile: {
-            name: file.name,
-            size: file.size,
-            lastModified: file.lastModified,
-          },
+            sourceFile: {
+              name: file.name,
+              size: file.size,
+              lastModified: file.lastModified,
+              ...(sourceIdentity ? { identity: { id: sourceIdentity.identity, size: sourceIdentity.size, mtimeMs: sourceIdentity.mtimeMs } } : {}),
+            },
         };
 
         const currentProject = get().project;
         if (currentProject.id !== project.id) {
-          return {
+          return finish({
             success: false,
             error: {
               code: "INVALID_PARAMS" as const,
               message: "The project changed while importing media. Import the file again in the current project.",
             },
-          };
+          });
         }
 
+        if(desktop)await saveMediaBlob(project.id,newMediaItem.id,file,newMediaItem.metadata);
+        const projectAfterSave = get().project;
+        if (projectAfterSave.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS" as const, message: "The project changed while importing media. Import the file again in the current project." } });
+
         const updatedProject = {
-          ...currentProject,
+          ...projectAfterSave,
           mediaLibrary: {
-            ...currentProject.mediaLibrary,
-            items: [...currentProject.mediaLibrary.items, newMediaItem],
+            ...projectAfterSave.mediaLibrary,
+            items: [...projectAfterSave.mediaLibrary.items, newMediaItem],
           },
           modifiedAt: Date.now(),
         };
 
         set({ project: updatedProject });
 
-        try {
+        if(!desktop)try {
           await saveMediaBlob(
             updatedProject.id,
             newMediaItem.id,
@@ -178,7 +250,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           );
         }
 
-        if (mediaType === "video" && !thumbnailUrl) {
+        if (!desktop && mediaType === "video" && !thumbnailUrl) {
           setTimeout(async () => {
             try {
               const thumbs = await mediaBridge.generateThumbnailsForMedia(
@@ -219,16 +291,21 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           }, 100);
         }
 
-        return { success: true, actionId: newMediaItem.id };
+        return finish({ success: true, actionId: newMediaItem.id });
       } catch (error) {
-        return {
+        return finish({
           success: false,
           error: {
             code: "DECODE_ERROR" as const,
             message:
               error instanceof Error ? error.message : "Unknown import error",
           },
-        };
+        });
+      } finally {
+        if (pendingKey) {
+          pendingImports.delete(pendingKey);
+          if (resolvePending) resolvePending({ success: false, error: { code: "DECODE_ERROR", message: "Import did not complete." } });
+        }
       }
     },
 
@@ -259,14 +336,16 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
       const replacementKey = `${project.id}:${mediaId}`;
       const replacementRequest = Symbol();
       replacementRequests.set(replacementKey, replacementRequest);
+      const desktop=typeof window!=="undefined"&&window.licketysplit?.platform==="desktop";
 
       try {
+        const sourceIdentity = desktop ? await window.licketysplit?.lickety?.identifyOriginalFile(file) ?? null : null;
         const mediaBridge = getMediaBridge();
         if (!mediaBridge.isInitialized()) {
           await initializeMediaBridge();
         }
 
-        const importResult = await mediaBridge.importFile(file, true);
+        const importResult = await mediaBridge.importFile(file, true,desktop);
 
         if (!importResult.success || !importResult.media) {
           return {
@@ -321,7 +400,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
             ? "audio"
             : "image";
 
-        if (mediaType === "video" && !thumbnailUrl) {
+        if (!desktop && mediaType === "video" && !thumbnailUrl) {
           try {
             const thumbs = await mediaBridge.generateThumbnailsForMedia(
               processedMedia.blob ?? file,
@@ -358,6 +437,9 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
             fileSize: file.size,
             hasVideo: processedMedia.metadata.hasVideo,
             hasAudio: processedMedia.metadata.hasAudio,
+            audioTrackCount:processedMedia.metadata.audioTrackCount,
+            canDecode:processedMedia.metadata.canDecode,
+            canDecodeVideo:processedMedia.metadata.canDecodeVideo,
           },
           thumbnailUrl,
           waveformData: processedMedia.waveformData?.peaks || null,
@@ -369,6 +451,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
             size: file.size,
             lastModified: file.lastModified,
             folder: sourceFolder,
+            ...(sourceIdentity ? { identity: { id: sourceIdentity.identity, size: sourceIdentity.size, mtimeMs: sourceIdentity.mtimeMs } } : {}),
           },
         };
 
@@ -387,19 +470,21 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           };
         }
 
-        const updatedItems = currentProject.mediaLibrary.items.map((item) =>
+        if(desktop){await saveMediaBlob(currentProject.id,updatedItem.id,file,updatedItem.metadata);if(get().project.id!==project.id||replacementRequests.get(replacementKey)!==replacementRequest)return {success:false,error:{code:'INVALID_PARAMS',message:'The media changed while relinking; try again'}};}
+        const updatedItems = get().project.mediaLibrary.items.map((item) =>
           item.id === mediaId ? updatedItem : item,
         );
 
+        const projectAfterReference=get().project;
         set({
           project: {
-            ...currentProject,
-            mediaLibrary: { ...currentProject.mediaLibrary, items: updatedItems },
+            ...projectAfterReference,
+            mediaLibrary: { ...projectAfterReference.mediaLibrary, items: updatedItems },
             modifiedAt: Date.now(),
           },
         });
 
-        try {
+        if(!desktop)try {
           await saveMediaBlob(
             currentProject.id,
             updatedItem.id,
@@ -414,7 +499,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           );
         }
 
-        if (updatedItem.type === "video" && !updatedItem.thumbnailUrl) {
+        if (!desktop && updatedItem.type === "video" && !updatedItem.thumbnailUrl) {
           setTimeout(async () => {
             try {
               const thumbs = await mediaBridge.generateThumbnailsForMedia(

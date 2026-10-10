@@ -62,7 +62,7 @@ export interface CodecRecommendation {
   qualityRating: "good" | "better" | "best";
 }
 
-const STORAGE_KEY = "openreel_device_profile";
+const STORAGE_KEY = "licketysplit_device_profile";
 
 export function getCpuTier(cores: number): DeviceTier {
   if (cores >= 8) return "high";
@@ -435,11 +435,11 @@ export async function getDeviceProfile(
     return cachedProfile;
   }
 
-  // Desktop: build the profile from real hardware specs (window.openreel.probeHardware)
+  // Desktop: build the profile from real hardware specs (window.licketysplit.probeHardware)
   // instead of the browser heuristics (navigator/WebGL/WebCodecs).
   const bridge = (globalThis as unknown as {
-    openreel?: { platform?: string; probeHardware?: () => Promise<NativeHardwareInfo> };
-  }).openreel;
+    licketysplit?: { platform?: string; probeHardware?: () => Promise<NativeHardwareInfo> };
+  }).licketysplit;
   if (bridge?.platform === "desktop" && typeof bridge.probeHardware === "function") {
     const info = await bridge.probeHardware();
     const { buildProfileFromNativeSpecs } = await import("./native-profile");

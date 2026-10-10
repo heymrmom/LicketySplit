@@ -1,4 +1,5 @@
 export * from "./video-engine";
+export * from "./video-decoder-budget";
 export * from "./canvas-fit";
 export * from "./video-effects-engine";
 export * from "./color-grading-engine";

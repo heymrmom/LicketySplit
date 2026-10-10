@@ -5,7 +5,7 @@ import {
   type ServerInfo,
 } from "./core";
 
-const SERVER_INFO: ServerInfo = { name: "openreel", version: "1.2.3" };
+const SERVER_INFO: ServerInfo = { name: "licketysplit", version: "1.2.3" };
 
 function provider(overrides: Partial<McpToolProvider> = {}): McpToolProvider {
   return {

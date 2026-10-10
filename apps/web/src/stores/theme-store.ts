@@ -55,7 +55,7 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: "openreel-theme",
+      name: "licketysplit-theme",
       onRehydrateStorage: () => (state) => {
         if (state) {
           const isDark = calculateIsDark(state.mode);

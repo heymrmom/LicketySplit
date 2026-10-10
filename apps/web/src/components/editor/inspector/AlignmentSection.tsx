@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import {
   AlignHorizontalJustifyStart,
   AlignHorizontalJustifyCenter,
@@ -10,7 +10,7 @@ import {
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
 } from "@/icons/lucide-compat";
-import type { Transform } from "@openreel/core";
+import type { Transform } from "@licketysplit/core";
 
 interface AlignmentSectionProps {
   clipType: string | null;

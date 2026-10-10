@@ -6,11 +6,11 @@ const project = createEmptyProject("My video");
 
 beforeEach(() => {
   (projectManager as unknown as { currentFileHandle: unknown }).currentFileHandle = null;
-  delete window.openreel;
+  delete window.licketysplit;
 });
 afterEach(() => {
   delete (window as Window & { showSaveFilePicker?: unknown }).showSaveFilePicker;
-  delete window.openreel;
+  delete window.licketysplit;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -98,9 +98,9 @@ describe("ProjectManager save outcomes", () => {
 
   it("rejects failures while overwriting an existing native file", async () => {
     const writeFile = vi.fn(async () => {});
-    window.openreel = {
-      fs: { showSaveDialog: vi.fn(async () => "/tmp/video.oreel"), writeFile },
-    } as unknown as NonNullable<Window["openreel"]>;
+    window.licketysplit = {
+      fs: { showSaveDialog: vi.fn(async () => "/tmp/video.licketysplit"), writeFile },
+    } as unknown as NonNullable<Window["licketysplit"]>;
     await expect(projectManager.saveProjectAs(project)).resolves.toBe(true);
     writeFile.mockRejectedValueOnce(new Error("Read-only folder"));
 
@@ -113,6 +113,6 @@ describe("ProjectManager save outcomes", () => {
 
     await expect(projectManager.saveProjectAs(project)).rejects.toThrow("Download failed");
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:project-download");
-    expect(document.querySelector('a[download="My video.oreel"]')).toBeNull();
+    expect(document.querySelector('a[download="My video.licketysplit"]')).toBeNull();
   });
 });

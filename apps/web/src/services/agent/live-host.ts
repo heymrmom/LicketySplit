@@ -30,14 +30,14 @@ import type {
   MotionRenderQueueAddError,
   MotionRenderQueueRunResult,
   MulticamHostBridge,
-} from "@openreel/agent";
-import type { TextStyle, TextAnimationPreset } from "@openreel/core/text/types";
-import type { ShapeStyle, ShapeType } from "@openreel/core/graphics/types";
-import type { Transform } from "@openreel/core/types/timeline";
-import { CAPABILITY_MANIFEST } from "@openreel/core/capabilities/manifest";
-import type { Action } from "@openreel/core/types/actions";
-import type { Project } from "@openreel/core/types/project";
-import type { CapabilityManifest } from "@openreel/core/capabilities/manifest";
+} from "@licketysplit/agent";
+import type { TextStyle, TextAnimationPreset } from "@licketysplit/core/text/types";
+import type { ShapeStyle, ShapeType } from "@licketysplit/core/graphics/types";
+import type { Transform } from "@licketysplit/core/types/timeline";
+import { CAPABILITY_MANIFEST } from "@licketysplit/core/capabilities/manifest";
+import type { Action } from "@licketysplit/core/types/actions";
+import type { Project } from "@licketysplit/core/types/project";
+import type { CapabilityManifest } from "@licketysplit/core/capabilities/manifest";
 import { useProjectStore } from "../../stores/project-store";
 import { insertTimelineOverlay } from "../../stores/project/insert-timeline-overlay";
 import { checkForRecovery } from "../auto-save";
@@ -250,7 +250,7 @@ export class LiveEditorHost implements EditingHost {
     options?: { name?: string },
   ): Promise<ImportedMediaRef> {
     this.requireOpenProject();
-    const bridge = window.openreel?.media?.fetchUrl;
+    const bridge = window.licketysplit?.media?.fetchUrl;
     if (typeof bridge !== "function") {
       throw new Error("Media download is only available in the desktop app");
     }
@@ -300,7 +300,7 @@ export class LiveEditorHost implements EditingHost {
       (descriptor.transparent || descriptor.extension === "mov");
     const nativeAvailable =
       typeof window !== "undefined" &&
-      window.openreel?.platform === "desktop";
+      window.licketysplit?.platform === "desktop";
     const willNormalize = requiresNative && !nativeAvailable;
     if (willNormalize && options.acknowledgeH264Fallback !== true) {
       throw new Error(
@@ -441,7 +441,7 @@ export class LiveEditorHost implements EditingHost {
   };
 
   async probeRiggingBackend(): Promise<RiggingBackendProbe> {
-    const probeBackend = window.openreel?.rigging?.probeBackend;
+    const probeBackend = window.licketysplit?.rigging?.probeBackend;
     if (typeof probeBackend !== "function") {
       return {
         available: false,
@@ -460,7 +460,7 @@ export class LiveEditorHost implements EditingHost {
   }
 
   async rigHumanoidModel(options: HumanoidRigRequest): Promise<HumanoidRigResult> {
-    const rigHumanoidModel = window.openreel?.rigging?.rigHumanoidModel;
+    const rigHumanoidModel = window.licketysplit?.rigging?.rigHumanoidModel;
     if (typeof rigHumanoidModel !== "function") {
       return {
         ok: false,
@@ -647,7 +647,7 @@ export class LiveEditorHost implements EditingHost {
     options: StickerOverlayOptions,
   ): Promise<OverlayRef> {
     this.requireOpenProject();
-    const { stickerLibrary } = await import("@openreel/core");
+    const { stickerLibrary } = await import("@licketysplit/core");
     const created = await insertTimelineOverlay(
       options.startSec,
       options.durationSec,

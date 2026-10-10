@@ -1,1 +1,1 @@
-export * from '@openreel/image-core/schema';
+export * from '@licketysplit/image-core/schema';

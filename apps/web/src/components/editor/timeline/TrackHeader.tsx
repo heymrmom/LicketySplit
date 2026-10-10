@@ -4,14 +4,14 @@ import {
   ToolcraftContextMenu as ContextMenu,
   ToolcraftDropdownMenu as DropdownMenu,
   type ToolcraftContextMenuOption as ContextMenuOption,
-} from "@openreel/ui";
-import { ToolcraftTextInputControl } from "@openreel/ui";
-import type { Track } from "@openreel/core";
+} from "@licketysplit/ui";
+import { ToolcraftTextInputControl } from "@licketysplit/ui";
+import type { Track } from "@licketysplit/core";
 import {
   getTrackItems,
   trackHasAudioItems,
   trackHasVisualItems,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { useProjectStore } from "../../../stores/project-store";
 import { useTimelineStore } from "../../../stores/timeline-store";
 import { useCompactEditor } from "../../../hooks/useCompactEditor";

@@ -19,14 +19,14 @@ import {
 } from "../../services/screen-recorder";
 import { RecordingCountdown } from "./RecordingCountdown";
 import { RecordingControls } from "./RecordingControls";
-import { ToolcraftSwitchControl } from "@openreel/ui";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from "@openreel/ui";
-import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent, ToolcraftLayoutFooter as LayoutFooter } from "@openreel/ui";
-import { ToolcraftSelectableCard as SelectableCard } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftSwitchControl } from "@licketysplit/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from "@licketysplit/ui";
+import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent, ToolcraftLayoutFooter as LayoutFooter } from "@licketysplit/ui";
+import { ToolcraftSelectableCard as SelectableCard } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 
 interface ScreenRecorderProps {
   isOpen: boolean;

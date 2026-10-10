@@ -5,8 +5,8 @@ import type {
   TextClip,
   SVGClip,
   StickerClip,
-} from "@openreel/core";
-import { getTrackItems } from "@openreel/core";
+} from "@licketysplit/core";
+import { getTrackItems } from "@licketysplit/core";
 import type { ProjectState } from "../project-store";
 import type { ProjectStoreHelpers } from "./store-helpers";
 import type {

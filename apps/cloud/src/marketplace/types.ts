@@ -6,7 +6,7 @@ import type {
   EarningsEntry,
   CreatorBalance,
   Attribution,
-} from "@openreel/fxpkg";
+} from "@licketysplit/fxpkg";
 
 export type Bindings = {
   TEMPLATES_BUCKET: R2Bucket;

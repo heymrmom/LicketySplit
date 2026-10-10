@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { RunTurnInput, RunTurnResult } from "@openreel/agent";
+import type { RunTurnInput, RunTurnResult } from "@licketysplit/agent";
 
 const h = vi.hoisted(() => ({
   runTurn: vi.fn(),
@@ -22,7 +22,7 @@ const h = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@openreel/agent", () => ({
+vi.mock("@licketysplit/agent", () => ({
   runTurn: h.runTurn,
   toAnthropicTools: () => [],
   toOpenAITools: h.toOpenAITools,

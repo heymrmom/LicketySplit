@@ -1,12 +1,12 @@
-import { resolveCreationMotionSceneBinding } from "@openreel/core/creation/index";
-import { renderAuroraPreviewToImageBitmap } from "@openreel/core/motion/native-aurora-bridge";
+import { resolveCreationMotionSceneBinding } from "@licketysplit/core/creation/index";
+import { renderAuroraPreviewToImageBitmap } from "@licketysplit/core/motion/native-aurora-bridge";
 import type {
   MediaItem,
   MotionAsset,
   MotionRendererAssetResolver,
   MotionScene3DRenderResult,
-} from "@openreel/core";
-import type { CreationProjectState } from "@openreel/core/creation/index";
+} from "@licketysplit/core";
+import type { CreationProjectState } from "@licketysplit/core/creation/index";
 
 const imageBitmapCache = new Map<string, Promise<ImageBitmap | null>>();
 const videoElementCache = new Map<string, Promise<HTMLVideoElement | null>>();
@@ -71,7 +71,7 @@ export function clearWebMotionAssetBitmapCache(): void {
 async function resolveModelUrl(url: string): Promise<string | null> {
   if (!isRemoteHttpUrl(url)) return url;
   const bridge = typeof window !== "undefined"
-    ? window.openreel?.media?.fetchUrl
+    ? window.licketysplit?.media?.fetchUrl
     : undefined;
   if (typeof bridge !== "function") return url;
 

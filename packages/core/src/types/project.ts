@@ -1,3 +1,4 @@
+import type { LicketyProjectState, RegisteredAsset } from "../lickety/types";
 import type { Timeline } from "./timeline";
 import type { TextClip } from "../text/types";
 import type { ShapeClip, SVGClip, StickerClip } from "../graphics/types";
@@ -24,6 +25,7 @@ export interface ProjectSettings {
 }
 
 export interface Project {
+  readonly lickety?: LicketyProjectState;
   readonly id: string;
   readonly name: string;
   readonly createdAt: number;
@@ -55,6 +57,8 @@ export interface MediaLibrary {
 }
 
 export interface MediaItem {
+  /** Local registry binding, omitted from portable project JSON. */
+  readonly nativeSource?: RegisteredAsset;
   readonly id: string;
   readonly name: string;
   readonly type: "video" | "audio" | "image";
@@ -67,7 +71,7 @@ export interface MediaItem {
   readonly isPlaceholder?: boolean;
   readonly originalUrl?: string;
   /** File hint stored in JSON for cross-session/cross-machine asset matching */
-  readonly sourceFile?: { name: string; size: number; lastModified: number; folder?: string };
+  readonly sourceFile?: { name: string; size: number; lastModified: number; folder?: string; identity?: { id: string; size: number; mtimeMs: number } };
   /** True while a background KieAI generation task is in progress */
   readonly isPending?: boolean;
   /** True when polling exhausted all retries — shows manual retry button */
@@ -96,4 +100,6 @@ export interface MediaMetadata {
   /** Optional source-stream flags preserved by modern importers. */
   readonly hasVideo?: boolean;
   readonly hasAudio?: boolean;
+  readonly canDecode?: boolean;
+  readonly canDecodeVideo?: boolean;
 }

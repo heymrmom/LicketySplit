@@ -1,7 +1,6 @@
 import type { JSX } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import type { RenderResult } from "@testing-library/react";
 
 import { EditorBootstrapGate } from "./EditorBootstrapGate";
 import { useDesktopEditorBootstrap } from "./useDesktopEditorBootstrap";
@@ -21,13 +20,16 @@ beforeEach(() => {
 describe("EditorBootstrapGate", () => {
   it("shows the branded loading state and hides children while not ready", () => {
     mockedHook.mockReturnValue({ ready: false, error: null });
-    const { container }: RenderResult = render(
+    render(
       <EditorBootstrapGate>
         <Sentinel />
       </EditorBootstrapGate>,
     );
     expect(screen.getByText("Loading editor…")).toBeTruthy();
-    expect(container.querySelector("svg")).toBeTruthy();
+    const mark = screen.getByRole("img", { name: "LicketySplit" });
+    expect(mark.getAttribute("src")).toBe("/icons/licketysplit-mark.png");
+    expect(mark.getAttribute("width")).toBe("48");
+    expect(mark.getAttribute("height")).toBe("48");
     expect(screen.queryByTestId("editor-child")).toBeNull();
   });
 

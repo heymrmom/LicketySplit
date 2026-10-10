@@ -17,8 +17,8 @@ import {
   Zap,
   type LucideIcon,
 } from "@/icons/lucide-compat";
-import { ToolcraftClickableCard, ToolcraftText } from "@openreel/ui";
-import type { MotionComposition } from "@openreel/core";
+import { ToolcraftClickableCard, ToolcraftText } from "@licketysplit/ui";
+import type { MotionComposition } from "@licketysplit/core";
 import { useProjectStore } from "../../stores/project-store";
 import {
   createMotionLayerOfType,

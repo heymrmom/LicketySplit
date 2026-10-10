@@ -30,6 +30,8 @@ export interface AudioTrackRenderInfo {
 }
 
 export interface AudioClipRenderInfo {
+  readonly fadeClipOffset?:number;
+  readonly fadeClipDuration?:number;
   readonly clipId: string;
   readonly mediaId: string;
   readonly sourceTime: number;
@@ -47,6 +49,8 @@ export interface AudioClipRenderInfo {
   readonly reversed?: boolean;
   /** Zero-based index of the audio track within the source media file to use. */
   readonly audioTrackIndex?: number;
+  /** Zero-based channel within the selected source audio track; omitted means preserve/mix channels. */
+  readonly sourceChannelIndex?: number;
 }
 
 export interface AudioChannelState {

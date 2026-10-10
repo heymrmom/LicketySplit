@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { MotionComposition } from "@openreel/core";
-import { IDENTITY_TRANSFORM } from "@openreel/core/creation/index";
+import type { MotionComposition } from "@licketysplit/core";
+import { IDENTITY_TRANSFORM } from "@licketysplit/core/creation/index";
 import type {
   CreationAssetRecipe,
   CreationProjectState,
   CreationScene,
-} from "@openreel/core/creation/index";
+} from "@licketysplit/core/creation/index";
 import { summarizeCreationWorkspace } from "./creation-workspace";
 
 function asset(id: string, dirty = false): CreationAssetRecipe {

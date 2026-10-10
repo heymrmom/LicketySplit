@@ -15,9 +15,9 @@ export function buildMenuTemplate(platform: string): MenuNode[] {
   const template: MenuNode[] = [];
   if (isMac) {
     template.push({
-      label: "OpenReel",
+      label: "LicketySplit",
       submenu: [
-        { label: "About OpenReel", role: "about" },
+        { label: "About LicketySplit", role: "about" },
         { label: "Settings…", accelerator: "Cmd+,", actionId: "settings" },
         { label: "Quit", role: "quit", accelerator: "Cmd+Q" },
       ],
@@ -28,17 +28,19 @@ export function buildMenuTemplate(platform: string): MenuNode[] {
     submenu: [
       { label: "New Project", accelerator: "CmdOrCtrl+N", actionId: "newProject" },
       { label: "Open…", accelerator: "CmdOrCtrl+O", actionId: "open" },
-      { label: "Export…", accelerator: "CmdOrCtrl+E", actionId: "export" },
+      // User-customizable editor commands are handled in the renderer. Native
+      // accelerators here would keep firing after a user rebinds or unassigns them.
+      { label: "Export…", actionId: "export" },
     ],
   });
   template.push({
     label: "Edit",
     submenu: [
-      { label: "Undo", accelerator: "CmdOrCtrl+Z", actionId: "undo" },
-      { label: "Redo", accelerator: "Shift+CmdOrCtrl+Z", actionId: "redo" },
-      { label: "Cut", role: "cut" },
-      { label: "Copy", role: "copy" },
-      { label: "Paste", role: "paste" },
+      { label: "Undo", actionId: "undo" },
+      { label: "Redo", actionId: "redo" },
+      { label: "Cut", actionId: "cut" },
+      { label: "Copy", actionId: "copy" },
+      { label: "Paste", actionId: "paste" },
       ...(!isMac
         ? [{ label: "Settings…", accelerator: "Ctrl+,", actionId: "settings" }]
         : []),
@@ -67,7 +69,7 @@ export function buildMenuTemplate(platform: string): MenuNode[] {
   template.push({
     label: "Help",
     submenu: [
-      { label: "OpenReel Help" },
+      { label: "LicketySplit Help" },
       { label: "Open Source Licenses", actionId: "openLicenses" },
     ],
   });
@@ -93,5 +95,5 @@ export function installApplicationMenu(platform: string, onAction: (id: string) 
 }
 
 export function sendMenuAction(win: BrowserWindow | null, id: string): void {
-  if (win) win.webContents.send("openreel:menu:action", id);
+  if (win) win.webContents.send("licketysplit:menu:action", id);
 }

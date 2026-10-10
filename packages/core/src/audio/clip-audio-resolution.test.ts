@@ -90,6 +90,20 @@ describe("clip audio resolution", () => {
     ]);
   });
 
+  it("does not link effects across different selected source channels", () => {
+    const { timeline, audioClip } = createSeparatedAudioTimeline();
+    const source = timeline.tracks[0]!.clips[0]!;
+    const selected = { ...audioClip, sourceChannelIndex: 1 };
+    const separated = {
+      ...timeline,
+      tracks: timeline.tracks.map((track) => track.id === "video-track"
+        ? { ...track, clips: [{ ...source, sourceChannelIndex: 0 }] }
+        : { ...track, clips: [selected] }),
+    };
+
+    expect(resolveClipAudioEffects(selected, separated)).toEqual([]);
+  });
+
   it("resolves ducking automation from a linked separated video clip", () => {
     const { timeline, audioClip } = createSeparatedAudioTimeline();
 

@@ -102,7 +102,7 @@ describe("tool registry", () => {
 
   it("generates a capability doc", () => {
     const doc = toCapabilityDoc();
-    expect(doc).toContain("OpenReel Agent Tools");
+    expect(doc).toContain("LicketySplit Agent Tools");
     expect(doc).toContain("execute_action");
   });
 

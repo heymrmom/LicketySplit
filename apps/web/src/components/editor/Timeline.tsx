@@ -36,21 +36,31 @@ import {
   VolumeX,
   Pencil,
 } from "@/icons/lucide-compat";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
 import {
   ToolcraftDropdownMenu as DropdownMenu,
   type ToolcraftDropdownMenuOption as DropdownMenuOption,
   ToolcraftPopover as Popover,
   ToolcraftText as Text,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import { useProjectStore } from "../../stores/project-store";
-import { useTimelineStore, ZOOM_PRESETS } from "../../stores/timeline-store";
+import {
+  getZoomFromSliderPosition,
+  getZoomSliderPosition,
+  useTimelineStore,
+  ZOOM_PRESETS,
+} from "../../stores/timeline-store";
 import { useCompactEditor } from "../../hooks/useCompactEditor";
 import { useUIStore } from "../../stores/ui-store";
 import { toast } from "../../stores/notification-store";
 import { useEngineStore } from "../../stores/engine-store";
 import { getPlaybackBridge } from "../../bridges/playback-bridge";
-import { trackHasAudioItems, trackHasVisualItems } from "@openreel/core";
+import {
+  calculateProjectDuration,
+  trackHasAudioItems,
+  trackHasVisualItems,
+} from "@licketysplit/core";
+import { formatKeyComboDisplay, keyboardShortcuts } from "../../services/keyboard-shortcuts";
 import {
   deleteTimelineItem,
   duplicateTimelineItem,
@@ -209,15 +219,19 @@ export const Timeline: React.FC = () => {
     playheadPosition,
     playbackState,
     pixelsPerSecond,
+    fitRestore,
     scrollX,
     scrollY,
     viewportWidth,
     setScrollX,
     setScrollY,
     setViewportDimensions,
+    zoomToFit,
+    updateFitDuration,
     zoomIn,
     zoomOut,
     setZoom,
+    resetZoom,
     trackHeight,
     trackHeights,
     setTrackHeight,
@@ -226,6 +240,10 @@ export const Timeline: React.FC = () => {
   } = useTimelineStore();
 
   const [showLayersPanel, setShowLayersPanel] = useState(false);
+  const previousProjectIdRef = useRef(project.id);
+  const [fitShortcutKey, setFitShortcutKey] = useState(
+    () => keyboardShortcuts.getShortcut("timeline.fitTimeline")?.currentKey,
+  );
   const [trackLayerQuery, setTrackLayerQuery] = useState("");
   const [trackLayerFilter, setTrackLayerFilter] =
     useState<TrackLayerFilter>("all");
@@ -329,19 +347,29 @@ export const Timeline: React.FC = () => {
     additive: boolean;
   } | null>(null);
 
-  const timelineDuration = useMemo(() => {
-    let maxEnd = 0;
-    for (const track of tracks) {
-      for (const clip of track.clips) {
-        const end = clip.startTime + clip.duration;
-        if (end > maxEnd) maxEnd = end;
-      }
-    }
-    for (const clip of [...allTextClips, ...allShapeClips]) {
-      maxEnd = Math.max(maxEnd, clip.startTime + clip.duration);
-    }
-    return Math.max(maxEnd, 60); // Minimum 60 seconds
-  }, [tracks, allTextClips, allShapeClips]);
+  const contentDuration = useMemo(() => calculateProjectDuration(project), [project]);
+  const timelineDuration = Math.max(contentDuration, 60);
+  const fitDuration = contentDuration || 60;
+
+  useEffect(() => {
+    updateFitDuration(fitDuration);
+  }, [fitDuration, updateFitDuration]);
+
+  useEffect(() => {
+    if (previousProjectIdRef.current === project.id) return;
+    previousProjectIdRef.current = project.id;
+    // The saved detail zoom belongs to the previous project; never restore it
+    // into another project's timeline.
+    if (fitRestore) resetZoom();
+  }, [fitRestore, project.id, resetZoom]);
+
+  useEffect(() => {
+    const refresh = () =>
+      setFitShortcutKey(
+        keyboardShortcuts.getShortcut("timeline.fitTimeline")?.currentKey,
+      );
+    return keyboardShortcuts.subscribe(refresh);
+  }, []);
 
   const playheadSnapPoints = useMemo(() => {
     const points = new Set<number>();
@@ -438,20 +466,25 @@ export const Timeline: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!tracksRef.current) return;
 
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setViewportDimensions(
-          entry.contentRect.width,
-          entry.contentRect.height,
-        );
+        const element = entry.target as HTMLElement;
+        setViewportDimensions(element.clientWidth, element.clientHeight);
       }
     });
 
-    observer.observe(containerRef.current);
+    observer.observe(tracksRef.current);
     return () => observer.disconnect();
   }, [setViewportDimensions]);
+
+  useEffect(() => {
+    const element = tracksRef.current;
+    if (element && Math.abs(element.scrollLeft - scrollX) > 0.5) {
+      element.scrollLeft = scrollX;
+    }
+  }, [scrollX]);
 
   useEffect(() => {
     if (playbackState !== "playing") return;
@@ -942,6 +975,8 @@ export const Timeline: React.FC = () => {
     title,
     children,
     extra,
+    ariaPressed,
+    className,
   }: {
     onClick?: () => void;
     disabled?: boolean;
@@ -949,14 +984,17 @@ export const Timeline: React.FC = () => {
     title?: string;
     children: React.ReactNode;
     extra?: React.ReactNode;
+    ariaPressed?: boolean;
+    className?: string;
   }) => (
     <button
       type="button"
       aria-label={title ?? "Timeline tool"}
+      aria-pressed={ariaPressed}
       onClick={onClick}
       disabled={disabled}
       data-tip-bottom={title}
-      className={`relative grid place-items-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+      className={`relative grid place-items-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${className ?? ""} ${
         active ? "text-accent" : "text-fg-muted hover:text-fg-2"
       }`}
     >
@@ -965,12 +1003,17 @@ export const Timeline: React.FC = () => {
     </button>
   );
 
+  const fitShortcutLabel = fitShortcutKey
+    ? formatKeyComboDisplay(fitShortcutKey)
+    : "Unassigned";
+  const zoomSliderPosition = getZoomSliderPosition(pixelsPerSecond);
+
   return (
     <div
       data-tour="timeline"
       className="h-full bg-tl-bg flex flex-col min-h-0 relative overflow-hidden"
     >
-      {/* ── Timeline toolbar (mock: 48px line-icon tools + emerald zoom slider) ── */}
+      {/* ── Timeline toolbar (mock: 48px line-icon tools + purple zoom slider) ── */}
       <div className="flex items-center h-12 px-4 gap-4 bg-bg-1 border-b border-border shrink-0 relative z-50">
         <TLTool onClick={undo} disabled={!canUndo()} title="Undo (⌘Z)">
           <Undo2 size={16} aria-hidden />
@@ -1317,7 +1360,7 @@ export const Timeline: React.FC = () => {
         <CaptionBatchSelectButton />
 
         <div className="ml-auto flex items-center gap-3">
-          {/* Zoom control (mock: minus / emerald slider track + knob / plus) */}
+          {/* Zoom control (mock: minus / purple slider track + knob / plus) */}
           <div className="flex items-center gap-2.5">
             <TLTool onClick={zoomOut} title="Zoom out">
               <ZoomOut size={16} aria-hidden />
@@ -1335,9 +1378,7 @@ export const Timeline: React.FC = () => {
                     0,
                     Math.min(
                       100,
-                      ((pixelsPerSecond - ZOOM_PRESETS.MIN) /
-                        (ZOOM_PRESETS.MAX - ZOOM_PRESETS.MIN)) *
-                        100,
+                      (zoomSliderPosition / 1000) * 100,
                     ),
                   )}%`,
                 }}
@@ -1350,9 +1391,7 @@ export const Timeline: React.FC = () => {
                     0,
                     Math.min(
                       100,
-                      ((pixelsPerSecond - ZOOM_PRESETS.MIN) /
-                        (ZOOM_PRESETS.MAX - ZOOM_PRESETS.MIN)) *
-                        100,
+                      (zoomSliderPosition / 1000) * 100,
                     ),
                   )}%`,
                 }}
@@ -1360,17 +1399,28 @@ export const Timeline: React.FC = () => {
               <input
                 type="range"
                 aria-label="Timeline zoom"
-                aria-valuetext={`${Math.round(pixelsPerSecond)} pixels per second`}
-                min={ZOOM_PRESETS.MIN}
-                max={ZOOM_PRESETS.MAX}
+                aria-valuetext={`${Number(pixelsPerSecond.toPrecision(3))} pixels per second`}
+                min={0}
+                max={1000}
                 step={1}
-                value={pixelsPerSecond}
-                onChange={(event) => setZoom(Number(event.currentTarget.value))}
+                value={zoomSliderPosition}
+                onChange={(event) =>
+                  setZoom(getZoomFromSliderPosition(Number(event.currentTarget.value)))
+                }
                 className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
               />
             </div>
             <TLTool onClick={zoomIn} title="Zoom in">
               <ZoomIn size={16} aria-hidden />
+            </TLTool>
+            <TLTool
+              onClick={() => zoomToFit(fitDuration)}
+              active={fitRestore !== null}
+              ariaPressed={fitRestore !== null}
+              title={`${fitRestore ? "Restore previous zoom" : "Full Extent Zoom"} (${fitShortcutLabel})`}
+              className="h-8 w-8 rounded-md hover:bg-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              <Maximize2 size={16} aria-hidden />
             </TLTool>
           </div>
 

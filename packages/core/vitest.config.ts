@@ -13,7 +13,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@openreel/core": path.resolve(__dirname, "./src"),
+      "@licketysplit/core": path.resolve(__dirname, "./src"),
     },
   },
 });

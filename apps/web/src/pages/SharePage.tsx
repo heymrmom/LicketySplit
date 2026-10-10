@@ -11,7 +11,7 @@ import {
   ToolcraftButton as Button,
   ToolcraftLink as Link,
   ToolcraftText as Text,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import {
   getShareInfo,
   getShareDownloadUrl,
@@ -216,7 +216,7 @@ export const SharePage: React.FC<SharePageProps> = ({ shareId }) => {
           <Text type="supporting" color="secondary" className="text-xs text-text-muted">
             Made with{" "}
             <Link href="#/editor" className="text-primary hover:underline">
-              Open Reel Video
+              LicketySplit
             </Link>
           </Text>
         </div>

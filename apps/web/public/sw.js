@@ -1,5 +1,5 @@
 /**
- * OpenReel Service Worker
+ * LicketySplit Service Worker
  *
  * Handles offline functionality by caching application assets.
  * Implements a cache-first strategy for static assets and network-first for API calls.
@@ -10,9 +10,10 @@
  * - 35.4: Inform user that AI requires internet connectivity
  */
 
-const CACHE_NAME = "openreel-v2";
-const STATIC_CACHE_NAME = "openreel-static-v2";
-const DYNAMIC_CACHE_NAME = "openreel-dynamic-v2";
+const CACHE_NAME = "licketysplit-v2";
+const STATIC_CACHE_NAME = "licketysplit-static-v2";
+const DYNAMIC_CACHE_NAME = "licketysplit-dynamic-v2";
+const isOwnedCacheName = (name) => name.startsWith("licketysplit-") || name.startsWith("openreel-");
 
 /**
  * Static assets to cache on install
@@ -111,7 +112,7 @@ self.addEventListener("activate", (event) => {
             .filter((name) => {
               // Delete old versions of our caches
               return (
-                name.startsWith("openreel-") &&
+                isOwnedCacheName(name) &&
                 name !== STATIC_CACHE_NAME &&
                 name !== DYNAMIC_CACHE_NAME
               );
@@ -287,7 +288,7 @@ async function getCacheStatus() {
   let totalEntries = 0;
 
   for (const name of cacheNames) {
-    if (name.startsWith("openreel-")) {
+    if (isOwnedCacheName(name)) {
       const cache = await caches.open(name);
       const keys = await cache.keys();
       totalEntries += keys.length;
@@ -295,20 +296,20 @@ async function getCacheStatus() {
   }
 
   return {
-    cacheNames: cacheNames.filter((n) => n.startsWith("openreel-")),
+    cacheNames: cacheNames.filter(isOwnedCacheName),
     totalEntries,
     version: CACHE_NAME,
   };
 }
 
 /**
- * Clear all OpenReel caches
+ * Clear all LicketySplit caches
  */
 async function clearAllCaches() {
   const cacheNames = await caches.keys();
   await Promise.all(
     cacheNames
-      .filter((name) => name.startsWith("openreel-"))
+      .filter(isOwnedCacheName)
       .map((name) => caches.delete(name))
   );
 }

@@ -1,7 +1,6 @@
-# OpenReel App-Attestation Token Broker — Canonical Contract
+# App-attestation token broker compatibility contract
 
-This is the authoritative spec for the anonymous-user GPU-job authorization flow.
-The iOS and Android client agents implement against this document exactly.
+This preserved upstream contract describes an anonymous-user GPU-job authorization flow. The referenced iOS and Android client source trees are absent from this checkout; this document is not the current LicketySplit desktop authorization path or proof of a deployed service. Exact worker origins, mobile identities, and external resource names below remain deployment/compatibility references pending owner disposition. No live service configuration was changed by the desktop takeover.
 
 ## Goals
 

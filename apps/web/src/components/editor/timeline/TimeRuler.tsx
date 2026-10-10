@@ -6,7 +6,6 @@ import React, {
   useMemo,
 } from "react";
 import { useTimelineTouchGesture, listenTimelineGesture } from "./touch-gestures";
-import { formatTimecode } from "./utils";
 import {
   getBeatSyncBridge,
   type BeatSyncState,
@@ -23,7 +22,48 @@ interface TimeRulerProps {
   snapPoints?: number[];
 }
 
+const NICE_INTERVALS = [
+  0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 15, 30,
+  60, 90, 120, 150, 180, 240, 300, 360, 450, 600, 720, 900, 1200,
+  1800, 3600, 7200, 10800, 14400, 21600, 43200, 86400, 172800, 604800,
+];
+
+function nextNiceInterval(minimum: number, alignedTo = 1): number {
+  const matches = (interval: number) => {
+    const ratio = interval / alignedTo;
+    return Math.abs(ratio - Math.round(ratio)) < 0.000001;
+  };
+  const interval = NICE_INTERVALS.find((candidate) =>
+    candidate >= minimum && matches(candidate),
+  );
+  if (interval !== undefined) return interval;
+  const multiple = Math.ceil(minimum / alignedTo);
+  return Math.max(1, multiple) * alignedTo;
+}
+
+function getTickConfig(pixelsPerSecond: number) {
+  const minor = nextNiceInterval(18 / pixelsPerSecond);
+  const major = nextNiceInterval(60 / pixelsPerSecond, minor);
+  const labelEvery = nextNiceInterval(
+    Math.max(1, 110 / pixelsPerSecond),
+    major,
+  );
+  return { minor, major, labelEvery };
+}
+
+function formatRulerLabel(time: number, showHours: boolean): string {
+  const seconds = Math.floor(time + 0.000001);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return showHours
+    ? `${pad(hours)}:${pad(minutes)}:${pad(remainder)}`
+    : `${pad(Math.floor(seconds / 60))}:${pad(remainder)}`;
+}
+
 export const TimeRuler: React.FC<TimeRulerProps> = ({
+  duration,
   pixelsPerSecond,
   scrollX,
   viewportWidth,
@@ -59,26 +99,7 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
     );
   }, [beatState.beatMarkers, visibleStart, visibleEnd]);
 
-  const getTickConfig = () => {
-    if (safePixelsPerSecond > 500) {
-      return { minor: 0.01, major: 0.1, labelEvery: 0.5 };
-    }
-    if (safePixelsPerSecond > 200) {
-      return { minor: 0.05, major: 0.5, labelEvery: 1 };
-    }
-    if (safePixelsPerSecond > 100) {
-      return { minor: 0.1, major: 1, labelEvery: 1 };
-    }
-    if (safePixelsPerSecond > 50) {
-      return { minor: 0.5, major: 1, labelEvery: 5 };
-    }
-    if (safePixelsPerSecond > 20) {
-      return { minor: 1, major: 5, labelEvery: 5 };
-    }
-    return { minor: 5, major: 10, labelEvery: 10 };
-  };
-
-  const tickConfig = getTickConfig();
+  const tickConfig = getTickConfig(safePixelsPerSecond);
   const rawStartTick = Math.floor(visibleStart / tickConfig.minor) * tickConfig.minor;
   const startTick = Math.max(0, rawStartTick);
 
@@ -216,10 +237,11 @@ export const TimeRuler: React.FC<TimeRulerProps> = ({
         tick.showLabel && tick.time >= 0 ? (
           <span
             key={`tick-${tick.time}`}
+            data-ruler-time-label
             className="absolute top-[9px] text-[11px] font-medium text-fg-muted whitespace-nowrap pointer-events-none"
             style={{ left: `${tick.time * safePixelsPerSecond + 6}px` }}
           >
-            {formatTimecode(Math.max(0, tick.time)).slice(3, 8)}
+            {formatRulerLabel(Math.max(0, tick.time), duration >= 3600)}
           </span>
         ) : null,
       )}

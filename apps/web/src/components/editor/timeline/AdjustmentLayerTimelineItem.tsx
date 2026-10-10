@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTimelineTouchGesture, listenTimelineGesture } from "./touch-gestures";
 import { TimelineTouchMoveHandle } from "./TimelineTouchMoveHandle";
 import { Layers } from "@/icons/lucide-compat";
-import type { AdjustmentLayer } from "@openreel/core";
+import type { AdjustmentLayer } from "@licketysplit/core";
 import { useProjectStore } from "../../../stores/project-store";
 
 interface AdjustmentLayerTimelineItemProps {

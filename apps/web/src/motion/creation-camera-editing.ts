@@ -1,11 +1,11 @@
-import type { Project, MotionComposition } from "@openreel/core";
-import type { MotionScene3DLayer } from "@openreel/core/motion/types";
+import type { Project, MotionComposition } from "@licketysplit/core";
+import type { MotionScene3DLayer } from "@licketysplit/core/motion/types";
 import type {
   CreationCamera,
   CreationOperation,
   CreationScene,
   Transform3D,
-} from "@openreel/core/creation/index";
+} from "@licketysplit/core/creation/index";
 
 export interface CreationCameraEditPatch {
   readonly name?: string;

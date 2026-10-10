@@ -18,12 +18,16 @@ import type {
 import {
   ProjectSerializer,
   SCHEMA_VERSION,
+  assertReaderCompatibility,
   normalizeMotionComposition,
   normalizeProjectCreationFields,
   normalizeProjectMotionFields,
+  serializeProjectFile,
 } from "./project-serializer";
 import { createCreationScene, createEmptyCreationState } from "../creation";
 import { UNIVERSAL_TRACKS_CAPABILITY } from "../timeline/timeline-items";
+import { DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS } from "../multicam/manifest";
+import { makeWorkflowFixture } from "../lickety/test-fixtures";
 
 const makeVideoLayer = (
   overrides: Partial<MotionVideoLayer> = {},
@@ -270,6 +274,106 @@ describe("normalizeProjectCreationFields", () => {
 });
 
 describe("ProjectSerializer round-trip", () => {
+  it("preserves opaque original-file identity without serializing a local path", () => {
+    const fixture = makeWorkflowFixture();
+    const first = fixture.mediaLibrary.items[0]!;
+    const identity = { id: "f7d0c642-5a73-4b11-88f0-5e177898f725", size: 12, mtimeMs: 1728561600000 };
+    const project = {
+      ...fixture,
+      mediaLibrary: { ...fixture.mediaLibrary, items: fixture.mediaLibrary.items.map((item, index) => index === 0 ? { ...item, sourceFile: { name: first.name, size: 12, lastModified: 1728561600000, identity } } : item) },
+    };
+    const saved = JSON.parse(serializeProjectFile(project)) as { project: Project };
+
+    expect(saved.project.mediaLibrary.items[0]?.sourceFile?.identity).toEqual(identity);
+    expect(JSON.stringify(saved.project.mediaLibrary.items[0]?.sourceFile)).not.toContain("path");
+  });
+
+  it("requires reader 1.4 for selected source channels and segmented camera angles, then round-trips them", () => {
+    const serializer = new ProjectSerializer(new MemoryStorageEngine());
+    const fixture = makeWorkflowFixture();
+    const clip = { ...fixture.timeline.tracks[1]!.clips[0]!, sourceChannelIndex: 1 };
+    const project: Project = {
+      ...fixture,
+      timeline: { ...fixture.timeline, tracks: fixture.timeline.tracks.map((track, index) => index === 1 ? { ...track, clips: [clip] } : track) },
+      multicamGroups: [{
+        id: "podcast-group", name: "Episode",
+        angles: [{
+          id: "angle-main", name: "Main", clipId: "clip-source", trackId: "source-main", offset: 0,
+          color: "#ef4444", isActive: true,
+          sourceSegments: [{ mediaId: "cam-a", clipId: "clip-source", trackId: "source-main", sourceStartSeconds: 0, sourceEndSeconds: 20, episodeMapping: { scale: 1, offsetSeconds: 0 } }],
+        }],
+        activeAngleId: "angle-main", syncPoint: 0, duration: 20, createdAt: 1,
+      }],
+    };
+    const json = serializer.exportToJson(project);
+    const file = JSON.parse(json) as { version: string; minimumReaderVersion?: string; capabilities?: string[] };
+    const imported = serializer.importFromJson(json);
+
+    expect(SCHEMA_VERSION).toBe("1.4.0");
+    expect(file).toMatchObject({ version: "1.4.0", minimumReaderVersion: "1.4.0" });
+    expect(file.capabilities).toContain("licketysplit-podcast-assembly-v1");
+    expect(imported.timeline.tracks[1]?.clips[0]?.sourceChannelIndex).toBe(1);
+    expect(imported.multicamGroups?.[0]?.angles[0]?.sourceSegments?.[0]?.mediaId).toBe("cam-a");
+    expect(() => assertReaderCompatibility({ version: "1.3.0", minimumReaderVersion: "1.4.0", project }, "1.3.0")).toThrow(/requires LicketySplit project reader 1\.4\.0 or newer/);
+  });
+
+  it("keeps the 1.3 minimum for older plain and workflow projects", () => {
+    const serializer = new ProjectSerializer(new MemoryStorageEngine());
+    const workflow = makeProject({ lickety: { schemaVersion: 1 } });
+    const plainFile = JSON.parse(serializer.exportToJson(makeProject())) as { version: string; minimumReaderVersion?: string };
+    const workflowFile = JSON.parse(serializer.exportToJson(workflow)) as { version: string; minimumReaderVersion?: string };
+    expect(plainFile.version).toBe("1.4.0");
+    expect(plainFile.minimumReaderVersion).toBeUndefined();
+    expect(workflowFile.minimumReaderVersion).toBe("1.3.0");
+  });
+
+  it("normalizes legacy multicam specs when old projects are reopened and saved", () => {
+    const source = makeWorkflowFixture();
+    const legacyGroup = {
+      id: "legacy-group",
+      name: "Interview",
+      angles: [{
+        id: "main", name: "Main", clipId: "camera-clip", trackId: "camera-track",
+        offset: 0.25, color: "#a855f7", isActive: true,
+        sourceSegments: [{ mediaId: "camera", clipId: "camera-clip", trackId: "camera-track", sourceStartSeconds: 3, sourceEndSeconds: 13, episodeMapping: { scale: 0.9999, offsetSeconds: 2 } }],
+      }],
+      activeAngleId: "main",
+      syncPoint: 7,
+      duration: 10,
+      createdAt: 123,
+      switches: [{ id: "switch-1", groupId: "legacy-group", angleId: "main", time: 4 }],
+      manifest: {
+        spec: "openreel-multicam/v1",
+        fps: 25,
+        sync: { method: "manual", reference: "main" },
+        participants: [{ id: "host", name: "Host", audio: "mic", seat: "left" }],
+        cameras: [{ id: "main", type: "wide", subject: "host", file: "camera.mov" }],
+        constraints: DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
+        retainedExtension: { sourceNote: "preserve" },
+      },
+      shotPlan: {
+        spec: "openreel-multicam-edit/v1",
+        durationMs: 10_000,
+        shots: [{ startMs: 1_000, endMs: 8_000, reason: "speaker", confidence: 0.9, transitionIn: { type: "cut", durationMs: 0 }, layout: { template: "solo", panels: [{ cameraId: "main", subject: "host", rect: { x: 0.1, y: 0, width: 0.8, height: 1 } }] } }],
+        retainedExtension: { plannerNote: "preserve" },
+      },
+    } as unknown as NonNullable<Project["multicamGroups"]>[number];
+    const oldProject = { ...source, multicamGroups: [legacyGroup] };
+    const before = structuredClone(oldProject);
+    const serializer = new ProjectSerializer(new MemoryStorageEngine());
+    const opened = serializer.importFromJson(JSON.stringify({ version: "1.3.0", project: oldProject }));
+    const saved = JSON.parse(serializeProjectFile(opened)) as { project: Project };
+
+    expect(saved.project.multicamGroups?.[0]?.manifest?.spec).toBe("licketysplit-multicam/v1");
+    expect(saved.project.multicamGroups?.[0]?.shotPlan?.spec).toBe("licketysplit-multicam-edit/v1");
+    expect(saved.project.multicamGroups?.[0]).toEqual({
+      ...legacyGroup,
+      manifest: { ...legacyGroup.manifest, spec: "licketysplit-multicam/v1" },
+      shotPlan: { ...legacyGroup.shotPlan, spec: "licketysplit-multicam-edit/v1" },
+    });
+    expect(oldProject).toEqual(before);
+  });
+
   it("writes the universal-track reader requirement and preserves it", () => {
     const serializer = new ProjectSerializer(new MemoryStorageEngine());
     const project = makeProject({
@@ -301,7 +405,7 @@ describe("ProjectSerializer round-trip", () => {
     });
 
     expect(() => serializer.importFromJson(json)).toThrow(
-      /requires OpenReel project reader 9\.0\.0 or newer/,
+      /requires LicketySplit project reader 9\.0\.0 or newer/,
     );
     expect(serializer.validateProjectJson(json)).toMatchObject({
       valid: false,

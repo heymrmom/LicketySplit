@@ -7,7 +7,7 @@ import { createEmptyProject, loadProjectFile, saveProjectFile } from "./project-
 
 const tempFiles: string[] = [];
 function tmpFile(): string {
-  const file = path.join(tmpdir(), `openreel-proj-${randomUUID()}.json`);
+  const file = path.join(tmpdir(), `licketysplit-proj-${randomUUID()}.json`);
   tempFiles.push(file);
   return file;
 }

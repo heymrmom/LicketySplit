@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MediaItem, Project } from "@openreel/core";
+import type { MediaItem, Project } from "@licketysplit/core";
 import { PreviewProxyControls, PreviewProxyBadge } from "./PreviewProxyControls";
 import { previewProxyCache } from "../../stores/preview-proxy-store";
 

@@ -1,8 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { ProjectSerializer } from "@openreel/core/storage/project-serializer";
-import type { IStorageEngine } from "@openreel/core/storage/types";
-import type { Project, ProjectSettings } from "@openreel/core/types/project";
+import { ProjectSerializer } from "@licketysplit/core/storage/project-serializer";
+import type { IStorageEngine } from "@licketysplit/core/storage/types";
+import type { Project, ProjectSettings } from "@licketysplit/core/types/project";
 
 const DEFAULT_SETTINGS: ProjectSettings = {
   width: 1920,

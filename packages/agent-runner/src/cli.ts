@@ -48,7 +48,7 @@ function parseArgs(argv: string[]): CliArgs {
 
 function resolveApiKey(provider: LlmProvider): string {
   return (
-    process.env.OPENREEL_API_KEY ??
+    process.env.LICKETYSPLIT_API_KEY ??
     (provider === "anthropic"
       ? process.env.ANTHROPIC_API_KEY
       : process.env.OPENAI_API_KEY) ??
@@ -61,10 +61,10 @@ const DEFAULT_MODEL: Record<LlmProvider, string> = {
   openai: "gpt-5.6-sol",
 };
 
-const USAGE = `openreel-agent — headless project editing
+const USAGE = `licketysplit-agent — headless project editing
 
 Usage:
-  openreel-agent --project <file.json> --prompt "<instruction>" [options]
+  licketysplit-agent --project <file.json> --prompt "<instruction>" [options]
 
 Options:
   -p, --project <path>   Project JSON to edit (required)
@@ -74,7 +74,7 @@ Options:
   -o, --out <path>       Output path (default: edit in place)
       --dry-run          Plan without applying mutations
 
-API key (never stored): OPENREEL_API_KEY, or ANTHROPIC_API_KEY / OPENAI_API_KEY.`;
+API key (never stored): LICKETYSPLIT_API_KEY, or ANTHROPIC_API_KEY / OPENAI_API_KEY.`;
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
@@ -85,7 +85,7 @@ async function main(): Promise<void> {
   const apiKey = resolveApiKey(args.provider);
   if (!apiKey) {
     process.stderr.write(
-      `No API key found. Set OPENREEL_API_KEY (or ${args.provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"}).\n`,
+      `No API key found. Set LICKETYSPLIT_API_KEY (or ${args.provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"}).\n`,
     );
     process.exit(1);
   }

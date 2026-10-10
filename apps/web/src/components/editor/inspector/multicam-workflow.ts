@@ -1,3 +1,4 @@
+import type {AnalysisSamples} from "../../../services/lickety/analysis-audio";
 import type {
   Action,
   CameraAngle,
@@ -13,7 +14,8 @@ import type {
   MulticamManifestConstraints,
   MulticamVadTrack,
   MulticamCalibrationRange,
-} from "@openreel/core";
+} from "@licketysplit/core";
+import { DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS, fingerprintMulticamManifest, type OrmaArtifact } from "@licketysplit/core";
 
 export interface MulticamSyncAnalysis {
   results: Map<string, SyncResult>;
@@ -25,6 +27,21 @@ export interface ResolvedMulticamSource {
   clip: Clip;
   media: MediaItem;
   track: Track;
+  segments: Array<{ clip: Clip; media: MediaItem; track: Track }>;
+}
+
+type PodcastClipTag = {
+  setupId?: string;
+  groupId?: string;
+  role?: string;
+  participantId?: string;
+  sourceStreamIndex?: number;
+  sourceChannelIndex?: number;
+};
+
+function podcastClipTag(clip: Clip): PodcastClipTag | undefined {
+  const value = clip.metadata?.podcast;
+  return value && typeof value === "object" ? value as PodcastClipTag : undefined;
 }
 
 export function resolveMulticamSources(
@@ -32,23 +49,72 @@ export function resolveMulticamSources(
   group: MultiCamGroup,
 ): ResolvedMulticamSource[] {
   return group.angles.map((angle) => {
-    const track = project.timeline.tracks.find((candidate) =>
-      candidate.clips.some((clip) => clip.id === angle.clipId),
-    );
-    const clip = track?.clips.find((candidate) => candidate.id === angle.clipId);
-    if (!track || !clip) {
-      throw new Error(`${angle.name} is no longer available on the timeline.`);
-    }
-    const media = project.mediaLibrary.items.find((item) => item.id === clip.mediaId);
-    if (!media) {
-      throw new Error(`${angle.name} is missing its source media.`);
-    }
-    return { angle, clip, media, track };
+    const segmentRefs = angle.sourceSegments?.length
+      ? angle.sourceSegments
+      : [{ clipId: angle.clipId, trackId: angle.trackId }];
+    const segments = segmentRefs.map((segment) => {
+      const track = project.timeline.tracks.find((candidate) =>
+        candidate.id === segment.trackId && candidate.clips.some((clip) => clip.id === segment.clipId),
+      ) ?? project.timeline.tracks.find((candidate) => candidate.clips.some((clip) => clip.id === segment.clipId));
+      const clip = track?.clips.find((candidate) => candidate.id === segment.clipId);
+      if (!track || !clip) throw new Error(`${angle.name} source segment ${segment.clipId} is no longer available on the timeline.`);
+      const media = project.mediaLibrary.items.find((item) => item.id === clip.mediaId);
+      if (!media) throw new Error(`${angle.name} source segment ${segment.clipId} is missing its source media.`);
+      return { clip, media, track };
+    });
+    const preferred = segments.find((entry) => entry.clip.id === angle.clipId) ?? segments[0];
+    if (!preferred) throw new Error(`${angle.name} is no longer available on the timeline.`);
+    return { angle, ...preferred, segments };
   });
 }
 
+export function buildMulticamSourceClipMap(sources: readonly ResolvedMulticamSource[]): Map<string, Clip> {
+  return new Map(sources.flatMap((source) => source.segments.map(({ clip }) => [clip.id, clip] as const)));
+}
+
+export interface PodcastProgramClipSamples {
+  participantId?: string;
+  startTime: number;
+  duration: number;
+  speed: number;
+  volume: number;
+  samples: Float32Array;
+}
+
+/** Map already selected original microphone samples onto their current episode-time clips. */
+export function mapPodcastProgramAudio(
+  durationSeconds: number,
+  sampleRate: number,
+  clips: readonly PodcastProgramClipSamples[],
+): Array<{ angleId: string; samples: Float32Array; sampleRate: number }> {
+  const frameCount = Math.max(0, Math.ceil(durationSeconds * sampleRate));
+  const grouped = new Map<string, Float32Array>();
+  for (const clip of clips) {
+    if (!Number.isFinite(clip.startTime) || clip.startTime < 0 || !Number.isFinite(clip.duration) || clip.duration <= 0 || !Number.isFinite(clip.speed) || clip.speed <= 0) continue;
+    if (!Number.isFinite(clip.volume) || clip.volume === 0 || !clip.samples.length) continue;
+    const id = clip.participantId ? `participant-${clip.participantId}` : "shared-conversation";
+    const output = grouped.get(id) ?? new Float32Array(frameCount);
+    grouped.set(id, output);
+    const start = Math.max(0, Math.round(clip.startTime * sampleRate));
+    const count = Math.min(Math.ceil(clip.duration * sampleRate), output.length - start);
+    for (let index = 0; index < count; index++) {
+      const sourcePosition = index * clip.speed;
+      const left = Math.floor(sourcePosition);
+      const fraction = sourcePosition - left;
+      const a = clip.samples[left] ?? 0;
+      const b = clip.samples[Math.min(left + 1, clip.samples.length - 1)] ?? 0;
+      output[start + index] += (a + (b - a) * fraction) * clip.volume;
+    }
+  }
+  return [...grouped].map(([angleId, samples]) => ({ angleId, samples, sampleRate }));
+}
+
+export function hasGroupedPodcastSources(group: MultiCamGroup): boolean {
+  return group.angles.some((angle) => (angle.sourceSegments?.length ?? 0) > 0);
+}
+
 export function prepareMulticamAnalysisAudio(
-  buffer: AudioBuffer,
+  buffer: AnalysisSamples,
   targetSampleRate = 2_000,
 ): { samples: Float32Array; sampleRate: number } {
   const sampleRate = Math.min(buffer.sampleRate, targetSampleRate);
@@ -73,39 +139,128 @@ export function buildMulticamManifest(
   sources: readonly ResolvedMulticamSource[],
   constraints: MulticamManifestConstraints,
 ): MulticamManifest {
-  const participantAngles = group.angles.filter(
-    (angle) => !/\bwide\b/i.test(angle.name),
-  );
-  const participants = participantAngles.map((angle, index) => ({
-    id: `participant-${angle.id}`,
-    name: angle.name,
-    audio: angle.id,
-    seat: index,
-  }));
-  const participantByAngle = new Map(
-    participantAngles.map((angle, index) => [angle.id, participants[index]!.id]),
-  );
+  const podcastSetupId = sources.flatMap((source) => source.segments).map(({ clip }) => podcastClipTag(clip)?.setupId).find((id): id is string => typeof id === "string");
+  const isPodcast = Boolean(podcastSetupId);
+  const audioEntries = podcastSetupId
+    ? project.timeline.tracks.flatMap((track) => track.clips.flatMap((clip) => {
+        const podcast = podcastClipTag(clip);
+        return podcast?.setupId === podcastSetupId && podcast.role === "dialogue"
+          ? [{ track, clip, podcast }]
+          : [];
+      }))
+    : [];
+  const isolated = new Map<string, { trackIds: Set<string>; bindings: Array<{ trackId: string; streamIndex?: number; channel?: number }>; audioWindows: NonNullable<MulticamManifest["participants"][number]["audioWindows"]> }>();
+  const shared = new Map<string, NonNullable<MulticamManifest["participants"][number]["audioWindows"]>>();
+  for (const { track, clip, podcast } of audioEntries) {
+    const window = {
+      trackId: track.id,
+      clipId: clip.id,
+      mediaId: clip.mediaId,
+      startTime: clip.startTime,
+      duration: clip.duration,
+      inPoint: clip.inPoint,
+      outPoint: clip.outPoint,
+      speed: clip.speed ?? 1,
+      volume: clip.volume ?? 1,
+      ...(typeof podcast.sourceChannelIndex === "number" ? { sourceChannelIndex: podcast.sourceChannelIndex } : {}),
+    };
+    if (podcast.participantId) {
+      const entry = isolated.get(podcast.participantId) ?? { trackIds: new Set<string>(), bindings: [], audioWindows: [] };
+      entry.trackIds.add(track.id);
+      entry.audioWindows.push(window);
+      const binding = { trackId: track.id, streamIndex: podcast.sourceStreamIndex as number | undefined, channel: podcast.sourceChannelIndex as number | undefined };
+      if (!entry.bindings.some((candidate) => candidate.trackId === binding.trackId && candidate.streamIndex === binding.streamIndex && candidate.channel === binding.channel)) entry.bindings.push(binding);
+      isolated.set(podcast.participantId, entry);
+    } else {
+      const windows = shared.get(track.id) ?? [];
+      windows.push(window);
+      shared.set(track.id, windows);
+    }
+  }
+  const participants: MulticamManifest["participants"] = isPodcast
+    ? [
+        ...[...isolated].map(([participantId, audio], index) => ({
+          id: `participant-${participantId}`,
+          name: project.lickety?.podcastSetup?.participants.find((entry) => entry.id === participantId)?.name ?? participantId,
+          audio: [...audio.trackIds][0]!,
+          audioTracks: [...audio.trackIds],
+          bindings: audio.bindings,
+          audioWindows: audio.audioWindows,
+          seat: index,
+          audioMode: "isolated" as const,
+        })),
+        ...(shared.size ? [{ id: "shared-conversation", name: "Shared conversation", audio: shared.keys().next().value as string, audioTracks: [...shared.keys()], audioWindows: [...shared.values()].flat(), seat: isolated.size, audioMode: "shared-mix" as const }] : []),
+      ]
+    : group.angles.filter((angle) => !/\bwide\b/i.test(angle.name)).map((angle, index) => ({
+        id: `participant-${angle.id}`,
+        name: angle.name,
+        audio: angle.id,
+        seat: index,
+      }));
   const cameras = group.angles.map((angle) => {
     const source = sources.find((entry) => entry.angle.id === angle.id);
-    const isWide = /\bwide\b/i.test(angle.name);
+    const sourcePodcast = source?.segments.map(({ clip }) => podcastClipTag(clip)).find((podcast) => podcast?.role === "camera" && podcastSetupId === podcast.setupId);
+    const podcastGroup = sourcePodcast?.groupId
+      ? project.lickety?.podcastSetup?.groups.find((entry) => entry.id === sourcePodcast.groupId)
+      : undefined;
+    let type: MulticamManifest["cameras"][number]["type"];
+    let subject: string;
+    if (!isPodcast) {
+      type = /\bwide\b/i.test(angle.name) ? "wide" : "closeup";
+      subject = type === "wide" ? "all" : `participant-${angle.id}`;
+    } else if (podcastGroup?.framing === "everyone") {
+      type = "wide";
+      subject = "all";
+    } else if (podcastGroup?.framing === "person" && podcastGroup.participantIds?.length === 1) {
+      const id = `participant-${podcastGroup.participantIds[0]}`;
+      if (participants.some((entry) => entry.id === id && entry.audioMode !== "shared-mix")) {
+        type = "closeup";
+        subject = id;
+      } else {
+        type = "unknown";
+        subject = "unmapped";
+      }
+    } else {
+      type = "unknown";
+      subject = "unmapped";
+    }
     return {
       id: angle.id,
-      type: isWide ? "wide" as const : "closeup" as const,
-      subject: isWide ? "all" : (participantByAngle.get(angle.id) ?? "all"),
+      type,
+      subject,
       file: source?.media.sourceFile?.name ?? source?.media.name ?? angle.name,
       clipId: angle.clipId,
       angleId: angle.id,
+      ...(angle.sourceSegments?.length ? { sourceSegments: structuredClone(angle.sourceSegments.map((segment) => {
+        const live = source?.segments.find((entry) => entry.clip.id === segment.clipId);
+        if (!live) return segment;
+        const speed = live.clip.speed ?? 1;
+        const liveDuration = Math.max(0, Math.min(live.clip.duration, (live.clip.outPoint - live.clip.inPoint) / speed));
+        return { ...segment, mediaId: live.clip.mediaId, trackId: live.track.id, timelineStart: live.clip.startTime, timelineEnd: live.clip.startTime + liveDuration };
+      })) } : {}),
     };
   });
-  const reference = cameras.find((camera) => camera.type === "wide")?.id ?? cameras[0]?.id ?? "";
+  const reference = cameras.find((camera) => camera.type === "wide")?.id ?? (isPodcast ? "" : cameras[0]?.id ?? "");
   return {
-    spec: "openreel-multicam/v1",
+    spec: "licketysplit-multicam/v1",
     fps: project.settings.frameRate,
     sync: { method: "audio-crosscorr", reference },
     participants,
     cameras,
     constraints,
   };
+}
+
+/** Only reuse grouped-podcast activity while its live camera and microphone routes are unchanged. */
+export function hasCurrentGroupedPodcastActivity(
+  project: Project,
+  group: MultiCamGroup,
+  artifact: Pick<OrmaArtifact, "manifestFingerprint">,
+): boolean {
+  if (!hasGroupedPodcastSources(group)) return true;
+  const sources = resolveMulticamSources(project, group);
+  const manifest = buildMulticamManifest(project, group, sources, group.manifest?.constraints ?? DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS);
+  return artifact.manifestFingerprint === fingerprintMulticamManifest(manifest);
 }
 
 export function findMulticamCalibrationRanges(
@@ -162,7 +317,7 @@ export function findMulticamCalibrationRanges(
 }
 
 export async function analyzeMulticamSyncInWorker(
-  buffers: ReadonlyMap<string, AudioBuffer>,
+  buffers: ReadonlyMap<string, AnalysisSamples>,
   referenceAngleId: string,
 ): Promise<MulticamSyncAnalysis> {
   const referenceBuffer = buffers.get(referenceAngleId);
@@ -219,7 +374,7 @@ export async function analyzeMulticamSyncInWorker(
 
 export function getMulticamAnalysisDuration(
   sources: readonly ResolvedMulticamSource[],
-  buffers: ReadonlyMap<string, AudioBuffer>,
+  buffers: ReadonlyMap<string, AnalysisSamples>,
 ): number {
   if (sources.length === 0) return 0;
   return sources.reduce((duration, source) => {
@@ -240,6 +395,9 @@ export function updateAlignedSourceOffsets(
   sources: readonly ResolvedMulticamSource[],
   results: ReadonlyMap<string, SyncResult>,
 ): void {
+  if (hasGroupedPodcastSources(group)) {
+    throw new Error("Podcast camera timing is controlled by its approved source placements. Change it in Podcast Setup.");
+  }
   const reference = sources[0];
   if (!reference) return;
   for (const source of sources) {
@@ -273,6 +431,13 @@ interface TimelineActionOptions {
   now?: () => number;
 }
 
+function sourceTrackIdsForGroup(group: MultiCamGroup): string[] {
+  return [...new Set(group.angles.flatMap((angle) => [
+    angle.trackId,
+    ...(angle.sourceSegments ?? []).map((segment) => segment.trackId),
+  ]).filter(Boolean))];
+}
+
 /**
  * Returns the complete action batch for an automatic edit. Callers wrap the
  * batch in a history group so source-track muting, output replacement, and
@@ -301,11 +466,7 @@ export function createMulticamTimelineActions({
     actions.push(action("track/remove", { trackId: outputTrackId }));
   }
 
-  const sourceTrackIds = new Set(
-    group.angles
-      .map((angle) => angle.trackId)
-      .filter((trackId) => trackId.length > 0 && trackId !== outputTrackId),
-  );
+  const sourceTrackIds = new Set(sourceTrackIdsForGroup(group).filter((trackId) => trackId !== outputTrackId));
   for (const trackId of sourceTrackIds) {
     const track = project.timeline.tracks.find((candidate) => candidate.id === trackId);
     if (!track) continue;
@@ -380,11 +541,7 @@ export function createMulticamApplyEditAction({
       outputTracks: [createMulticamOutputTrack(group, outputTrackId, sequence)],
       replacedOutputTrackIds: previousOutputTrackIds(project, group.id),
       outputTrackPosition: existingOutputIndex >= 0 ? existingOutputIndex : 0,
-      sourceTrackIds: [...new Set(
-        group.angles
-          .map((angle) => angle.trackId)
-          .filter((trackId) => trackId.length > 0 && trackId !== outputTrackId),
-      )],
+      sourceTrackIds: sourceTrackIdsForGroup(group).filter((trackId) => trackId !== outputTrackId),
       groups,
     },
   };
@@ -410,11 +567,7 @@ export function createMulticamApplyTracksAction(input: {
       outputTracks: input.outputTracks.map((track) => structuredClone(track)),
       replacedOutputTrackIds: previousOutputTrackIds(input.project, input.group.id),
       outputTrackPosition: existingOutputIndex >= 0 ? existingOutputIndex : 0,
-      sourceTrackIds: [...new Set(
-        input.group.angles
-          .map((angle) => angle.trackId)
-          .filter((trackId) => trackId.length > 0 && !outputIds.has(trackId)),
-      )],
+      sourceTrackIds: sourceTrackIdsForGroup(input.group).filter((trackId) => !outputIds.has(trackId)),
       groups: input.groups,
     },
   };

@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest a new feature or enhancement for OpenReel
+description: Suggest a new feature or enhancement for LicketySplit
 title: "[Feature]: "
 labels: ["needs-claude-review", "type-feature"]
 body:
@@ -87,7 +87,7 @@ body:
       options:
         - label: I have searched existing issues to ensure this isn't a duplicate
           required: true
-        - label: This feature aligns with OpenReel's goal of browser-based video editing
+        - label: This feature aligns with LicketySplit's goal of browser-based video editing
           required: true
         - label: I am willing to help test this feature once implemented
           required: false

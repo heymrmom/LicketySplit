@@ -1,4 +1,6 @@
 export const MULTICAM_BLEED_CALIBRATION_SPEC =
+  "licketysplit-bleed-calibration/v1" as const;
+export const LEGACY_MULTICAM_BLEED_CALIBRATION_SPEC =
   "openreel-bleed-calibration/v1" as const;
 
 export interface MulticamCalibrationSource {
