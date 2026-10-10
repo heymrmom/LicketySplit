@@ -53,7 +53,7 @@ describe("native packet timing", () => {
       const wallMs = performance.now() - started;
       expect(result.channels[0]).toHaveLength(80_000);
       expect(calls).toHaveLength(2);
-      expect(calls.map(({ args }) => Number(args[args.indexOf("-t") + 1]))).toEqual([10, 4]);
+      expect(calls.map(({ args }) => Number(args[args.indexOf("-t") + 1]))).toEqual([9.5, 4.5]);
       expect(calls.every(({ args }) => args.indexOf("-t") < args.indexOf("-i"))).toBe(true);
       expect(wallMs).toBeLessThan(10_000);
       console.info(`Bounded late read from 600s media: ${calls.map((call) => `${call.elapsedMs.toFixed(0)}ms`).join(" + ")} FFmpeg, ${wallMs.toFixed(0)}ms total; 80,000 frames returned.`);

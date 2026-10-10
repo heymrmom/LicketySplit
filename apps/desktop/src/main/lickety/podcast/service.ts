@@ -2,11 +2,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type {
-  PodcastAnalysis, PodcastAsset, PodcastGroup, PodcastParticipant, PodcastSetup, PodcastStreamFacts,
+  PodcastAnalysis, PodcastAnalyzeRecovery, PodcastAsset, PodcastGroup, PodcastParticipant, PodcastSetup, PodcastStreamFacts,
   PodcastUpdateRequest, PodcastWaveformRequest, PodcastWaveformSummary,
 } from "../../../../../../packages/core/src/lickety/podcast-types";
 import { assertPodcastSetup } from "../../../../../../packages/core/src/lickety/podcast-types";
-import { NativeAudioAnalysis } from "../audio-analysis";
+import { NativeAudioAnalysis, PodcastAudioReadError } from "../audio-analysis";
 import { atomicJson } from "../asset-registry";
 import { inspectPodcastMedia } from "./native-packet-inspector";
 import { groupPodcastAssets } from "./intake";
@@ -135,11 +135,11 @@ export class PodcastNativeService {
     const cached = await readPodcastWorkCache<{ version: 1; featureCacheKey: string; frames: number; min: number[]; max: number[] }>(this.analysisDir, cacheKey, (value): value is { version: 1; featureCacheKey: string; frames: number; min: number[]; max: number[] } => {
       if (!value || typeof value !== "object") return false;
       const row = value as { version?: number; featureCacheKey?: string; frames?: number; min?: unknown; max?: unknown };
-      return row.version === 1 && row.featureCacheKey === channel.cacheKey && row.frames === channel.frames && Array.isArray(row.min) && Array.isArray(row.max) && row.min.length === Math.ceil(channel.frames / HOP) && row.max.length === row.min.length && row.min.every(Number.isFinite) && row.max.every(Number.isFinite);
+      return row.version === 1 && row.featureCacheKey === channel.cacheKey && row.frames === channel.frames && Array.isArray(row.min) && Array.isArray(row.max) && row.min.length === Math.floor(channel.frames / HOP) && row.max.length === row.min.length && row.min.every(Number.isFinite) && row.max.every(Number.isFinite);
     });
     if (!cached) throw new Error("The podcast waveform cache failed its integrity check; analyze this setup again.");
     const peaks = HOP / ANALYSIS_RATE, from = Math.max(0, Math.floor((request.startSeconds - firstPTS) / peaks));
-    const to = Math.min(cached.frames ? Math.ceil(cached.frames / HOP) : 0, Math.ceil((request.startSeconds + request.durationSeconds - firstPTS) / peaks));
+    const to = Math.min(Math.floor(cached.frames / HOP), Math.ceil((request.startSeconds + request.durationSeconds - firstPTS) / peaks));
     if (to <= from) throw new Error("Podcast waveform range is outside the analyzed source.");
     const bucketCount = Math.min(maxPoints, to - from), min: number[] = [], max: number[] = [];
     for (let bucket = 0; bucket < bucketCount; bucket++) {
@@ -262,19 +262,88 @@ export class PodcastNativeService {
     });
   }
 
-  async analyze(setupId: string, requestId: string, signal: AbortSignal, onProgress: (event: PodcastProgressUpdate) => void, retryAssetIds?: string[], prepareOnly = false): Promise<PodcastSetup> {
+  async analyze(setupId: string, requestId: string, signal: AbortSignal, onProgress: (event: PodcastProgressUpdate) => void, retryAssetIds?: string[], prepareOnly = false, recovery?: PodcastAnalyzeRecovery): Promise<PodcastSetup> {
     validateSetupId(setupId);
     const requestUuid = UUID.test(requestId);
     if (!requestUuid) throw new Error("Invalid podcast analysis request ID.");
     if (this.activeSetups.has(setupId)) throw new Error("Podcast analysis is already active for this setup.");
     if (this.activeMutations.has(setupId)) throw new Error("A podcast setup change is already active.");
     this.activeSetups.add(setupId);
-    try { await this.get(setupId); return await this.analyzeOwned(setupId, signal, onProgress, retryAssetIds, prepareOnly); }
+    try { await this.get(setupId); return await this.analyzeOwned(setupId, signal, onProgress, retryAssetIds, prepareOnly, recovery); }
     finally { this.activeSetups.delete(setupId); }
   }
 
-  private async analyzeOwned(setupId: string, signal: AbortSignal, onProgress: (event: PodcastProgressUpdate) => void, retryAssetIds?: string[], prepareOnly = false): Promise<PodcastSetup> {
+  private async analyzeOwned(setupId: string, signal: AbortSignal, onProgress: (event: PodcastProgressUpdate) => void, retryAssetIds?: string[], prepareOnly = false, recovery?: PodcastAnalyzeRecovery): Promise<PodcastSetup> {
     const setup = await this.readSetup(setupId);
+    if (setup.decodeFailure && !recovery) throw new Error("A podcast decode failure is unresolved. Choose an explicit recovery action before analyzing again.");
+    let blockedAssetIds = setup.placements.filter((placement) => placement.status === "excluded" && placement.exception?.includes("decode failure")).map((placement) => placement.assetId);
+    if (recovery) {
+      const failure = setup.decodeFailure;
+      if (!failure || recovery.failureId !== failure.id) throw new Error("This decode failure is stale. Refresh the setup before choosing a recovery action.");
+      if (recovery.action === "save-and-stop") { setup.state = "error"; setup.progress = undefined; setup.updatedAt = now(); await this.save(setup); return setup; }
+      if (recovery.action === "continue-unresolved") {
+        if (failure.resolution === "unresolved-excluded") throw new Error("This source is already explicitly excluded after its decode failure. Resolve it manually or choose another copy.");
+        const old = setup.placements.find((placement) => placement.assetId === failure.assetId);
+        setup.placements = setup.placements.filter((placement) => placement.assetId !== failure.assetId);
+        setup.placements.push({ assetId: failure.assetId, mapping: old?.mapping ?? { version: 1, scale: 1, offsetSeconds: 0 }, status: "excluded", component: old?.component ?? failure.assetId, locked: true, provenance: [...(old?.provenance ?? []), "user-decision:continue-unresolved"], exception: `Explicitly excluded after decode failure; resolve ${setup.analysis.assets.find((asset) => asset.id === failure.assetId)?.name ?? failure.assetId} manually before relying on it.` });
+        failure.resolution = "unresolved-excluded";
+        blockedAssetIds = [...new Set([...blockedAssetIds, failure.assetId])];
+      } else {
+        const asset = setup.analysis.assets.find((candidate) => candidate.id === failure.assetId)!;
+        const mediaId = recovery.alternateMediaId;
+        if (!mediaId || !mediaId.trim()) throw new Error("Choose a registered alternate copy to continue.");
+        const registered = await this.registry.findMedia(mediaId);
+        if (!registered || registered.identity.assetId === failure.sourceId || registered.identity.mediaId !== mediaId) throw new Error("Choose a different registered original as the alternate copy.");
+        const original = await this.registry.resolve(registered.identity.assetId, "original");
+        const inspected = await this.inspectMedia(original.path, signal);
+        const packetFacts = await this.inspectPackets(original.path, signal);
+        signal.throwIfAborted();
+        const verified = await this.registry.findMedia(mediaId);
+        if (!verified || verified.identity.assetId !== registered.identity.assetId || verified.identity.sha256 !== registered.identity.sha256) throw new Error("The alternate original changed during verification. Refresh Media and try again.");
+        await this.registry.resolve(verified.identity.assetId, "original");
+        const stream = packetFacts.streams.find((candidate) => candidate.index === failure.streamIndex && candidate.kind === "audio");
+        if (!stream || !Number.isInteger(stream.channels) || stream.channels! <= failure.channelIndex) throw new Error("The alternate copy does not contain the failed audio stream and channel. Assign a compatible recording copy.");
+        if (!Number.isFinite(inspected.metadata.duration) || inspected.metadata.duration <= 0) throw new Error("The alternate copy has no verified duration.");
+        if ((inspected.metadata.hasVideo ? "video" : "audio") !== asset.kind) throw new Error("The alternate copy has a different recording kind and cannot preserve this assignment.");
+        for (const group of setup.groups.filter((candidate) => candidate.assetIds.includes(asset.id))) {
+          if (group.role === "camera" && !packetFacts.streams.some((candidate) => candidate.kind === "video")) throw new Error("The alternate copy lacks the video stream required by its camera assignment.");
+          for (const binding of group.audioBindings ?? []) {
+            if (binding.assetId !== asset.id) continue;
+            const bound = packetFacts.streams.find((candidate) => candidate.index === binding.streamIndex && candidate.kind === "audio");
+            if (!bound || (binding.channel !== undefined && (!Number.isInteger(bound.channels) || bound.channels! <= binding.channel))) throw new Error("The alternate copy cannot preserve every assigned audio stream and channel.");
+          }
+        }
+        const refreshed: PodcastAsset = {
+          // Assignment IDs remain stable, but source facts must describe the replacement file.
+          ...asset, mediaId, sourceId: registered.identity.assetId, sourceDigest: registered.identity.sha256,
+          name: path.basename(original.path), kind: inspected.metadata.hasVideo ? "video" : "audio", durationSeconds: inspected.metadata.duration,
+          containerStartSeconds: packetFacts.containerStartSeconds ?? inspected.containerStartSeconds,
+          sampleRate: inspected.metadata.sampleRate, channels: inspected.metadata.channels, sizeBytes: registered.identity.byteLength,
+          codec: inspected.metadata.codec, streams: packetFacts.streams,
+          fps: inspected.metadata.frameRate > 0 ? inspected.metadata.frameRate : undefined,
+          frames: undefined,
+          width: inspected.metadata.width > 0 ? inspected.metadata.width : undefined,
+          height: inspected.metadata.height > 0 ? inspected.metadata.height : undefined,
+          nativeRate: packetFacts.streams.find((candidate) => candidate.kind === "video")?.rate ?? packetFacts.streams.find((candidate) => candidate.kind === "video")?.declaredRate,
+          nativeVideoFrames: packetFacts.streams.find((candidate) => candidate.kind === "video")?.frameCount,
+          nativeVideoDurationSeconds: packetFacts.streams.find((candidate) => candidate.kind === "video")?.durationSeconds,
+          timecode: inspected.sourceMetadata?.timecode,
+          sourceTimecodeRate: inspected.sourceMetadata?.timecode
+            ? (packetFacts.streams.find((candidate) => candidate.kind === "video")?.rate ?? packetFacts.streams.find((candidate) => candidate.kind === "video")?.declaredRate)
+            : undefined,
+          timecodeOrigin: inspected.sourceMetadata?.timecode ? "embedded" : undefined,
+          creationTime: inspected.sourceMetadata?.creationTime,
+          bwfTimeReferenceSamples: inspected.sourceMetadata?.bwfTimeReferenceSamples,
+          reel: inspected.sourceMetadata?.reel,
+          ...podcastSequenceMetadata(path.basename(original.path)),
+        };
+        const revised = revisePodcastSources(setup, { ...setup.analysis, generatedAt: now(), assets: setup.analysis.assets.map((candidate) => candidate.id === asset.id ? refreshed : candidate) }, setup.groups, setup.participants);
+        revised.decodeFailure = undefined;
+        Object.assign(setup, revised);
+        retryAssetIds = [asset.id];
+        blockedAssetIds = blockedAssetIds.filter((id) => id !== asset.id);
+      }
+    }
     if (setup.analysisProposal) throw new Error("Apply or discard the pending timing proposal before another analysis.");
     if (!setup.groups.some((group) => group.assetIds.length)) throw new Error("Choose at least one source in Setup before analysis.");
     const previous = clone(setup);
@@ -283,14 +352,16 @@ export class PodcastNativeService {
     const started = performance.now();
     try {
       const included = [...new Set(setup.groups.flatMap((group) => group.assetIds))];
+      const inspectIds: string[] | undefined = recovery ? [] : undefined;
       for (let index = 0; index < included.length; index++) {
         signal.throwIfAborted();
         const asset = setup.analysis.assets.find((candidate) => candidate.id === included[index])!;
         const registered = await this.registry.findMedia(asset.mediaId);
         if (!registered || registered.identity.assetId !== asset.sourceId) throw new Error(`${asset.name} was relinked. Revise Setup to confirm the current original before analysis.`);
         asset.sourceDigest = registered.identity.sha256;
-        onProgress({ phase: "inspect", completed: index, total: included.length, message: `Verifying presented timestamps for ${asset.name}` });
         const original = await this.registry.resolve(asset.sourceId, "original");
+        if (inspectIds && !inspectIds.includes(asset.id)) continue;
+        onProgress({ phase: "inspect", completed: index, total: included.length, message: `Verifying presented timestamps for ${asset.name}` });
         const packetFacts = await this.inspectPackets(original.path, signal);
         asset.streams = packetFacts.streams;
         if (packetFacts.containerStartSeconds !== undefined) asset.containerStartSeconds = packetFacts.containerStartSeconds;
@@ -305,11 +376,15 @@ export class PodcastNativeService {
         await waitTurn();
       }
       await this.save(setup);
-      const result = await analyzePodcastSetup({ setup, registry: this.registry, audio: this.audio, cacheDir: this.analysisDir, signal, retryAssetIds, prepareOnly, onProgress });
+      const activeIds = included.filter((id) => !blockedAssetIds.includes(id));
+      if (!activeIds.length) {
+        setup.state = "review"; setup.progress = undefined; setup.updatedAt = now(); await this.save(setup); return setup;
+      }
+      const result = await analyzePodcastSetup({ setup, registry: this.registry, audio: this.audio, cacheDir: this.analysisDir, signal, retryAssetIds, blockedAssetIds: [...new Set(blockedAssetIds)], prepareOnly, onProgress });
       result.metrics.wallSeconds = (performance.now() - started) / 1000;
       result.setup.metrics = result.metrics;
       result.setup.updatedAt = now(); result.setup.progress = undefined;
-      if (hasTiming) {
+      if (hasTiming && recovery?.action !== "continue-unresolved") {
         stagePodcastProposal(result.setup, previous, setup.groups.flatMap((group) => group.assetIds));
       } else {
         result.setup.revision = setup.revision;
@@ -318,6 +393,7 @@ export class PodcastNativeService {
     } catch (error) {
       const latest = await this.get(setupId).catch(() => setup);
       latest.state = signal.aborted ? "canceled" : "error"; latest.progress = undefined; latest.updatedAt = now();
+      if (error instanceof PodcastAudioReadError) latest.decodeFailure = error.decodeFailure;
       latest.warnings.push(signal.aborted ? "Analysis canceled safely. Completed bounded-window feature caches remain reusable." : `Analysis failed: ${error instanceof Error ? error.message : String(error)}`);
       await this.save(latest);
       throw error;
@@ -349,6 +425,7 @@ export class PodcastNativeService {
     return this.withSetupMutation(setupId, async () => {
       const setup = await this.readSetup(setupId);
       if (setup.revision !== expectedRevision) throw new Error("Podcast setup changed. Review the current timing before approving it.");
+      if (setup.decodeFailure && setup.decodeFailure.resolution !== "unresolved-excluded") throw new Error("Resolve or explicitly exclude the unresolved podcast decode failure before approving timing.");
       await this.assertCurrentIncludedSources(setup);
       const project = asSyncProject(setup);
       const included = new Set(setup.groups.flatMap((group) => group.assetIds));

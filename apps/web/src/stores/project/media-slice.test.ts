@@ -72,6 +72,7 @@ function originalMedia(): MediaItem {
 describe("Media slice asynchronous imports", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete (window as unknown as { licketysplit?: unknown }).licketysplit;
     bridge.importFile.mockReset();
     saveMediaBlob.mockReset().mockResolvedValue(undefined);
   });
@@ -112,6 +113,101 @@ describe("Media slice asynchronous imports", () => {
     expect(saveMediaBlob).not.toHaveBeenCalled();
   });
 
+  it("reuses an existing project media identity for the same unchanged native original", async () => {
+    const identity = { identity: "opaque-source-id", size: 4, mtimeMs: 1234 };
+    Object.assign(window, { licketysplit: { platform: "desktop", lickety: { identifyOriginalFile: vi.fn(async () => identity) } } });
+    const initial = createEmptyProject("Existing original");
+    initial.mediaLibrary.items.push({ ...originalMedia(), id: "canonical-media", isPlaceholder: false, sourceFile: { name: "same.wav", size: 4, lastModified: 1234, identity: { id: identity.identity, size: 4, mtimeMs: 1234 } } });
+    const store = createMediaStore(initial);
+
+    const result = await store.getState().importMedia(new File(["same"], "same.wav", { lastModified: 1234 }));
+
+    expect(result).toMatchObject({ success: true, actionId: "canonical-media" });
+    expect(bridge.importFile).not.toHaveBeenCalled();
+    expect(store.getState().project.mediaLibrary.items).toHaveLength(1);
+  });
+
+  it("coalesces concurrent imports of the same native file identity", async () => {
+    const identity = { identity: "opaque-source-id", size: 4, mtimeMs: 1234 };
+    Object.assign(window, { licketysplit: { platform: "desktop", lickety: { identifyOriginalFile: vi.fn(async () => identity) } } });
+    const decoding = deferred<ReturnType<typeof decodedAudio>>();
+    bridge.importFile.mockReturnValueOnce(decoding.promise);
+    const store = createMediaStore();
+    const fileA = new File(["same"], "same.wav", { lastModified: 1234 });
+    const fileB = new File(["same"], "same.wav", { lastModified: 1234 });
+
+    const first = store.getState().importMedia(fileA);
+    const second = store.getState().importMedia(fileB);
+    await vi.waitFor(() => expect(bridge.importFile).toHaveBeenCalledOnce());
+    decoding.resolve(decodedAudio());
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult.actionId).toBe(secondResult.actionId);
+    expect(store.getState().project.mediaLibrary.items).toHaveLength(1);
+    expect(store.getState().project.mediaLibrary.items[0].sourceFile?.identity).toEqual({ id: identity.identity, size: 4, mtimeMs: 1234 });
+  });
+
+  it("stops after a native identity lookup if the active project changes", async () => {
+    const lookup = deferred<string | undefined>();
+    Object.assign(window, { licketysplit: { platform: "desktop", lickety: {
+      identifyOriginalFile: vi.fn(async () => ({ identity: "opaque-source-id", size: 4, mtimeMs: 1234 })),
+      findOriginalMediaId: vi.fn(() => lookup.promise),
+    } } });
+    const initial = createEmptyProject("Before switch");
+    initial.mediaLibrary.items.push({ ...originalMedia(), id: "legacy-media", isPlaceholder: false });
+    const store = createMediaStore(initial);
+    const importing = store.getState().importMedia(new File(["same"], "same.wav", { lastModified: 1234 }));
+    await vi.waitFor(() => expect(window.licketysplit?.lickety?.findOriginalMediaId).toHaveBeenCalledOnce());
+    const changed = createEmptyProject("After switch");
+    store.setState({ project: changed });
+    lookup.resolve("legacy-media");
+
+    expect(await importing).toMatchObject({ success: false, error: { code: "INVALID_PARAMS" } });
+    expect(store.getState().project).toBe(changed);
+    expect(bridge.importFile).not.toHaveBeenCalled();
+  });
+
+  it("rechecks project identity after a slow registry lookup so concurrent imports cannot duplicate", async () => {
+    const lateLookup = deferred<string | undefined>();
+    let lookupCount = 0;
+    Object.assign(window, { licketysplit: { platform: "desktop", lickety: {
+      identifyOriginalFile: vi.fn(async () => ({ identity: "opaque-source-id", size: 4, mtimeMs: 1234 })),
+      findOriginalMediaId: vi.fn(() => ++lookupCount === 1 ? Promise.resolve(undefined) : lateLookup.promise),
+    } } });
+    const decoding = deferred<ReturnType<typeof decodedAudio>>();
+    bridge.importFile.mockReturnValueOnce(decoding.promise);
+    const store = createMediaStore();
+    const first = store.getState().importMedia(new File(["same"], "same.wav", { lastModified: 1234 }));
+    await vi.waitFor(() => expect(bridge.importFile).toHaveBeenCalledOnce());
+    const second = store.getState().importMedia(new File(["same"], "same.wav", { lastModified: 1234 }));
+    await vi.waitFor(() => expect(lookupCount).toBe(2));
+
+    decoding.resolve(decodedAudio());
+    const firstResult = await first;
+    lateLookup.resolve(undefined);
+    const secondResult = await second;
+    expect(firstResult.actionId).toBe(secondResult.actionId);
+    expect(bridge.importFile).toHaveBeenCalledOnce();
+    expect(store.getState().project.mediaLibrary.items).toHaveLength(1);
+  });
+
+  it("settles every coalesced caller when the canonical import fails", async () => {
+    Object.assign(window, { licketysplit: { platform: "desktop", lickety: { identifyOriginalFile: vi.fn(async () => ({ identity: "opaque-failed-source", size: 4, mtimeMs: 1234 })) } } });
+    const failing = deferred<{ success: false; error: string }>();
+    bridge.importFile.mockReturnValueOnce(failing.promise);
+    const store = createMediaStore();
+    const fileA = new File(["same"], "broken.wav", { lastModified: 1234 });
+    const first = store.getState().importMedia(fileA);
+    await vi.waitFor(() => expect(bridge.importFile).toHaveBeenCalledOnce());
+    const second = store.getState().importMedia(new File(["same"], "broken.wav", { lastModified: 1234 }));
+    failing.resolve({ success: false, error: "Unsupported audio fixture" });
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult).toMatchObject({ success: false, error: { message: "Unsupported audio fixture" } });
+    expect(secondResult).toEqual(firstResult);
+    expect(store.getState().project.mediaLibrary.items).toHaveLength(0);
+  });
+
   it("persists replacement media and retains edits made while relinking", async () => {
     const decoding = deferred<ReturnType<typeof decodedAudio>>();
     bridge.importFile.mockReturnValueOnce(decoding.promise);
@@ -136,6 +232,19 @@ describe("Media slice asynchronous imports", () => {
       file,
       expect.objectContaining({ fileSize: file.size }),
     );
+  });
+
+  it("updates the opaque canonical identity when a desktop original is relinked", async () => {
+    const identity = { identity: "relinked-canonical-id", size: 8, mtimeMs: 4321 };
+    Object.assign(window, { licketysplit: { platform: "desktop", lickety: { identifyOriginalFile: vi.fn(async () => identity) } } });
+    bridge.importFile.mockResolvedValue(decodedAudio());
+    const initial = createEmptyProject("Native relink identity");
+    initial.mediaLibrary.items.push(originalMedia());
+    const store = createMediaStore(initial);
+    const file = new File(["replacement"], "relinked.wav", { lastModified: 4321 });
+
+    expect((await store.getState().replaceMediaAsset("existing-media", file)).success).toBe(true);
+    expect(store.getState().project.mediaLibrary.items[0].sourceFile?.identity).toEqual({ id: identity.identity, size: identity.size, mtimeMs: identity.mtimeMs });
   });
 
   it("does not resurrect media removed while a replacement decodes", async () => {

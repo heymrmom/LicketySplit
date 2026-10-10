@@ -219,6 +219,56 @@ export interface PodcastSetupMetrics {
   cacheMisses?: number;
 }
 
+export interface PodcastDecodeReceipt {
+  startSample: number;
+  requestedSamples: number;
+  validSamples: number;
+  inputStartSample?: number;
+  inputEndSample?: number;
+  outputStartSample?: number;
+  outputEndSample?: number;
+  evidence: {
+    naturalEof: boolean;
+    decoderDrained: boolean;
+    resamplerFlushed: boolean;
+    startCovered: boolean;
+    contiguousTimestamps: boolean;
+    decodeErrors: boolean;
+  };
+}
+
+/** Portable blocker details for a bounded native audio read that could not be verified complete. */
+export interface PodcastDecodeFailure {
+  version: 1;
+  id: string;
+  assetId: string;
+  sourceId: string;
+  streamIndex: number;
+  channelIndex: number;
+  startSample: number;
+  requestedSamples: number;
+  validSamples: number;
+  sampleRate: number;
+  reason: "interior-short-read" | "unverified-eof" | "eof-over-cap";
+  evidence: {
+    naturalEof: boolean;
+    decoderDrained: boolean;
+    resamplerFlushed: boolean;
+    startCovered: boolean;
+    contiguousTimestamps: boolean;
+    decodeErrors: boolean;
+  };
+  attempts: 0 | 1;
+  resolution?: "unresolved-excluded";
+  receipts?: PodcastDecodeReceipt;
+}
+
+export interface PodcastAnalyzeRecovery {
+  failureId: string;
+  action: "continue-unresolved" | "use-alternate-copy" | "save-and-stop";
+  alternateMediaId?: string;
+}
+
 /** A portable checkpoint of timing authority used for retry/apply/discard/undo. */
 export interface PodcastTimingSnapshot {
   algorithm?: string;
@@ -279,6 +329,7 @@ export interface PodcastSetup {
   updatedAt: string;
   step: PodcastSetupStep;
   analysis: PodcastAnalysis;
+  decodeFailure?: PodcastDecodeFailure;
   groups: PodcastGroup[];
   participants: PodcastParticipant[];
   timelineRate?: RationalRate;
@@ -312,7 +363,7 @@ export interface PodcastReviseRequest {
   groups: PodcastGroup[];
   participants: PodcastParticipant[];
 }
-export interface PodcastAnalyzeRequest { setupId: string; requestId: string; retryAssetIds?: string[]; prepareOnly?: boolean }
+export interface PodcastAnalyzeRequest { setupId: string; requestId: string; retryAssetIds?: string[]; prepareOnly?: boolean; recovery?: PodcastAnalyzeRecovery }
 export interface PodcastUpdateRequest extends Omit<PodcastPlacementUpdate, "assetId"> {
   setupId: string;
   assetId?: string;
@@ -407,6 +458,31 @@ export function assertPodcastSetup(value: unknown): asserts value is PodcastSetu
     }
   }
   const assets = new Set(assetById.keys());
+  if (setup.decodeFailure !== undefined) {
+    const failure = setup.decodeFailure as PodcastDecodeFailure;
+    const asset = isRecord(failure) ? assetById.get(String(failure.assetId)) : undefined;
+    const evidence = isRecord(failure?.evidence) ? failure.evidence : undefined;
+    if (!isRecord(failure) || failure.version !== 1 || typeof failure.id !== "string" || !failure.id.trim() || !asset || failure.sourceId !== asset.sourceId
+      || !Number.isInteger(failure.streamIndex) || failure.streamIndex < 0 || !Number.isInteger(failure.channelIndex) || failure.channelIndex < 0
+      || !Number.isSafeInteger(failure.startSample) || failure.startSample < 0 || !Number.isSafeInteger(failure.requestedSamples) || failure.requestedSamples < 1
+      || !Number.isSafeInteger(failure.validSamples) || failure.validSamples < 0 || failure.validSamples > failure.requestedSamples
+      || !Number.isSafeInteger(failure.sampleRate) || failure.sampleRate < 1 || !["interior-short-read", "unverified-eof", "eof-over-cap"].includes(failure.reason)
+      || ![0, 1].includes(failure.attempts) || (failure.resolution !== undefined && failure.resolution !== "unresolved-excluded")
+      || !evidence || (["naturalEof", "decoderDrained", "resamplerFlushed", "startCovered", "contiguousTimestamps", "decodeErrors"] as const).some((key) => typeof evidence[key] !== "boolean")) fail("Invalid podcast decode failure evidence.");
+    const stream = asset.streams?.find((candidate) => candidate.index === failure.streamIndex);
+    if (!stream || stream.kind !== "audio" || failure.channelIndex >= (stream.channels ?? 0)) fail("Podcast decode failure references an unknown audio channel.");
+    if (failure.receipts !== undefined) {
+      const receipt = failure.receipts;
+      if (!isRecord(receipt) || !Number.isSafeInteger(receipt.startSample) || !Number.isSafeInteger(receipt.requestedSamples) || !Number.isSafeInteger(receipt.validSamples)
+        || receipt.requestedSamples !== failure.requestedSamples || receipt.validSamples !== failure.validSamples
+        || ["inputStartSample", "inputEndSample", "outputStartSample", "outputEndSample"].some((key) => receipt[key] !== undefined && !Number.isSafeInteger(receipt[key]))
+        || !isRecord(receipt.evidence) || (["naturalEof", "decoderDrained", "resamplerFlushed", "startCovered", "contiguousTimestamps", "decodeErrors"] as const).some((key) => typeof receipt.evidence[key] !== "boolean")) fail("Invalid podcast decode timing receipt.");
+    }
+    if (failure.resolution === "unresolved-excluded") {
+      const placement = setup.placements?.find((candidate) => candidate.assetId === failure.assetId);
+      if (!placement || placement.status !== "excluded" || !placement.exception?.includes("decode failure")) fail("An unresolved decode failure requires its explicit excluded placement.");
+    }
+  }
   const participants = new Set<string>();
   for (const raw of setup.participants) {
     if (!isRecord(raw) || typeof raw.id !== "string" || !raw.id.trim() || participants.has(raw.id)) fail("Invalid or duplicate podcast participant.");

@@ -274,6 +274,20 @@ describe("normalizeProjectCreationFields", () => {
 });
 
 describe("ProjectSerializer round-trip", () => {
+  it("preserves opaque original-file identity without serializing a local path", () => {
+    const fixture = makeWorkflowFixture();
+    const first = fixture.mediaLibrary.items[0]!;
+    const identity = { id: "f7d0c642-5a73-4b11-88f0-5e177898f725", size: 12, mtimeMs: 1728561600000 };
+    const project = {
+      ...fixture,
+      mediaLibrary: { ...fixture.mediaLibrary, items: fixture.mediaLibrary.items.map((item, index) => index === 0 ? { ...item, sourceFile: { name: first.name, size: 12, lastModified: 1728561600000, identity } } : item) },
+    };
+    const saved = JSON.parse(serializeProjectFile(project)) as { project: Project };
+
+    expect(saved.project.mediaLibrary.items[0]?.sourceFile?.identity).toEqual(identity);
+    expect(JSON.stringify(saved.project.mediaLibrary.items[0]?.sourceFile)).not.toContain("path");
+  });
+
   it("requires reader 1.4 for selected source channels and segmented camera angles, then round-trips them", () => {
     const serializer = new ProjectSerializer(new MemoryStorageEngine());
     const fixture = makeWorkflowFixture();

@@ -110,3 +110,6 @@ scripts/__pycache__/
 apps/desktop/release-native-import/
 # Final local takeover output; not a distributable release artifact.
 apps/desktop/release-takeover-alpha2/
+
+# Separate local EOF recovery and recording-import candidate.
+apps/desktop/release-improvements-alpha3/

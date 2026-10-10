@@ -65,6 +65,23 @@ function setup(): PodcastSetup {
 }
 
 describe("buildPodcastAssembly", () => {
+  it("blocks unresolved decode failures and never materializes an explicitly excluded source", () => {
+    const source = makeWorkflowFixture({ durationSec: 20 });
+    const project = { ...source, mediaLibrary: { items: [...source.mediaLibrary.items, ...media.map((item) => ({ ...source.mediaLibrary.items[0]!, id: `media-${item.id}`, name: item.name, type: item.kind, metadata: { ...source.mediaLibrary.items[0]!.metadata, duration: item.durationSeconds, hasVideo: item.kind === "video", hasAudio: true, audioTrackCount: 2 } }))] } };
+    const failed = setup();
+    failed.decodeFailure = {
+      version: 1, id: "failure-mic2", assetId: "mic2", sourceId: "source-mic2", streamIndex: 2, channelIndex: 0,
+      startSample: 10, requestedSamples: 80_000, validSamples: 79_999, sampleRate: 8_000, reason: "interior-short-read", attempts: 1,
+      evidence: { naturalEof: false, decoderDrained: false, resamplerFlushed: false, startCovered: true, contiguousTimestamps: true, decodeErrors: false },
+    };
+    expect(() => buildPodcastAssembly(project, failed, { pictureGapPolicy: "keep-picture-gaps" })).toThrow(/decode failure/i);
+    failed.decodeFailure.resolution = "unresolved-excluded";
+    const placement = failed.placements.find((row) => row.assetId === "mic2")!;
+    placement.status = "excluded"; placement.exception = "Explicitly excluded after decode failure.";
+    const assembled = buildPodcastAssembly(project, failed, { pictureGapPolicy: "keep-picture-gaps" });
+    expect(assembled.project.timeline.tracks.some((track) => track.clips.some((clip) => clip.mediaId === "media-mic2"))).toBe(false);
+  });
+
   it("materializes three physical cameras and two routed mics on one 61:33 episode clock", () => {
     const source = makeWorkflowFixture({ durationSec: 20 });
     const project = {

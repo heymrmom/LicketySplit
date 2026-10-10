@@ -16,6 +16,8 @@ export const CHANNELS = {
   licketyEnsureAudioStream: "licketysplit:lickety:ensureAudioStream",
   licketyEnsureProxy: "licketysplit:lickety:ensureProxy",
   licketyCancelMedia: "licketysplit:lickety:cancelMedia",
+  licketyIdentifyOriginal: "licketysplit:lickety:identifyOriginal",
+  licketyFindOriginalMediaId: "licketysplit:lickety:findOriginalMediaId",
   podcastInspect: "licketysplit:podcast:inspect",
   podcastRevise: "licketysplit:podcast:revise",
   podcastAnalyze: "licketysplit:podcast:analyze",

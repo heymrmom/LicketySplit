@@ -71,7 +71,7 @@ export interface MediaItem {
   readonly isPlaceholder?: boolean;
   readonly originalUrl?: string;
   /** File hint stored in JSON for cross-session/cross-machine asset matching */
-  readonly sourceFile?: { name: string; size: number; lastModified: number; folder?: string };
+  readonly sourceFile?: { name: string; size: number; lastModified: number; folder?: string; identity?: { id: string; size: number; mtimeMs: number } };
   /** True while a background KieAI generation task is in progress */
   readonly isPending?: boolean;
   /** True when polling exhausted all retries — shows manual retry button */

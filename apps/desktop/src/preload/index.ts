@@ -69,6 +69,8 @@ contextBridge.exposeInMainWorld("licketysplit", {
     registerFile: (mediaId: string, file: File) => ipcRenderer.invoke(CHANNELS.licketyRegisterAsset, {mediaId, path:webUtils.getPathForFile(file)}),
     registerPath: (mediaId: string, path: string) => ipcRenderer.invoke(CHANNELS.licketyRegisterAsset, {mediaId,path,managed:true}),
     findAsset: (mediaId: string) => ipcRenderer.invoke(CHANNELS.licketyFindAsset, {mediaId}),
+    identifyOriginalFile: (file:File) => {const filePath=webUtils.getPathForFile(file);return filePath?ipcRenderer.invoke(CHANNELS.licketyIdentifyOriginal,{path:filePath}):Promise.resolve(null);},
+    findOriginalMediaId: (file:File,mediaIds:string[]) => {const filePath=webUtils.getPathForFile(file);return filePath?ipcRenderer.invoke(CHANNELS.licketyFindOriginalMediaId,{path:filePath,mediaIds}):Promise.resolve(undefined);},
     resolve: (assetId: string, purpose: string) => ipcRenderer.invoke(CHANNELS.licketyResolve, {assetId,purpose}),
     ensureAudioStream: (assetId:string,trackIndex:number,sourceChannelIndex?:number) => ipcRenderer.invoke(CHANNELS.licketyEnsureAudioStream,{assetId,trackIndex,sourceChannelIndex}),
     ensureProxy: (assetId: string) => ipcRenderer.invoke(CHANNELS.licketyEnsureProxy, {assetId}),

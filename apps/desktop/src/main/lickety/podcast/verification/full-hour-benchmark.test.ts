@@ -8,7 +8,7 @@ import type { PodcastGroup, PodcastParticipant, PodcastSetup } from "../../../..
 import { analyzeMulticamDrift } from "../../../../../../../packages/core/src/multicam/drift";
 import { ManagedAssetRegistry } from "../../asset-registry";
 import { HeavyJobQueue } from "../../media-jobs";
-import { NativeAudioAnalysis } from "../../audio-analysis";
+import { createAudioDecodeCapture, NativeAudioAnalysis, type AudioDecodeCapture } from "../../audio-analysis";
 import { PodcastNativeService } from "../service";
 import { analyzeLegacyPodcastSetup } from "../legacy/pipeline";
 
@@ -56,17 +56,19 @@ async function sampleChildRss() {
   } finally { samplingChildRss = false; }
 }
 
-function captureWithPinnedFfmpeg(args: string[], signal: AbortSignal): Promise<ArrayBuffer> {
+function captureWithPinnedFfmpeg(args: string[], signal: AbortSignal): Promise<AudioDecodeCapture> {
   signal.throwIfAborted();
   const inputCap = args.indexOf("-t");
   if (inputCap >= 0 && args.indexOf("-i") > inputCap) metrics.maxInputDecodeSeconds = Math.max(metrics.maxInputDecodeSeconds, Number(args[inputCap + 1]));
-  return new Promise((resolve, reject) => {
+  return new Promise<AudioDecodeCapture>((resolve, reject) => {
     const child = spawn(ffmpegPath, args, { stdio: ["ignore", "pipe", "pipe"] });
     if (child.pid) childPids.add(child.pid);
     metrics.activeChildren++;
     metrics.maxActiveChildren = Math.max(metrics.maxActiveChildren, metrics.activeChildren);
     const chunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
     let bytes = 0;
+    let stderrBytes = 0;
     const abort = () => child.kill("SIGKILL");
     signal.addEventListener("abort", abort, { once: true });
     child.stdout.on("data", (chunk: Buffer) => {
@@ -74,7 +76,10 @@ function captureWithPinnedFfmpeg(args: string[], signal: AbortSignal): Promise<A
       if (bytes > 16 * 1024 ** 2) { child.kill("SIGKILL"); reject(new Error("Bounded audio output exceeded 16 MiB.")); }
       else chunks.push(chunk);
     });
-    child.stderr.resume();
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderrBytes += chunk.length;
+      if (stderrBytes <= 1024 * 1024) stderrChunks.push(chunk);
+    });
     child.once("error", reject);
     child.once("close", (code) => {
       if (child.pid) childPids.delete(child.pid);
@@ -85,7 +90,8 @@ function captureWithPinnedFfmpeg(args: string[], signal: AbortSignal): Promise<A
       else {
         metrics.maxNativePayloadBytes = Math.max(metrics.maxNativePayloadBytes, bytes);
         const buffer = Buffer.concat(chunks);
-        resolve(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer);
+        const stderr = Buffer.concat(stderrChunks).toString("utf8");
+        resolve(createAudioDecodeCapture(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer, stderr, true, stderrBytes > 1024 * 1024));
       }
     });
   });

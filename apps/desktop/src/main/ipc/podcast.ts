@@ -2,7 +2,7 @@ import { BrowserWindow, app } from "electron";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
-import type { PodcastGroup, PodcastParticipant, PodcastProgressEvent } from "../../../../../packages/core/src/lickety/podcast-types";
+import type { PodcastAnalyzeRecovery, PodcastGroup, PodcastParticipant, PodcastProgressEvent } from "../../../../../packages/core/src/lickety/podcast-types";
 import { CHANNELS } from "../../shared/channels";
 import { NativeAudioAnalysis } from "../lickety/audio-analysis";
 import { PodcastNativeService } from "../lickety/podcast/service";
@@ -44,8 +44,10 @@ export function installPodcastIpc() {
     }));
   handle(CHANNELS.podcastRevise, z.object({ setupId: uuid, groups: z.array(z.unknown()), participants: z.array(z.unknown()) }),
     (args) => nativeService().revise({ setupId: args.setupId, groups: args.groups as PodcastGroup[], participants: args.participants as PodcastParticipant[] }));
-  handle(CHANNELS.podcastAnalyze, z.object({ setupId: uuid, requestId: uuid, retryAssetIds: z.array(z.string()).optional(), prepareOnly: z.boolean().optional() }),
-    (args) => ownRequest(args.requestId, (controller) => nativeService().analyze(args.setupId, args.requestId, controller.signal, (update) => progress(args.setupId, args.requestId, update), args.retryAssetIds, args.prepareOnly)));
+  handle(CHANNELS.podcastAnalyze, z.object({ setupId: uuid, requestId: uuid, retryAssetIds: z.array(z.string()).optional(), prepareOnly: z.boolean().optional(), recovery: z.object({
+    failureId: z.string().min(1), action: z.enum(["continue-unresolved", "use-alternate-copy", "save-and-stop"]), alternateMediaId: z.string().min(1).optional(),
+  }).optional() }),
+    (args) => ownRequest(args.requestId, (controller) => nativeService().analyze(args.setupId, args.requestId, controller.signal, (update) => progress(args.setupId, args.requestId, update), args.retryAssetIds, args.prepareOnly, args.recovery as PodcastAnalyzeRecovery | undefined)));
   handle(CHANNELS.podcastUpdate, z.object({
     setupId: uuid, assetId: z.string().optional(), offsetSeconds: z.number().optional(), scale: z.number().positive().optional(), locked: z.boolean().optional(),
     excluded: z.boolean().optional(), note: z.string().optional(), regionId: z.string().optional(), splitSourceSeconds: z.number().optional(),

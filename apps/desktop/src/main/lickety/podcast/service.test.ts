@@ -3,18 +3,20 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { NativeAudioAnalysis } from "../audio-analysis";
+import { NativeAudioAnalysis, PodcastAudioReadError } from "../audio-analysis";
 import { PodcastNativeService } from "./service";
 import { nativeSetupMappingDigest } from "./legacy/approval";
 import { analyzeLegacyPodcastSetup } from "./legacy/pipeline";
+import { revisePodcastSources } from "./legacy/source-revision";
 import { cachedPodcastWork } from "./work-cache";
 
 const projectId = "6ba7b810-9dad-41d1-80b4-00c04fd430c8";
 const sourceA = "550e8400-e29b-41d4-a716-446655440000";
 const sourceB = "550e8400-e29b-41d4-a716-446655440001";
+const sourceC = "550e8400-e29b-41d4-a716-446655440002";
 
 function makeHarness() {
-  const originals = new Map([["media-a", sourceA], ["media-b", sourceB]]);
+  const originals = new Map([["media-a", sourceA], ["media-b", sourceB], ["media-c", sourceC]]);
   const registry = {
     originalUri: vi.fn(async (mediaId: string) => {
       const sourceId = originals.get(mediaId);
@@ -35,6 +37,108 @@ function makeHarness() {
 }
 
 describe("native podcast setup revision and live analysis", () => {
+  it("preserves a decode blocker when an unrelated recording relationship changes", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-revision-decode-blocker-"));
+    try {
+      const harness = makeHarness();
+      const setup = await harness.serviceWith(directory, {} as NativeAudioAnalysis).inspect({ projectId, mediaIds: ["media-a"] });
+      const asset = setup.analysis.assets[0]!;
+      setup.decodeFailure = {
+        version: 1, id: "failure-a", assetId: asset.id, sourceId: asset.sourceId, streamIndex: 0, channelIndex: 0,
+        startSample: 10, requestedSamples: 80_000, validSamples: 79_999, sampleRate: 8_000,
+        reason: "interior-short-read", attempts: 1,
+        evidence: { naturalEof: false, decoderDrained: false, resamplerFlushed: false, startCovered: true, contiguousTimestamps: true, decodeErrors: false },
+      };
+      const groups = structuredClone(setup.groups);
+      groups[0]!.recordingLink = { id: "link-a", kind: "continuous" };
+      const revised = revisePodcastSources(setup, setup.analysis, groups, setup.participants);
+      expect(revised.decodeFailure).toMatchObject({ id: "failure-a", assetId: asset.id });
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("persists a localized decode blocker and continues only after explicit unresolved exclusion", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-recovery-"));
+    try {
+      const harness = makeHarness();
+      const setup = await harness.serviceWith(directory, {} as NativeAudioAnalysis).inspect({ projectId, mediaIds: ["media-a"] });
+      const asset = setup.analysis.assets[0]!;
+      const failure = {
+        version: 1 as const, id: "failure-a", assetId: asset.id, sourceId: asset.sourceId, streamIndex: 0, channelIndex: 0,
+        startSample: 10, requestedSamples: 80_000, validSamples: 79_999, sampleRate: 8_000,
+        reason: "interior-short-read" as const,
+        evidence: { naturalEof: false, decoderDrained: false, resamplerFlushed: false, startCovered: true, contiguousTimestamps: true, decodeErrors: false }, attempts: 1 as const,
+      };
+      const audio = { getNativeAudioWindow: vi.fn(async () => { throw new PodcastAudioReadError(failure); }) };
+      const service = harness.serviceWith(directory, audio as never);
+      const first = setup;
+      await expect(service.analyze(first.setupId, "550e8400-e29b-41d4-a716-446655440099", new AbortController().signal, () => undefined)).rejects.toBeInstanceOf(PodcastAudioReadError);
+      const failed = await service.get(first.setupId);
+      expect(failed.decodeFailure).toMatchObject({ id: "failure-a", assetId: asset.id, requestedSamples: 80_000 });
+      await expect(service.approve(first.setupId, failed.revision)).rejects.toThrow(/explicitly exclude|unresolved podcast decode failure/i);
+      const packetScans = harness.inspectPackets.mock.calls.length;
+      const continued = await service.analyze(first.setupId, "550e8400-e29b-41d4-a716-446655440098", new AbortController().signal, () => undefined, undefined, false, { failureId: "failure-a", action: "continue-unresolved" });
+      expect(harness.inspectPackets).toHaveBeenCalledTimes(packetScans);
+      expect(continued.decodeFailure).toMatchObject({ id: "failure-a", resolution: "unresolved-excluded" });
+      expect(continued.placements.find((placement) => placement.assetId === asset.id)).toMatchObject({ status: "excluded", locked: true, exception: expect.stringContaining("decode failure") });
+      await expect(service.analyze(first.setupId, "550e8400-e29b-41d4-a716-446655440097", new AbortController().signal, () => undefined, undefined, false, { failureId: "stale", action: "save-and-stop" })).rejects.toThrow(/stale/i);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("revalidates an alternate registered copy and preserves its asset assignment", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-alternate-recovery-"));
+    try {
+      const harness = makeHarness();
+      let reads = 0;
+      let failureAssetId = "";
+      const audio = { getNativeAudioWindow: vi.fn(async (_sourceId: string, _track: number, _start: number, durationMs: number, _signal: AbortSignal) => {
+        reads++;
+        if (reads === 1) throw new PodcastAudioReadError({
+          version: 1, id: "failure-a", assetId: failureAssetId, sourceId: sourceA, streamIndex: 0, channelIndex: 0,
+          startSample: 10, requestedSamples: 80_000, validSamples: 79_999, sampleRate: 8_000, reason: "interior-short-read",
+          evidence: { naturalEof: false, decoderDrained: false, resamplerFlushed: false, startCovered: true, contiguousTimestamps: true, decodeErrors: false }, attempts: 1,
+        });
+        return { channels: [new Float32Array(Math.round(durationMs * 8))], sampleRate: 8_000 };
+      }) };
+      const service = harness.serviceWith(directory, audio as never);
+      const setup = await service.inspect({ projectId, mediaIds: ["media-a"] });
+      const asset = setup.analysis.assets[0]!;
+      failureAssetId = asset.id;
+      await expect(service.analyze(setup.setupId, "550e8400-e29b-41d4-a716-446655440099", new AbortController().signal, () => undefined)).rejects.toBeInstanceOf(PodcastAudioReadError);
+      const recovered = await service.analyze(setup.setupId, "550e8400-e29b-41d4-a716-446655440098", new AbortController().signal, () => undefined, undefined, false, { failureId: "failure-a", action: "use-alternate-copy", alternateMediaId: "media-c" });
+      expect(recovered.decodeFailure).toBeUndefined();
+      expect(recovered.analysis.assets[0]).toMatchObject({ id: asset.id, mediaId: "media-c", sourceId: sourceC });
+      expect(recovered.groups.flatMap((group) => group.assetIds)).toContain(asset.id);
+      expect(recovered.sourceHistory?.some((row) => row.asset?.sourceId === sourceA)).toBe(true);
+      expect(harness.inspectPackets).toHaveBeenCalledTimes(2);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("keeps earlier decode exclusions blocked when a second source fails", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-multiple-failures-"));
+    try {
+      const harness = makeHarness();
+      const assetIds = new Map<string, string>();
+      const audio = { getNativeAudioWindow: vi.fn(async (sourceId: string) => {
+        const assetId = assetIds.get(sourceId)!;
+        throw new PodcastAudioReadError({ version: 1, id: `failure-${assetId}`, assetId, sourceId, streamIndex: 0, channelIndex: 0, startSample: 10, requestedSamples: 80_000, validSamples: 79_999, sampleRate: 8_000, reason: "interior-short-read", evidence: { naturalEof: false, decoderDrained: false, resamplerFlushed: false, startCovered: true, contiguousTimestamps: true, decodeErrors: false }, attempts: 1 });
+      }) };
+      const service = harness.serviceWith(directory, audio as never);
+      const setup = await service.inspect({ projectId, mediaIds: ["media-a", "media-b"] });
+      for (const asset of setup.analysis.assets) assetIds.set(asset.sourceId, asset.id);
+      const id = "550e8400-e29b-41d4-a716-446655440099";
+      await expect(service.analyze(setup.setupId, id, new AbortController().signal, () => undefined)).rejects.toBeInstanceOf(PodcastAudioReadError);
+      let failed = await service.get(setup.setupId);
+      const firstFailure = failed.decodeFailure!;
+      await expect(service.analyze(setup.setupId, "550e8400-e29b-41d4-a716-446655440098", new AbortController().signal, () => undefined, undefined, false, { failureId: firstFailure.id, action: "continue-unresolved" })).rejects.toBeInstanceOf(PodcastAudioReadError);
+      failed = await service.get(setup.setupId);
+      const secondFailure = failed.decodeFailure!;
+      const attemptsBeforeFinalChoice = audio.getNativeAudioWindow.mock.calls.length;
+      const resolvedRemainder = await service.analyze(setup.setupId, "550e8400-e29b-41d4-a716-446655440097", new AbortController().signal, () => undefined, undefined, false, { failureId: secondFailure.id, action: "continue-unresolved" });
+      expect(audio.getNativeAudioWindow).toHaveBeenCalledTimes(attemptsBeforeFinalChoice);
+      expect(resolvedRemainder.placements.filter((placement) => placement.status === "excluded" && placement.exception?.includes("decode failure")).map((placement) => placement.assetId).sort()).toEqual([...assetIds.values()].sort());
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   it("removes deselected recordings while preserving the remaining confirmed group", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-service-revise-"));
     try {

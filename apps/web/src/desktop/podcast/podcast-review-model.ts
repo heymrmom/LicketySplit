@@ -241,6 +241,40 @@ export function podcastTimelineModel(setup: PodcastSetup): PodcastTimelineModel 
   return { aligned, startSeconds, endSeconds, durationSeconds: Math.max(0.001, endSeconds - startSeconds), lanes };
 }
 
+export interface PodcastTimingRelation {
+  kind: "gap" | "overlap";
+  laneLabel: string;
+  firstName: string;
+  secondName: string;
+  startSeconds: number;
+  endSeconds: number;
+  durationSeconds: number;
+}
+
+/** Summarize adjacent saved intervals; unresolved, excluded, and provisional clips are not timing evidence. */
+export function podcastTimingRelations(model: PodcastTimelineModel): PodcastTimingRelation[] {
+  const relations: PodcastTimingRelation[] = [];
+  for (const lane of model.lanes) {
+    const verified = lane.clips
+      .filter((clip) => ["reference", "measured", "manual"].includes(clip.status) && !clip.attention)
+      .sort((a, b) => a.startSeconds - b.startSeconds || a.endSeconds - b.endSeconds);
+    if (verified.length < 2) continue;
+    let previous = verified[0];
+    for (let index = 1; index < verified.length; index += 1) {
+      const current = verified[index];
+      const delta = current.startSeconds - previous.endSeconds;
+      if (delta > 0.001) {
+        relations.push({ kind: "gap", laneLabel: lane.label, firstName: previous.name, secondName: current.name, startSeconds: previous.endSeconds, endSeconds: current.startSeconds, durationSeconds: delta });
+      } else if (delta < -0.001) {
+        const endSeconds = Math.min(previous.endSeconds, current.endSeconds);
+        relations.push({ kind: "overlap", laneLabel: lane.label, firstName: previous.name, secondName: current.name, startSeconds: current.startSeconds, endSeconds, durationSeconds: endSeconds - current.startSeconds });
+      }
+      if (current.endSeconds > previous.endSeconds) previous = current;
+    }
+  }
+  return relations;
+}
+
 export function timelinePercent(model: PodcastTimelineModel, seconds: number): number {
   return Math.max(0, Math.min(100, ((seconds - model.startSeconds) / model.durationSeconds) * 100));
 }

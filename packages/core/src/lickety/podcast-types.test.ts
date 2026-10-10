@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertPodcastSetup } from "./podcast-types";
+import { assertPodcastSetup, type PodcastSetup } from "./podcast-types";
 
 const setup = (overrides: Record<string, unknown> = {}) => ({
   schemaVersion: 1,
@@ -80,5 +80,24 @@ describe("portable podcast setup", () => {
       },
       placements: [{ assetId: "asset-a", mapping: { version: 1, scale: 0, offsetSeconds: 0 }, status: "manual", component: "camera-a", locked: false, provenance: [] }],
     }))).toThrow(/source|timing/i);
+  });
+
+  it("validates a persisted decode failure against its inventoried audio stream", () => {
+    const value = setup({
+      analysis: { ...setup().analysis, assets: [{ ...setup().analysis.assets[0], streams: [{ index: 0, kind: "audio", channels: 1 }] }] },
+      decodeFailure: { version: 1, id: "failure-a", assetId: "asset-a", sourceId: "registry-a", streamIndex: 0, channelIndex: 0, startSample: 10, requestedSamples: 80_000, validSamples: 79_999, sampleRate: 8_000, reason: "interior-short-read", attempts: 1, evidence: { naturalEof: false, decoderDrained: false, resamplerFlushed: false, startCovered: true, contiguousTimestamps: true, decodeErrors: false } },
+    });
+    expect(() => assertPodcastSetup(value)).not.toThrow();
+    expect(() => assertPodcastSetup({ ...value, decodeFailure: { ...(value as PodcastSetup).decodeFailure!, channelIndex: 1 } })).toThrow(/channel/i);
+  });
+
+  it("requires the explicit exclusion to accompany an unresolved decode resolution", () => {
+    const value = setup({
+      analysis: { ...setup().analysis, assets: [{ ...setup().analysis.assets[0], streams: [{ index: 0, kind: "audio", channels: 1 }] }] },
+      decodeFailure: { version: 1, id: "failure-a", assetId: "asset-a", sourceId: "registry-a", streamIndex: 0, channelIndex: 0, startSample: 10, requestedSamples: 80_000, validSamples: 79_999, sampleRate: 8_000, reason: "interior-short-read", attempts: 1, resolution: "unresolved-excluded", evidence: { naturalEof: false, decoderDrained: false, resamplerFlushed: false, startCovered: true, contiguousTimestamps: true, decodeErrors: false } },
+      placements: [{ assetId: "asset-a", mapping: { version: 1, scale: 1, offsetSeconds: 0 }, status: "excluded", component: "asset-a", locked: true, provenance: [], exception: "Explicitly excluded after decode failure." }],
+    });
+    expect(() => assertPodcastSetup(value)).not.toThrow();
+    expect(() => assertPodcastSetup({ ...value, placements: [] })).toThrow(/explicit excluded placement/i);
   });
 });

@@ -192,6 +192,8 @@ declare global {
         registerFile(mediaId:string,file:Blob):Promise<RegisteredAsset>;
         registerPath(mediaId:string,path:string):Promise<RegisteredAsset>;
         findAsset(mediaId:string):Promise<RegisteredAsset|undefined>;
+        identifyOriginalFile(file:File):Promise<{identity:string;size:number;mtimeMs:number}|null>;
+        findOriginalMediaId(file:File,mediaIds:string[]):Promise<string|undefined>;
         resolve(assetId:string,purpose:"original"|"proxy"):Promise<string>;
         ensureAudioStream(assetId:string,trackIndex:number,sourceChannelIndex?:number):Promise<string>;
         ensureProxy(assetId:string):Promise<ProxyReceipt>;

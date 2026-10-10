@@ -211,6 +211,12 @@ export function buildPodcastAssembly(
   if (project.id !== setup.projectId) throw new Error("Podcast setup belongs to a different project.");
   if (setup.state !== "approved") throw new Error("Review and approve the podcast timing before creating its timeline.");
   if (setup.approval?.revision !== setup.revision || !setup.approval.mappingDigest) throw new Error("Approve the current podcast timing revision before creating its timeline.");
+  if (setup.decodeFailure) {
+    const excluded = setup.placements.find((placement) => placement.assetId === setup.decodeFailure!.assetId);
+    if (setup.decodeFailure.resolution !== "unresolved-excluded" || excluded?.status !== "excluded" || !excluded.exception?.includes("decode failure")) {
+      throw new Error("Resolve or explicitly exclude the podcast source with a decode failure before creating its timeline.");
+    }
+  }
   const assetById = new Map(setup.analysis.assets.map((asset) => [asset.id, asset]));
   const referenceContainerStart = (setup.analysis.assets.find((asset) => asset.id === setup.referenceAssetId)?.containerStartSeconds ?? 0);
   const mediaById = new Map(project.mediaLibrary.items.map((item) => [item.id, item]));

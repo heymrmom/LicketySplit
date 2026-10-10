@@ -73,6 +73,7 @@ export function revisePodcastSources(previous: PodcastSetup, analysisInput: Podc
   }
 
   next.analysis = analysis; next.groups = groups; next.participants = participants; next.analysis.groups = structuredClone(groups);
+  if (next.decodeFailure && changedIds.includes(next.decodeFailure.assetId)) next.decodeFailure = undefined;
   next.channels = next.channels.filter((channel) => unchanged.has(channel.assetId) && !affected.has(channel.assetId));
   next.edges = next.edges.filter((edge) => unchanged.has(edge.a) && unchanged.has(edge.b) && !affected.has(edge.a) && !affected.has(edge.b));
   const retainedChannelIds = new Set(next.channels.map((channel) => channel.id));

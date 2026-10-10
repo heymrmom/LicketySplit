@@ -2,7 +2,7 @@ import "../../test/install-local-storage-mock";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { MediaItem } from "@licketysplit/core";
-import type { PodcastBridge, PodcastSetup, PodcastSyncChannel } from "@licketysplit/core/lickety/podcast-types";
+import type { PodcastBridge, PodcastProgressEvent, PodcastSetup, PodcastSyncChannel } from "@licketysplit/core/lickety/podcast-types";
 import { useProjectStore } from "../../stores/project-store";
 import { createEmptyProject } from "../../stores/project/project-helpers";
 import { registerDesktopMedia } from "../../services/lickety/desktop-media";
@@ -43,7 +43,7 @@ function setProject(): void {
   useProjectStore.setState({ hasOpenProject: true, project: { ...empty, id: projectId, mediaLibrary: { items: media } } });
 }
 
-function restoreSetupForStep(setup: PodcastSetup, step: "setup" | "check", pictureGapPolicy?: "keep-picture-gaps" | "available-camera-fallback"): void {
+function restoreSetupForStep(setup: PodcastSetup, step: "setup" | "lineup" | "check", pictureGapPolicy?: "keep-picture-gaps" | "available-camera-fallback"): void {
   const current = useProjectStore.getState().project;
   useProjectStore.setState({ project: {
     ...current,
@@ -91,7 +91,7 @@ describe("PodcastSetupDialog", () => {
 
   it("inspects selected imported originals, then persists reorder as a non-approved project draft", async () => {
     const view = render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
-    expect(screen.getByRole("heading", { name: "Choose recordings already in this project" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Choose recordings for this episode" })).toBeTruthy();
     const sourceCheckboxes = screen.getAllByRole("checkbox");
     fireEvent.click(sourceCheckboxes[0]);
     fireEvent.click(sourceCheckboxes[1]);
@@ -109,10 +109,58 @@ describe("PodcastSetupDialog", () => {
     view.unmount();
   });
 
+  it("selects all eligible recordings and clears them with visible counts", () => {
+    const current = useProjectStore.getState().project;
+    useProjectStore.setState({ project: {
+      ...current,
+      mediaLibrary: { items: [...media, { ...media[0], id: "image-1", type: "image" }, { ...media[1], id: "missing-1", isPlaceholder: true }] },
+    } });
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+
+    expect(screen.getByText("2 eligible recordings")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Select all eligible recordings" }));
+    expect(screen.getByText("2 selected of 2 eligible recordings")).toBeTruthy();
+    expect(screen.getAllByRole("checkbox").every((checkbox) => (checkbox as HTMLInputElement).checked)).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.getByText("No recordings selected")).toBeTruthy();
+    expect(readPodcastWizardCheckpoint(useProjectStore.getState().project)?.selectedMediaIds).toEqual([]);
+  });
+
+  it("keeps successful imports selected and reports partial import failures", async () => {
+    useProjectStore.setState({ importMedia: vi.fn(async (file: File) => {
+      if (file.name === "broken.wav") return { success: false, error: { code: "DECODE_ERROR" as const, message: "Could not decode this recording." } };
+      const current = useProjectStore.getState().project;
+      const item = { ...media[0], id: "imported-copy", name: file.name };
+      useProjectStore.setState({ project: { ...current, mediaLibrary: { items: [...current.mediaLibrary.items, item] } } });
+      return { success: true, actionId: item.id };
+    }) });
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("Import podcast recordings"), { target: { files: [new File(["a"], "good.wav"), new File(["b"], "broken.wav")] } });
+    await screen.findByRole("alert");
+    expect(screen.getByRole("alert").textContent).toContain("1 recording could not be imported");
+    expect(screen.getByText("1 selected of 3 eligible recordings")).toBeTruthy();
+    expect(readPodcastWizardCheckpoint(useProjectStore.getState().project)?.selectedMediaIds).toContain("imported-copy");
+  });
+
+  it("locks recording selection while source inspection is running", async () => {
+    let resolveInspect: ((value: PodcastSetup) => void) | undefined;
+    bridge.inspect = vi.fn(() => new Promise<PodcastSetup>((resolve) => { resolveInspect = resolve; }));
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect selected originals" }));
+
+    expect((screen.getAllByRole("checkbox")[0] as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Select all eligible recordings" }).hasAttribute("disabled")).toBe(true);
+    await act(async () => { resolveInspect?.(makeSetup()); });
+  });
+
   it("cancels only the in-flight analysis request and never applies timeline tracks", async () => {
     const setup = makeSetup();
     let resolveAnalyze: ((result: PodcastSetup) => void) | undefined;
+    let emitProgress: ((event: PodcastProgressEvent) => void) | undefined;
     bridge.analyze = vi.fn(() => new Promise<PodcastSetup>((resolve) => { resolveAnalyze = resolve; }));
+    bridge.onProgress = vi.fn((listener) => { emitProgress = listener; return () => undefined; });
     bridge.get = vi.fn(async () => setup);
     const current = useProjectStore.getState().project;
     useProjectStore.setState({ project: {
@@ -126,8 +174,16 @@ describe("PodcastSetupDialog", () => {
     const view = render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await vi.waitFor(() => expect(bridge.get).toHaveBeenCalledWith({ setupId: setup.setupId }));
     await screen.findByRole("heading", { name: "Line up the original recordings" });
+    expect(screen.queryByText(/Blank space is a gap; overlapping recordings stay on separate lanes/)).toBeNull();
+    expect(screen.getByText("Analysis has not been run for these groups.")).toHaveClass("text-fg");
     fireEvent.click(screen.getByRole("button", { name: "Line up recordings" }));
     await screen.findByRole("status");
+    const requestId = vi.mocked(bridge.analyze).mock.calls[0][0].requestId;
+    act(() => { emitProgress?.({ setupId: setup.setupId, requestId, phase: "features", completed: 48_000, total: 96_000, message: "Analyzing Host microphone · stream 0 · channel 1" }); });
+    expect(screen.getByRole("status").textContent).toContain("Features · 48,000 of 96,000 sample frames");
+    expect(screen.getByRole("status").textContent).toContain("Analyzing Host microphone · stream 0 · channel 1");
+    act(() => { emitProgress?.({ setupId: setup.setupId, requestId, phase: "decode", completed: 2, total: 3, message: "Decoding camera-a.mp4 · stream 0 · channel 1" }); });
+    expect(screen.getByRole("status").textContent).toContain("Decode · 2 of 3 audio channels");
     fireEvent.click(screen.getByRole("button", { name: "Cancel this run" }));
     await vi.waitFor(() => expect(bridge.cancel).toHaveBeenCalledWith({ requestId: expect.any(String) }));
     expect(useProjectStore.getState().project.timeline.tracks).toEqual([]);
@@ -137,7 +193,7 @@ describe("PodcastSetupDialog", () => {
     view.unmount();
   });
 
-  it("keeps a newer analysis busy when a canceled older request settles late", async () => {
+  it("keeps controls locked until cancellation settles, then allows the next run", async () => {
     const setup = makeSetup();
     const pending: Array<(value: PodcastSetup) => void> = [];
     bridge.analyze = vi.fn(() => new Promise<PodcastSetup>((resolve) => pending.push(resolve)));
@@ -155,13 +211,105 @@ describe("PodcastSetupDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Line up recordings" }));
     await screen.findByRole("button", { name: "Cancel this run" });
     fireEvent.click(screen.getByRole("button", { name: "Cancel this run" }));
+    expect(screen.getByRole("button", { name: "Cancellation pending…" }).hasAttribute("disabled")).toBe(true);
+    expect((screen.getByRole("button", { name: "Line up recordings" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(bridge.analyze).toHaveBeenCalledTimes(1);
+    await act(async () => { pending[0]?.({ ...setup, state: "canceled" }); });
+    await vi.waitFor(() => expect((screen.getByRole("button", { name: "Line up recordings" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "Line up recordings" }));
     await vi.waitFor(() => expect(bridge.analyze).toHaveBeenCalledTimes(2));
-    await act(async () => { pending[0]?.({ ...setup, state: "canceled" }); });
     expect(screen.getByRole("button", { name: "Cancel this run" })).toBeTruthy();
     expect(useProjectStore.getState().project.timeline.tracks).toEqual([]);
     await act(async () => { pending[1]?.({ ...setup, state: "canceled" }); });
     view.unmount();
+  });
+
+  it("does not launch analysis if cancellation arrives during setup preflight", async () => {
+    const setup = makeSetup();
+    let resolvePreflight: ((value: PodcastSetup) => void) | undefined;
+    bridge.get = vi.fn().mockResolvedValueOnce(setup).mockImplementationOnce(() => new Promise<PodcastSetup>((resolve) => { resolvePreflight = resolve; }));
+    restoreSetupForStep(setup, "lineup");
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Line up the original recordings" });
+    fireEvent.click(screen.getByRole("button", { name: "Line up recordings" }));
+    await vi.waitFor(() => expect(bridge.get).toHaveBeenCalledTimes(2));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel this run" }));
+    await act(async () => { resolvePreflight?.(setup); });
+    await vi.waitFor(() => expect((screen.getByRole("button", { name: "Line up recordings" }) as HTMLButtonElement).disabled).toBe(false));
+    expect(bridge.analyze).not.toHaveBeenCalled();
+  });
+
+  it("sends the explicit continue-unresolved recovery action with its failure ID", async () => {
+    const setup = makeSetup();
+    setup.step = "lineup";
+    setup.decodeFailure = {
+      version: 1, id: "failure-a", assetId: "asset-1", sourceId: "source-1", streamIndex: 0, channelIndex: 0,
+      startSample: 0, requestedSamples: 48_000, validSamples: 20_000, sampleRate: 48_000,
+      reason: "interior-short-read", evidence: { naturalEof: false, decoderDrained: false, resamplerFlushed: false, startCovered: true, contiguousTimestamps: true, decodeErrors: false }, attempts: 1,
+    };
+    setup.placements = [
+      { assetId: "asset-1", status: "excluded", mapping: { version: 1, scale: 1, offsetSeconds: 0 }, component: "asset-1", locked: false, provenance: [], exception: "Decode failure explicitly excluded pending manual resolution." },
+      { assetId: "asset-2", status: "reference", mapping: { version: 1, scale: 1, offsetSeconds: 0 }, component: "asset-2", locked: false, provenance: [] },
+    ];
+    bridge.get = vi.fn(async () => setup);
+    bridge.analyze = vi.fn(async () => ({ ...setup, decodeFailure: { ...setup.decodeFailure!, resolution: "unresolved-excluded" as const } }));
+    restoreSetupForStep(setup, "lineup");
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Line up the original recordings" });
+    expect(screen.getByRole("heading", { name: "One recording could not be verified" })).toHaveClass("text-fg");
+    expect(screen.getByText(/20,000 of 48,000 requested audio samples/)).toBeTruthy();
+    expect(screen.getByText(/stream 1, channel 1 · 00:00\.000/)).toHaveClass("text-fg");
+    fireEvent.click(screen.getByRole("button", { name: "Continue with this recording unresolved" }));
+    await screen.findByText(/remaining verified recordings may continue/);
+    expect(bridge.analyze).toHaveBeenCalledWith(expect.objectContaining({ recovery: { failureId: "failure-a", action: "continue-unresolved" } }));
+    expect(screen.queryByRole("button", { name: "Continue with this recording unresolved" })).toBeNull();
+    expect((screen.getByRole("button", { name: "Review saved timing" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("reloads and exposes a second persisted decode failure after recovery finds another source", async () => {
+    const first = makeSetup();
+    first.decodeFailure = { version: 1, id: "failure-a", assetId: "asset-1", sourceId: "source-1", streamIndex: 0, channelIndex: 0, startSample: 0, requestedSamples: 48000, validSamples: 20_000, sampleRate: 48_000, reason: "interior-short-read", evidence: { naturalEof: false, decoderDrained: false, resamplerFlushed: false, startCovered: true, contiguousTimestamps: true, decodeErrors: false }, attempts: 1 };
+    const second = { ...first, revision: 2, decodeFailure: { ...first.decodeFailure, id: "failure-b", assetId: "asset-2", sourceId: "source-2" } };
+    bridge.get = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second);
+    bridge.analyze = vi.fn(async () => { throw new Error("A second recording could not be verified."); });
+    restoreSetupForStep(first, "lineup");
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Line up the original recordings" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue with this recording unresolved" }));
+    await screen.findAllByText(/camera-b\.mp4/);
+    expect(bridge.get).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("button", { name: "Continue with this recording unresolved" })).toBeTruthy();
+    expect(screen.getByText(/another source could not be verified/)).toBeTruthy();
+  });
+
+  it("submits an alternate Media Pool copy ID without changing group assignments", async () => {
+    const setup = makeSetup();
+    setup.decodeFailure = { version: 1, id: "failure-a", assetId: "asset-1", sourceId: "source-1", streamIndex: 0, channelIndex: 0, startSample: 0, requestedSamples: 48000, validSamples: 20_000, sampleRate: 48_000, reason: "unverified-eof", evidence: { naturalEof: true, decoderDrained: true, resamplerFlushed: true, startCovered: true, contiguousTimestamps: true, decodeErrors: false }, attempts: 1 };
+    bridge.get = vi.fn(async () => setup);
+    bridge.analyze = vi.fn(async () => ({ ...setup, decodeFailure: undefined }));
+    restoreSetupForStep(setup, "lineup");
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Line up the original recordings" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Use another imported copy" }), { target: { value: "media-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Revalidate and use copy" }));
+    await screen.findByText(/Alternate recording selected/);
+    expect(bridge.analyze).toHaveBeenCalledWith(expect.objectContaining({ recovery: { failureId: "failure-a", action: "use-alternate-copy", alternateMediaId: "media-2" } }));
+    expect(useProjectStore.getState().project.lickety?.podcastSetup?.groups).toEqual(setup.groups);
+  });
+
+  it("keeps the current recovery panel and shows an alternate-copy validation error", async () => {
+    const setup = makeSetup();
+    setup.decodeFailure = { version: 1, id: "failure-a", assetId: "asset-1", sourceId: "source-1", streamIndex: 0, channelIndex: 0, startSample: 0, requestedSamples: 48_000, validSamples: 20_000, sampleRate: 48_000, reason: "unverified-eof", evidence: { naturalEof: true, decoderDrained: true, resamplerFlushed: true, startCovered: true, contiguousTimestamps: true, decodeErrors: false }, attempts: 1 };
+    bridge.get = vi.fn(async () => setup);
+    bridge.analyze = vi.fn(async () => { throw new Error("The alternate file is incompatible with this source."); });
+    restoreSetupForStep(setup, "lineup");
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Line up the original recordings" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Use another imported copy" }), { target: { value: "media-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Revalidate and use copy" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The alternate file is incompatible with this source.");
+    expect(screen.getByRole("heading", { name: "One recording could not be verified" })).toBeTruthy();
+    expect(screen.queryByText(/another source could not be verified/)).toBeNull();
   });
 
   it("cancels a request on project switch and ignores its late setup result", async () => {
@@ -176,7 +324,7 @@ describe("PodcastSetupDialog", () => {
     useProjectStore.setState({ project: { ...current, id: "another-project" } as typeof current });
     await vi.waitFor(() => expect(bridge.cancel).toHaveBeenCalledWith({ requestId }));
     await act(async () => { resolveInspect?.(makeSetup()); });
-    expect(screen.getByRole("heading", { name: "Choose recordings already in this project" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Choose recordings for this episode" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Name groups and assign sound" })).toBeNull();
     view.unmount();
   });

@@ -8,6 +8,9 @@ import { toast } from "../notification-store";
 
 type Get = StoreApi<ProjectState>["getState"];
 type Set = StoreApi<ProjectState>["setState"];
+type ImportMediaResult = Awaited<ReturnType<ProjectState["importMedia"]>>;
+type OriginalFileIdentity = { identity: string; size: number; mtimeMs: number };
+const pendingImports = new Map<string, Promise<ImportMediaResult>>();
 
 export type MediaSlice = Pick<
   ProjectState,
@@ -25,8 +28,68 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
     importMedia: async (file: File) => {
       const { project } = get();
       const desktop=typeof window!=="undefined"&&window.licketysplit?.platform==="desktop";
+      let sourceIdentity: OriginalFileIdentity | null = null;
+      let pendingKey: string | null = null;
+      let resolvePending: ((result: ImportMediaResult) => void) | undefined;
+      const finish = (result: ImportMediaResult) => { resolvePending?.(result); resolvePending = undefined; return result; };
 
       try {
+        const nativeBridge = desktop ? window.licketysplit?.lickety : undefined;
+        sourceIdentity = await nativeBridge?.identifyOriginalFile(file) ?? null;
+        if (sourceIdentity) {
+          const currentProject = get().project;
+          if (currentProject.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+          const sameIdentity = (item: MediaItem) => {
+            const identity = item.sourceFile?.identity;
+            return identity?.id === sourceIdentity?.identity && identity?.size === sourceIdentity?.size && identity?.mtimeMs === sourceIdentity?.mtimeMs;
+          };
+          let existingItem = currentProject.mediaLibrary.items.find((item) => !item.isPlaceholder && sameIdentity(item));
+          if (!existingItem && nativeBridge?.findOriginalMediaId) {
+            const mediaIds = currentProject.mediaLibrary.items.filter((item) => !item.isPlaceholder).map((item) => item.id);
+            const existingId = await nativeBridge.findOriginalMediaId(file, mediaIds);
+            const afterLookup = get().project;
+            if (afterLookup.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+            if (existingId) existingItem = afterLookup.mediaLibrary.items.find((item) => item.id === existingId);
+          }
+          if (!existingItem && nativeBridge?.identifyOriginalFile) {
+            for (const item of currentProject.mediaLibrary.items) {
+              if (item.isPlaceholder || item.sourceFile?.identity) continue;
+              const candidate = item.blob instanceof File ? item.blob : await item.fileHandle?.getFile().catch(() => undefined);
+              if (get().project.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+              if (!candidate) continue;
+              const candidateIdentity = await nativeBridge.identifyOriginalFile(candidate);
+              const afterLookup = get().project;
+              if (afterLookup.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+              if (afterLookup.mediaLibrary.items.some((current) => current.id === item.id) && candidateIdentity?.identity === sourceIdentity.identity && candidateIdentity.size === sourceIdentity.size && candidateIdentity.mtimeMs === sourceIdentity.mtimeMs) {
+                existingItem = item;
+                break;
+              }
+            }
+          }
+          if (existingItem) {
+            const latestProject = get().project;
+            if (latestProject.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+            if (!latestProject.mediaLibrary.items.some((item) => item.id === existingItem!.id)) existingItem = undefined;
+          }
+          if (existingItem) {
+            const latestProject = get().project;
+            const items = latestProject.mediaLibrary.items.map((item) => item.id === existingItem!.id ? {
+              ...item,
+              sourceFile: { ...item.sourceFile, name: item.sourceFile?.name ?? item.name, size: sourceIdentity!.size, lastModified: item.sourceFile?.lastModified ?? 0, identity: { id: sourceIdentity!.identity, size: sourceIdentity!.size, mtimeMs: sourceIdentity!.mtimeMs } },
+            } : item);
+            set({ project: { ...latestProject, mediaLibrary: { ...latestProject.mediaLibrary, items }, modifiedAt: Date.now() } });
+            return finish({ success: true, actionId: existingItem.id });
+          }
+          const latestProject = get().project;
+          if (latestProject.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS", message: "The project changed while importing media. Import the file again in the current project." } });
+          const concurrentExisting = latestProject.mediaLibrary.items.find((item) => !item.isPlaceholder && sameIdentity(item));
+          if (concurrentExisting) return finish({ success: true, actionId: concurrentExisting.id });
+          pendingKey = `${project.id}:${sourceIdentity.identity}:${sourceIdentity.size}:${sourceIdentity.mtimeMs}`;
+          const pending = pendingImports.get(pendingKey);
+          if (pending) { pendingKey = null; return pending; }
+          const coalesced = new Promise<ImportMediaResult>((resolve) => { resolvePending = resolve; });
+          pendingImports.set(pendingKey, coalesced);
+        }
         const mediaBridge = getMediaBridge();
         if (!mediaBridge.isInitialized()) {
           await initializeMediaBridge();
@@ -36,13 +99,13 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
         const importResult = await mediaBridge.importFile(file, true, desktop||isLargeFile);
 
         if (!importResult.success || !importResult.media) {
-          return {
+          return finish({
             success: false,
             error: {
               code: "DECODE_ERROR" as const,
               message: importResult.error || "Failed to import media",
             },
-          };
+          });
         }
 
         const processedMedia = importResult.media;
@@ -138,30 +201,34 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           waveformData: processedMedia.waveformData?.peaks || null,
           filmstripThumbnails:
             filmstripThumbnails.length > 0 ? filmstripThumbnails : undefined,
-          sourceFile: {
-            name: file.name,
-            size: file.size,
-            lastModified: file.lastModified,
-          },
+            sourceFile: {
+              name: file.name,
+              size: file.size,
+              lastModified: file.lastModified,
+              ...(sourceIdentity ? { identity: { id: sourceIdentity.identity, size: sourceIdentity.size, mtimeMs: sourceIdentity.mtimeMs } } : {}),
+            },
         };
 
-        if(desktop)await saveMediaBlob(project.id,newMediaItem.id,file,newMediaItem.metadata);
         const currentProject = get().project;
         if (currentProject.id !== project.id) {
-          return {
+          return finish({
             success: false,
             error: {
               code: "INVALID_PARAMS" as const,
               message: "The project changed while importing media. Import the file again in the current project.",
             },
-          };
+          });
         }
 
+        if(desktop)await saveMediaBlob(project.id,newMediaItem.id,file,newMediaItem.metadata);
+        const projectAfterSave = get().project;
+        if (projectAfterSave.id !== project.id) return finish({ success: false, error: { code: "INVALID_PARAMS" as const, message: "The project changed while importing media. Import the file again in the current project." } });
+
         const updatedProject = {
-          ...currentProject,
+          ...projectAfterSave,
           mediaLibrary: {
-            ...currentProject.mediaLibrary,
-            items: [...currentProject.mediaLibrary.items, newMediaItem],
+            ...projectAfterSave.mediaLibrary,
+            items: [...projectAfterSave.mediaLibrary.items, newMediaItem],
           },
           modifiedAt: Date.now(),
         };
@@ -224,16 +291,21 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
           }, 100);
         }
 
-        return { success: true, actionId: newMediaItem.id };
+        return finish({ success: true, actionId: newMediaItem.id });
       } catch (error) {
-        return {
+        return finish({
           success: false,
           error: {
             code: "DECODE_ERROR" as const,
             message:
               error instanceof Error ? error.message : "Unknown import error",
           },
-        };
+        });
+      } finally {
+        if (pendingKey) {
+          pendingImports.delete(pendingKey);
+          if (resolvePending) resolvePending({ success: false, error: { code: "DECODE_ERROR", message: "Import did not complete." } });
+        }
       }
     },
 
@@ -267,6 +339,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
       const desktop=typeof window!=="undefined"&&window.licketysplit?.platform==="desktop";
 
       try {
+        const sourceIdentity = desktop ? await window.licketysplit?.lickety?.identifyOriginalFile(file) ?? null : null;
         const mediaBridge = getMediaBridge();
         if (!mediaBridge.isInitialized()) {
           await initializeMediaBridge();
@@ -378,6 +451,7 @@ export function createMediaSlice(set: Set, get: Get): MediaSlice {
             size: file.size,
             lastModified: file.lastModified,
             folder: sourceFolder,
+            ...(sourceIdentity ? { identity: { id: sourceIdentity.identity, size: sourceIdentity.size, mtimeMs: sourceIdentity.mtimeMs } } : {}),
           },
         };
 

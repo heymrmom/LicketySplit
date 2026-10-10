@@ -48,16 +48,21 @@ export async function analyzeLegacyPodcastSetup(args: {
   cacheDir: string;
   signal: AbortSignal;
   retryAssetIds?: string[];
+  blockedAssetIds?: string[];
   prepareOnly?: boolean;
   onProgress: (event: PodcastProgressUpdate) => void;
 }): Promise<{ setup: PodcastSetup; metrics: PodcastSetupMetrics }> {
-  const { setup, registry, audio, cacheDir, signal, retryAssetIds, prepareOnly = false, onProgress } = args;
-  const included = [...new Set(setup.groups.flatMap((group) => group.assetIds))];
+  const { setup, registry, audio, cacheDir, signal, retryAssetIds, blockedAssetIds = [], prepareOnly = false, onProgress } = args;
+  const allIncluded = [...new Set(setup.groups.flatMap((group) => group.assetIds))];
+  const blocked = new Set(blockedAssetIds);
+  const included = allIncluded.filter((id) => !blocked.has(id));
   const assetById = new Map(setup.analysis.assets.map((asset) => [asset.id, asset]));
-  if (!included.length || included.some((id) => !assetById.has(id))) throw new Error("Choose inventoried sources before analysis.");
+  if (!allIncluded.length || allIncluded.some((id) => !assetById.has(id)) || !included.length) throw new Error("Choose inventoried sources before analysis.");
+  if (blockedAssetIds.some((id) => !allIncluded.includes(id))) throw new Error("An unresolved source is no longer part of this setup.");
   if (prepareOnly && setup.placements.length) throw new Error("Sources are already prepared. Retry audio matching or review the saved placements.");
 
   const channelWork: ChannelWork[] = [];
+  const totalChannels = included.reduce((sum, id) => sum + (assetById.get(id)!.streams ?? []).filter((stream) => stream.kind === "audio").reduce((count, stream) => count + Math.min(stream.channels ?? assetById.get(id)!.channels ?? 0, 64), 0), 0);
   let cacheHits = 0, cacheMisses = 0, decodeSeconds = 0, peakRssBytes = process.memoryUsage().rss;
   await mkdir(cacheDir, { recursive: true });
   for (let i = 0; i < included.length; i++) {
@@ -72,7 +77,7 @@ export async function analyzeLegacyPodcastSetup(args: {
       const stream = audioStreams[ordinal], channelCount = Math.min(stream.channels ?? asset.channels ?? 0, 64);
       for (let channel = 0; channel < channelCount; channel++) {
         signal.throwIfAborted();
-        onProgress({ phase: "decode", completed: channelWork.length, total: included.length, message: `Reading ${asset.name}, audio stream ${stream.index}, channel ${channel + 1}` });
+        onProgress({ phase: "decode", completed: channelWork.length, total: totalChannels, message: `Reading ${asset.name}, audio stream ${stream.index}, channel ${channel + 1}` });
         const extracted = await extractFeatures({ asset, stream, sourceId: registered.identity.assetId, sha256: registered.identity.sha256, audioOrdinal: ordinal, streamIndex: stream.index, channelIndex: channel, audio, directory: cacheDir, signal, onProgress });
         channelWork.push(extracted.work); decodeSeconds += extracted.decodeSeconds;
         if (extracted.cacheHit) cacheHits++; else cacheMisses++;
@@ -83,7 +88,7 @@ export async function analyzeLegacyPodcastSetup(args: {
   }
 
   const channels: SyncChannel[] = channelWork.map((work) => ({ ...work.channel, audioOrdinal: work.audioOrdinal, featureFile: work.featureFile, featureCacheKey: work.featureCacheKey, receipt: work.receipt }));
-  const priorChannels = setup.channels.map((channel) => fromPortableChannel(channel, assetById.get(channel.assetId)!));
+  const priorChannels = setup.channels.filter((channel) => !blocked.has(channel.assetId)).map((channel) => fromPortableChannel(channel, assetById.get(channel.assetId)!));
   const fps = setup.timelineRate ? setup.timelineRate.numerator / setup.timelineRate.denominator : setup.analysis.fps;
   const reference = setup.referenceAssetId && included.includes(setup.referenceAssetId) ? setup.referenceAssetId
     : included.map((id) => assetById.get(id)!).sort((a, b) => Number(b.kind === "audio") - Number(a.kind === "audio") || b.durationSeconds - a.durationSeconds)[0].id;
@@ -162,10 +167,11 @@ export async function analyzeLegacyPodcastSetup(args: {
     peakRssBytes = Math.max(peakRssBytes, process.memoryUsage().rss);
   }
 
-  const previous = structuredClone(workProject.placements);
+  const excludedPlacements = structuredClone(setup.placements.filter((placement) => blocked.has(placement.assetId)));
+  const previous = structuredClone(workProject.placements.filter((placement) => !blocked.has(placement.assetId)));
   const retained = new Set(retryAssetIds ? previous.filter((placement) => !retryAssetIds.includes(placement.assetId)).map((placement) => placement.assetId) : []);
   for (const placement of previous) if (retained.has(placement.assetId) && placement.status !== "manual" && placement.status !== "excluded") placement.locked = true;
-  const placements = solveGraph(included, reference, prepareOnly ? [] : edges, previous, workProject.clockGroups);
+  const placements = [...solveGraph(included, reference, prepareOnly ? [] : edges, previous, workProject.clockGroups), ...excludedPlacements];
   const warnings = [...setup.warnings];
   for (const placement of placements) {
     const asset = assetById.get(placement.assetId)!;

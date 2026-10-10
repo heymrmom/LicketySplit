@@ -4,7 +4,7 @@
 // legacy sync-timeline.test.ts 3–13 / 20–23 / 26–29 split-region spans.
 import { describe, expect, it } from "vitest";
 import type { PodcastAsset, PodcastPlacement, PodcastSetup, PodcastSyncChannel } from "@licketysplit/core/lickety/podcast-types";
-import { clipReview, formatReviewTime, parseReviewTime, podcastReviewState, podcastTimelineModel, reviewComparison, timelinePercent, timelineSeconds, timelineWaveformPath, PACKET_TIMING_WARNING } from "./podcast-review-model";
+import { clipReview, formatReviewTime, parseReviewTime, podcastReviewState, podcastTimelineModel, podcastTimingRelations, reviewComparison, timelinePercent, timelineSeconds, timelineWaveformPath, PACKET_TIMING_WARNING } from "./podcast-review-model";
 
 function asset(id: string, name: string, kind: "video" | "audio", durationSeconds = 10): PodcastAsset {
   return {
@@ -134,6 +134,34 @@ describe("podcast timeline adapted from legacy timeline helpers", () => {
     expect(model.aligned).toBe(true);
     expect(model.lanes[0].clips.map((clip) => [clip.startSeconds, clip.endSeconds, clip.attention])).toEqual([[3, 13, false], [20, 23, false], [26, 29, true]]);
     expect(timelineSeconds(model, timelinePercent(model, 26))).toBeCloseTo(26, 8);
+  });
+
+  it("summarizes measured adjacent gaps and overlaps while excluding unresolved timing", () => {
+    const value = setup();
+    value.analysis.assets = [asset("v1", "First camera.mov", "video", 10), asset("v2", "Second camera.mov", "video", 8), asset("v3", "Third camera.mov", "video", 10), asset("v4", "Excluded.mov", "video", 5), asset("v5", "Unresolved.mov", "video", 5)];
+    value.groups = [{ id: "camera", name: "Camera", kind: "video", role: "camera", confidence: "high", assetIds: ["v1", "v2", "v3", "v4", "v5"], warnings: [] }];
+    value.channels = [];
+    value.placements = [placement("v1", "reference", 0), placement("v2", "measured", 13), placement("v3", "measured", 19), { ...placement("v4", "excluded", 19), exception: "Excluded source." }, { ...placement("v5", "unresolved", 19), reviewReason: "insufficient-evidence" }];
+
+    const relations = podcastTimingRelations(podcastTimelineModel(value));
+    expect(relations.map(({ kind, durationSeconds, firstName, secondName }) => ({ kind, durationSeconds, firstName, secondName }))).toEqual([
+      { kind: "gap", durationSeconds: 3, firstName: "First camera.mov", secondName: "Second camera.mov" },
+      { kind: "overlap", durationSeconds: 2, firstName: "Second camera.mov", secondName: "Third camera.mov" },
+    ]);
+  });
+
+  it("keeps the furthest coverage leader for nested clips instead of inventing a gap", () => {
+    const value = setup();
+    value.analysis.assets = [asset("a", "Wide camera.mov", "video", 30), asset("b", "Nested camera.mov", "video", 10), asset("c", "Later camera.mov", "video", 10)];
+    value.groups = [{ id: "camera", name: "Camera", kind: "video", role: "camera", confidence: "high", assetIds: ["a", "b", "c"], warnings: [] }];
+    value.channels = [];
+    value.placements = [placement("a", "reference", 0), placement("b", "measured", 10), placement("c", "measured", 25)];
+
+    const relations = podcastTimingRelations(podcastTimelineModel(value));
+    expect(relations.map(({ kind, durationSeconds, firstName, secondName }) => ({ kind, durationSeconds, firstName, secondName }))).toEqual([
+      { kind: "overlap", durationSeconds: 10, firstName: "Wide camera.mov", secondName: "Nested camera.mov" },
+      { kind: "overlap", durationSeconds: 5, firstName: "Wide camera.mov", secondName: "Later camera.mov" },
+    ]);
   });
 
   it("builds a bounded waveform path from the prepared source summary", () => {
