@@ -2770,8 +2770,12 @@ export const Preview: React.FC = () => {
         ) as OffscreenCanvasRenderingContext2D;
       }
 
-      const ctx =
-        offscreenCtxRef.current as unknown as CanvasRenderingContext2D;
+      // A ResizeObserver can replace the shared offscreen refs while this
+      // render awaits decoding or effects. Keep this render's canvas and
+      // context paired so a later resize cannot make us copy a blank canvas.
+      const renderCanvas = offscreenCanvasRef.current;
+      const renderContext = renderCanvas?.getContext("2d");
+      const ctx = renderContext as unknown as CanvasRenderingContext2D | null;
       if (!ctx) return false;
 
       const videoTracks = timelineTracks.filter(
@@ -3281,9 +3285,9 @@ export const Preview: React.FC = () => {
         }
       }
 
-      if (ctx && offscreenCanvasRef.current) {
+      if (ctx && renderCanvas) {
         const adjusted = await applyPreviewAdjustmentLayers(
-          offscreenCanvasRef.current,
+          renderCanvas,
           ctx,
           project.adjustmentLayers ?? [],
           time,
@@ -3291,14 +3295,12 @@ export const Preview: React.FC = () => {
         hasRenderedFrame = hasRenderedFrame || adjusted;
       }
 
-      if (hasRenderedFrame && offscreenCanvasRef.current) {
+      if (hasRenderedFrame && renderCanvas) {
         mainCtx.clearRect(0, 0, canvas.width, canvas.height);
-        mainCtx.drawImage(offscreenCanvasRef.current, 0, 0);
+        mainCtx.drawImage(renderCanvas, 0, 0);
         try {
           lastGoodFrameRef.current?.close();
-          lastGoodFrameRef.current = await createImageBitmap(
-            offscreenCanvasRef.current,
-          );
+          lastGoodFrameRef.current = await createImageBitmap(renderCanvas);
         } catch {}
         return true;
       }

@@ -23,3 +23,9 @@ The owner alpha.4 snapshot used for diagnosis contained 77 passing, 74 fitting-o
 ## Verification boundaries
 
 Regression tests cover retry recovery, keyboard seeks, pending/rejected/canceled review playback, fixed monotonic work accounting, native persistence before 100 percent, cancellation, reference changes, and scoped review labels. Isolated actual-component fixtures cover both required viewport sizes. Final candidate receipts record the exact source and separate media-helper, mounted-editor and packaged-native evidence. Owner full-episode, real 8 GB, provider, signed/notarized/downloaded-installation and human acceptance remain separate gates.
+
+## Native paused-seek regression
+
+The first alpha.5 package exposed a paused backward-seek defect that the browser bridge simulation did not reproduce. Native video and ImageBitmap diagnostics both contained the correct nonblack frame at 1.995 seconds, but the displayed preview remained black through 2.5 seconds. The initial screenshot-hash check was insufficient because black was stable; the corrected native harness checks saved PNG content and actual target-frame imagery.
+
+The compositor captured an offscreen context before awaiting decoding, but read a mutable offscreen-canvas ref again for final presentation. A ResizeObserver could replace that canvas during the await. The alpha.6 repair pins the canvas/context pair for adjustments, final paint, and last-good-frame capture. The initial alpha.5 artifacts are retained as diagnostic evidence. Final packaged regression results are recorded separately from source-level checks.
