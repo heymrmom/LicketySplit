@@ -77,7 +77,7 @@ export function applyPodcastUpdate(project: SyncProject, update: PodcastUpdateRe
       }
     } else if (update.splitSourceSeconds !== undefined) {
       const asset = project.analysis.assets.find((item) => item.id === placement.assetId)!;
-      const streams = asset.streams?.filter((stream) => stream.kind === "video" || stream.kind === "audio") ?? [];
+      const streams = asset.streams?.filter((stream) => (stream.kind === "video" && !stream.auxiliaryVideo) || stream.kind === "audio") ?? [];
       const starts = streams.map((stream) => stream.startSeconds ?? asset.containerStartSeconds ?? 0);
       const ends = streams.map((stream, index) => starts[index] + (stream.durationSeconds ?? asset.durationSeconds));
       const lo = starts.length ? Math.min(...starts) : asset.containerStartSeconds ?? 0;

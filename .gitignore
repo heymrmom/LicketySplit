@@ -113,3 +113,6 @@ apps/desktop/release-takeover-alpha2/
 
 # Separate local EOF recovery and recording-import candidate.
 apps/desktop/release-improvements-alpha3/
+
+# Guided review local candidate
+apps/desktop/release-guided-alpha4/

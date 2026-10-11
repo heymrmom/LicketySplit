@@ -37,6 +37,130 @@ function makeHarness() {
 }
 
 describe("native podcast setup revision and live analysis", () => {
+  it("repairs only a proven attached-picture timing warning without changing saved timing", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-attached-picture-migration-"));
+    try {
+      const harness = makeHarness(), service = harness.serviceWith(directory, {} as NativeAudioAnalysis);
+      const originalPath = path.join(directory, "original.wav"); await writeFile(originalPath, "0123456789");
+      harness.registry.resolve.mockResolvedValue({ path: originalPath, mime: "audio/wav" });
+      const setup = await service.inspect({ projectId, mediaIds: ["media-a"] });
+      const asset = setup.analysis.assets[0]!;
+      asset.kind = "video"; asset.sourceDigest = "a".repeat(64);
+      asset.streams = [
+        { index: 0, kind: "video", codec: "mjpeg", startSeconds: 0, timestampStatus: "discontinuous" },
+        { index: 5, kind: "video", codec: "hevc", startSeconds: 0, durationSeconds: 30, timestampStatus: "continuous" },
+      ];
+      setup.groups[0]!.kind = "video"; setup.groups[0]!.role = "camera";
+      const warning = `${asset.name}: Video stream 0 presentation origin is discontinuous; relative waveform timing remains provisional.`;
+      setup.warnings = [warning, "Keep this unrelated warning"];
+      setup.analysis.warnings = [warning, "Keep this analysis warning"];
+      setup.placements = [{ assetId: asset.id, mapping: { version: 1, scale: 1, offsetSeconds: 2 }, status: "measured", component: asset.id, locked: true, provenance: ["saved mapping"], unsupported: ["Video stream 0 presentation origin is discontinuous; relative waveform timing remains provisional.", "Keep this blocker"] }];
+      setup.state = "review";
+      const file = path.join(directory, "setups", `${setup.setupId}.json`);
+      await writeFile(file, JSON.stringify(setup));
+      harness.inspect.mockResolvedValueOnce({
+        metadata: { duration: 30, width: 1280, height: 720, frameRate: 30, codec: "hevc", sampleRate: 0, channels: 0, fileSize: 10, hasVideo: true, hasAudio: true },
+        streams: [
+          { index: 0, kind: "video", codec: "mjpeg", auxiliaryVideo: true, timestampStatus: "unsupported" },
+          { index: 5, kind: "video", codec: "hevc", startSeconds: 0, durationSeconds: 30, timestampStatus: "continuous" },
+        ],
+      } as never);
+
+      const repaired = await service.get(setup.setupId);
+
+      expect(harness.inspect).toHaveBeenCalledTimes(2);
+      expect(repaired.revision).toBe(setup.revision + 1);
+      expect(repaired.placements[0]).toMatchObject({ mapping: setup.placements[0]!.mapping, locked: true, provenance: expect.arrayContaining(["saved mapping"]), unsupported: ["Keep this blocker"] });
+      expect(repaired.placements[0]!.provenance.at(-1)).toContain("Metadata refresh verified stream 0");
+      expect(repaired.warnings).toEqual(["Keep this unrelated warning"]);
+      expect(repaired.analysis.warnings).toEqual(["Keep this analysis warning"]);
+      expect(repaired.analysis.assets[0]!.streams?.[0]).toMatchObject({ index: 0, auxiliaryVideo: true });
+      expect(repaired.analysis.assets[0]!.streams?.[1]).toMatchObject({ index: 5, codec: "hevc", timestampStatus: "continuous" });
+      const reread = await service.get(setup.setupId);
+      expect(reread.revision).toBe(repaired.revision);
+      expect(harness.inspect).toHaveBeenCalledTimes(2);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("keeps the old warning when saved source identity or attached-picture metadata is unverified", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-attached-picture-unverified-"));
+    try {
+      const harness = makeHarness(), service = harness.serviceWith(directory, {} as NativeAudioAnalysis);
+      const originalPath = path.join(directory, "original.wav"); await writeFile(originalPath, "0123456789");
+      harness.registry.resolve.mockResolvedValue({ path: originalPath, mime: "audio/wav" });
+      const setup = await service.inspect({ projectId, mediaIds: ["media-a"] });
+      const asset = setup.analysis.assets[0]!;
+      asset.kind = "video"; asset.sourceDigest = "a".repeat(64);
+      asset.streams = [{ index: 0, kind: "video", timestampStatus: "discontinuous" }];
+      setup.groups[0]!.kind = "video"; setup.groups[0]!.role = "camera";
+      const warning = `${asset.name}: Video stream 0 presentation origin is discontinuous; relative waveform timing remains provisional.`;
+      setup.warnings = [warning]; setup.state = "review";
+      const file = path.join(directory, "setups", `${setup.setupId}.json`);
+      await writeFile(file, JSON.stringify(setup));
+      harness.inspect.mockResolvedValueOnce({
+        metadata: { duration: 30, width: 0, height: 0, frameRate: 0, codec: "", sampleRate: 0, channels: 0, fileSize: 10, hasVideo: true, hasAudio: false },
+        streams: [{ index: 0, kind: "video", timestampStatus: "discontinuous" }],
+      } as never);
+
+      const restored = await service.get(setup.setupId);
+
+      expect(restored.warnings).toEqual([warning]);
+      expect(restored.analysis.assets[0]!.streams?.[0]).not.toHaveProperty("auxiliaryVideo");
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("does not migrate an auxiliary warning without a saved source digest", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-attached-picture-no-digest-"));
+    try {
+      const harness = makeHarness(), service = harness.serviceWith(directory, {} as NativeAudioAnalysis);
+      const originalPath = path.join(directory, "original.wav"); await writeFile(originalPath, "0123456789");
+      harness.registry.resolve.mockResolvedValue({ path: originalPath, mime: "audio/wav" });
+      const setup = await service.inspect({ projectId, mediaIds: ["media-a"] });
+      const asset = setup.analysis.assets[0]!;
+      asset.kind = "video"; asset.sourceDigest = undefined;
+      asset.streams = [{ index: 0, kind: "video", timestampStatus: "discontinuous" }];
+      setup.groups[0]!.kind = "video"; setup.groups[0]!.role = "camera";
+      const warning = `${asset.name}: Video stream 0 presentation origin is discontinuous; relative waveform timing remains provisional.`;
+      setup.warnings = [warning]; setup.state = "review";
+      await writeFile(path.join(directory, "setups", `${setup.setupId}.json`), JSON.stringify(setup));
+      harness.inspect.mockResolvedValueOnce({
+        metadata: { duration: 30, width: 0, height: 0, frameRate: 0, codec: "", sampleRate: 0, channels: 0, fileSize: 10, hasVideo: true, hasAudio: false },
+        streams: [{ index: 0, kind: "video", auxiliaryVideo: true }],
+      } as never);
+
+      const restored = await service.get(setup.setupId);
+
+      expect(restored.warnings).toEqual([warning]);
+      expect(harness.inspect).toHaveBeenCalledTimes(1);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it("keeps a camera blocker when exact metadata shows only auxiliary video", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-attached-picture-only-video-"));
+    try {
+      const harness = makeHarness(), service = harness.serviceWith(directory, {} as NativeAudioAnalysis);
+      const originalPath = path.join(directory, "original.wav"); await writeFile(originalPath, "0123456789");
+      harness.registry.resolve.mockResolvedValue({ path: originalPath, mime: "audio/wav" });
+      const setup = await service.inspect({ projectId, mediaIds: ["media-a"] });
+      const asset = setup.analysis.assets[0]!;
+      asset.kind = "video"; asset.sourceDigest = "a".repeat(64);
+      asset.streams = [{ index: 0, kind: "video", codec: "mjpeg", timestampStatus: "discontinuous" }];
+      setup.groups[0]!.kind = "video"; setup.groups[0]!.role = "camera";
+      const warning = `${asset.name}: Video stream 0 presentation origin is discontinuous; relative waveform timing remains provisional.`;
+      setup.warnings = [warning]; setup.state = "review";
+      await writeFile(path.join(directory, "setups", `${setup.setupId}.json`), JSON.stringify(setup));
+      harness.inspect.mockResolvedValueOnce({
+        metadata: { duration: 30, width: 0, height: 0, frameRate: 0, codec: "mjpeg", sampleRate: 0, channels: 0, fileSize: 10, hasVideo: false, hasAudio: false },
+        streams: [{ index: 0, kind: "video", auxiliaryVideo: true, timestampStatus: "unsupported" }],
+      } as never);
+
+      const restored = await service.get(setup.setupId);
+
+      expect(restored.warnings).toEqual([warning]);
+      expect(restored.analysis.assets[0]!.streams?.[0]).not.toHaveProperty("auxiliaryVideo");
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   it("preserves a decode blocker when an unrelated recording relationship changes", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-revision-decode-blocker-"));
     try {

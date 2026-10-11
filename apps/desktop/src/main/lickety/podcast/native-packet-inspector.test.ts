@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { NativeAudioAnalysis } from "../audio-analysis";
 import { heavyQueue } from "../media-jobs";
 import { resolveMediaInspectorPath } from "../../sidecar/media-inspector-path";
-import { inspectPodcastMedia, packetOriginToleranceSeconds, VideoPacketScan } from "./native-packet-inspector";
+import { inspectPodcastMedia, isAuxiliaryVideoDisposition, packetOriginToleranceSeconds, VideoPacketScan } from "./native-packet-inspector";
 
 vi.mock("electron", () => ({ app: { isPackaged: false } }));
 
@@ -28,6 +28,34 @@ function capture(args: string[], signal: AbortSignal): Promise<ArrayBuffer> {
 }
 
 describe("native packet timing", () => {
+  it("classifies only disposition-marked attached pictures or thumbnails as auxiliary video streams", () => {
+    expect(isAuxiliaryVideoDisposition({ attached_pic: 1 })).toBe(true);
+    expect(isAuxiliaryVideoDisposition({ timed_thumbnails: "1" })).toBe(true);
+    expect(isAuxiliaryVideoDisposition({ attached_pic: 0, timed_thumbnails: 0 })).toBe(false);
+    expect(isAuxiliaryVideoDisposition(undefined)).toBe(false);
+  });
+
+  it("keeps an attached MJPEG stream auxiliary while selecting genuine timed video metadata", async () => {
+    if (!existsSync(ffmpeg) || !existsSync(resolveMediaInspectorPath())) return;
+    const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-attached-picture-inspection-"));
+    const source = path.join(directory, "attached-picture.mp4");
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=1:size=64x64:rate=10", "-f", "lavfi", "-i", "color=c=red:size=32x32:duration=0.1", "-map", "0:v:0", "-map", "1:v:0", "-c:v:0", "mpeg4", "-c:v:1", "mjpeg", "-disposition:v:1", "attached_pic", "-y", source], { stdio: ["ignore", "ignore", "pipe"] });
+        let stderr = "";
+        child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+        child.once("error", reject);
+        child.once("close", (code) => code === 0 ? resolve() : reject(new Error(stderr || `ffmpeg exited with ${code}`)));
+      });
+      const inspection = await inspectPodcastMedia(source, new AbortController().signal, { packetScan: false });
+      expect(inspection.streams.map(({ index, kind, codec, auxiliaryVideo }) => ({ index, kind, codec, auxiliaryVideo }))).toEqual([
+        { index: 0, kind: "video", codec: "mpeg4", auxiliaryVideo: undefined },
+        { index: 1, kind: "video", codec: "mjpeg", auxiliaryVideo: true },
+      ]);
+      expect(inspection.metadata).toMatchObject({ hasVideo: true, width: 64, height: 64, codec: "mpeg4", frameRate: 10 });
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   it("decodes only bounded windows from a ten-minute source at a late seek", async () => {
     if (!existsSync(ffmpeg)) return;
     const directory = await mkdtemp(path.join(os.tmpdir(), "podcast-bounded-decode-"));
@@ -90,6 +118,7 @@ describe("native packet timing", () => {
     const stream = inspection.streams.find((item) => item.kind === "audio");
     expect(inspection.containerStartSeconds).toBe(0);
     expect(video).toMatchObject({ startSeconds: 0, timestampStatus: "continuous" });
+    expect(video).not.toHaveProperty("auxiliaryVideo");
     expect(stream).toMatchObject({ startSeconds: 1.5, timestampStatus: "continuous" });
 
     const audio = new NativeAudioAnalysis({ resolve: async () => ({ path: mixedFixture, mime: "video/x-matroska" }) } as never, heavyQueue, capture);

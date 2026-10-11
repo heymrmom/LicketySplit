@@ -126,7 +126,7 @@ function setupClockGroups(analysis: PodcastAnalysis, groups: PodcastGroup[]): Ar
     if (kind === "continuous" && (members.length !== 1 || sources.some((asset) => asset.kind !== "video"))) throw new Error("Continuous recording must be one ordered camera group.");
     const sourceStarts: Record<string, number> = {}; let start = 0;
     for (const asset of sources) {
-      sourceStarts[asset.id] = kind === "simultaneous" ? 0 : start - (asset.streams?.find((stream) => stream.kind === "video")?.startSeconds ?? 0);
+      sourceStarts[asset.id] = kind === "simultaneous" ? 0 : start - (asset.streams?.find((stream) => stream.kind === "video" && !stream.auxiliaryVideo)?.startSeconds ?? 0);
       const duration = asset.nativeVideoDurationSeconds ?? asset.durationSeconds;
       if (!Number.isFinite(duration) || duration <= 0) throw new Error("A linked recording needs a known positive duration.");
       start += duration; linked.add(asset.id);

@@ -38,6 +38,19 @@ const now = () => new Date().toISOString();
 const clone = <T>(value: T): T => structuredClone(value);
 const waitTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
 function validateSetupId(setupId: string) { if (!UUID.test(setupId)) throw new Error("Invalid podcast setup ID."); }
+function legacyVideoTimingWarning(stream: PodcastStreamFacts) {
+  return `Video stream ${stream.index} presentation origin is ${stream.timestampStatus ?? "unknown"}; relative waveform timing remains provisional.`;
+}
+function knownAuxiliaryInspectorWarning(name: string, streamIndex: number, warning: string) {
+  return warning === `${name}: Stream ${streamIndex}: Packet cadence or duration differs from the declared constant rate.`
+    || warning === `${name}: Stream ${streamIndex} has no usable native rate for packet verification.`;
+}
+function hasAuxiliaryWarning(setup: PodcastSetup, asset: PodcastAsset, stream: PodcastStreamFacts) {
+  const placement = setup.placements.find((candidate) => candidate.assetId === asset.id);
+  const presentationWarning = legacyVideoTimingWarning(stream);
+  return placement?.unsupported?.includes(presentationWarning)
+    || [setup.warnings, setup.analysis.warnings].some((warnings) => warnings.some((warning) => warning === `${asset.name}: ${presentationWarning}` || knownAuxiliaryInspectorWarning(asset.name, stream.index, warning)));
+}
 export class PodcastNativeService {
   private readonly setupDir: string;
   private readonly analysisDir: string;
@@ -85,10 +98,72 @@ export class PodcastNativeService {
     }
   }
 
+  private async refreshAuxiliaryVideoFacts(setup: PodcastSetup): Promise<boolean> {
+    if (setup.analysisProposal) return false;
+    let changed = false;
+    const sameNameCount = (name: string) => setup.analysis.assets.filter((candidate) => candidate.name === name).length;
+    for (const asset of setup.analysis.assets) {
+      for (const savedStream of asset.streams ?? []) {
+        if (savedStream.kind !== "video" || savedStream.auxiliaryVideo || !hasAuxiliaryWarning(setup, asset, savedStream)) continue;
+        if (!asset.sourceDigest || !Number.isSafeInteger(asset.sizeBytes) || asset.sizeBytes! <= 0) continue;
+        try {
+          const uri = await this.registry.originalUri(asset.mediaId);
+          if (!uri) continue;
+          const reference = new URL(uri);
+          if (reference.protocol !== "licketysplit-media:" || reference.hostname !== asset.sourceId || reference.pathname !== "/original") continue;
+          const registered = await this.registry.findMedia(asset.mediaId);
+          if (!registered || registered.identity.assetId !== asset.sourceId || registered.identity.sha256 !== asset.sourceDigest || registered.identity.byteLength !== asset.sizeBytes) continue;
+          const original = await this.registry.resolve(asset.sourceId, "original");
+          const file = await stat(original.path);
+          if (!file.isFile() || file.size !== registered.identity.byteLength) continue;
+          const inspection = await this.inspectMedia(original.path);
+          if (inspection.metadata.fileSize !== registered.identity.byteLength) continue;
+          const assignedAsCamera = setup.groups.some((group) => group.role === "camera" && group.assetIds.includes(asset.id));
+          if (assignedAsCamera && !inspection.streams.some((stream) => stream.kind === "video" && !stream.auxiliaryVideo)) continue;
+          const observed = inspection.streams.find((stream) => stream.index === savedStream.index && stream.kind === "video" && stream.auxiliaryVideo);
+          if (!observed) continue;
+          const currentUri = await this.registry.originalUri(asset.mediaId);
+          const current = await this.registry.findMedia(asset.mediaId);
+          const currentOriginal = await this.registry.resolve(asset.sourceId, "original");
+          const currentFile = await stat(currentOriginal.path);
+          if (currentUri !== uri || currentOriginal.path !== original.path || !currentFile.isFile() || currentFile.size !== registered.identity.byteLength
+            || !current || current.identity.assetId !== registered.identity.assetId || current.identity.sha256 !== registered.identity.sha256 || current.identity.byteLength !== registered.identity.byteLength) continue;
+
+          savedStream.auxiliaryVideo = true;
+          const placement = setup.placements.find((candidate) => candidate.assetId === asset.id);
+          const presentationWarning = legacyVideoTimingWarning(savedStream);
+          if (placement?.unsupported?.includes(presentationWarning)) {
+            placement.unsupported = placement.unsupported.filter((reason) => reason !== presentationWarning);
+            placement.provenance.push(`Metadata refresh verified stream ${savedStream.index} as disposition-marked auxiliary video; removed its stale presentation warning.`);
+          }
+          if (sameNameCount(asset.name) === 1) {
+            const warningMatches = (warning: string) => warning === `${asset.name}: ${presentationWarning}` || knownAuxiliaryInspectorWarning(asset.name, savedStream.index, warning);
+            setup.warnings = setup.warnings.filter((warning) => !warningMatches(warning));
+            setup.analysis.warnings = setup.analysis.warnings.filter((warning) => !warningMatches(warning));
+          }
+          changed = true;
+        } catch {
+          // Metadata refresh is best-effort; an unverified source keeps its existing warning.
+        }
+      }
+    }
+    if (!changed) return false;
+    setup.revision++;
+    setup.updatedAt = now();
+    setup.approval = undefined;
+    if (setup.state === "approved") setup.state = "review";
+    return true;
+  }
+
+  private hasAuxiliaryVideoWarning(setup: PodcastSetup) {
+    return setup.analysis.assets.some((asset) => asset.streams?.some((stream) => stream.kind === "video" && !stream.auxiliaryVideo && hasAuxiliaryWarning(setup, asset, stream)));
+  }
+
   async get(setupId: string): Promise<PodcastSetup> {
     const initial = await this.readSetup(setupId);
     if (this.activeMutations.has(setupId) || this.activeSetups.has(setupId)) return initial;
-    let needsRepair = initial.state === "analyzing";
+    const needsAuxiliaryRefresh = this.hasAuxiliaryVideoWarning(initial);
+    let needsRepair = initial.state === "analyzing" || needsAuxiliaryRefresh;
     if (initial.state === "approved") {
       try { assertNativeSyncApproval(asSyncProject(initial)); await this.assertCurrentIncludedSources(initial); }
       catch { needsRepair = true; }
@@ -97,6 +172,9 @@ export class PodcastNativeService {
     try {
       return await this.withSetupMutation(setupId, async () => {
         const latest = await this.readSetup(setupId);
+        if (latest.revision !== initial.revision) return latest;
+        const auxiliaryFactsRefreshed = await this.refreshAuxiliaryVideoFacts(latest);
+        if (auxiliaryFactsRefreshed) await this.save(latest);
         if (latest.state === "approved") {
           try { assertNativeSyncApproval(asSyncProject(latest)); await this.assertCurrentIncludedSources(latest); }
           catch {
@@ -203,7 +281,7 @@ export class PodcastNativeService {
         ...(sourceMetadata?.bwfTimeReferenceSamples ? { bwfTimeReferenceSamples: sourceMetadata.bwfTimeReferenceSamples } : {}),
         ...(sourceMetadata?.reel ? { reel: sourceMetadata.reel } : {}),
       };
-      const nativeVideo = streams.find((stream) => stream.kind === "video");
+      const nativeVideo = streams.find((stream) => stream.kind === "video" && !stream.auxiliaryVideo);
       if (nativeVideo) {
         asset.nativeRate = nativeVideo.rate ?? nativeVideo.declaredRate;
         if (asset.timecode && asset.nativeRate) asset.sourceTimecodeRate = asset.nativeRate;
@@ -306,7 +384,7 @@ export class PodcastNativeService {
         if (!Number.isFinite(inspected.metadata.duration) || inspected.metadata.duration <= 0) throw new Error("The alternate copy has no verified duration.");
         if ((inspected.metadata.hasVideo ? "video" : "audio") !== asset.kind) throw new Error("The alternate copy has a different recording kind and cannot preserve this assignment.");
         for (const group of setup.groups.filter((candidate) => candidate.assetIds.includes(asset.id))) {
-          if (group.role === "camera" && !packetFacts.streams.some((candidate) => candidate.kind === "video")) throw new Error("The alternate copy lacks the video stream required by its camera assignment.");
+          if (group.role === "camera" && !packetFacts.streams.some((candidate) => candidate.kind === "video" && !candidate.auxiliaryVideo)) throw new Error("The alternate copy lacks the video stream required by its camera assignment.");
           for (const binding of group.audioBindings ?? []) {
             if (binding.assetId !== asset.id) continue;
             const bound = packetFacts.streams.find((candidate) => candidate.index === binding.streamIndex && candidate.kind === "audio");
@@ -324,12 +402,12 @@ export class PodcastNativeService {
           frames: undefined,
           width: inspected.metadata.width > 0 ? inspected.metadata.width : undefined,
           height: inspected.metadata.height > 0 ? inspected.metadata.height : undefined,
-          nativeRate: packetFacts.streams.find((candidate) => candidate.kind === "video")?.rate ?? packetFacts.streams.find((candidate) => candidate.kind === "video")?.declaredRate,
-          nativeVideoFrames: packetFacts.streams.find((candidate) => candidate.kind === "video")?.frameCount,
-          nativeVideoDurationSeconds: packetFacts.streams.find((candidate) => candidate.kind === "video")?.durationSeconds,
+          nativeRate: packetFacts.streams.find((candidate) => candidate.kind === "video" && !candidate.auxiliaryVideo)?.rate ?? packetFacts.streams.find((candidate) => candidate.kind === "video" && !candidate.auxiliaryVideo)?.declaredRate,
+          nativeVideoFrames: packetFacts.streams.find((candidate) => candidate.kind === "video" && !candidate.auxiliaryVideo)?.frameCount,
+          nativeVideoDurationSeconds: packetFacts.streams.find((candidate) => candidate.kind === "video" && !candidate.auxiliaryVideo)?.durationSeconds,
           timecode: inspected.sourceMetadata?.timecode,
           sourceTimecodeRate: inspected.sourceMetadata?.timecode
-            ? (packetFacts.streams.find((candidate) => candidate.kind === "video")?.rate ?? packetFacts.streams.find((candidate) => candidate.kind === "video")?.declaredRate)
+            ? (packetFacts.streams.find((candidate) => candidate.kind === "video" && !candidate.auxiliaryVideo)?.rate ?? packetFacts.streams.find((candidate) => candidate.kind === "video" && !candidate.auxiliaryVideo)?.declaredRate)
             : undefined,
           timecodeOrigin: inspected.sourceMetadata?.timecode ? "embedded" : undefined,
           creationTime: inspected.sourceMetadata?.creationTime,
@@ -365,7 +443,7 @@ export class PodcastNativeService {
         const packetFacts = await this.inspectPackets(original.path, signal);
         asset.streams = packetFacts.streams;
         if (packetFacts.containerStartSeconds !== undefined) asset.containerStartSeconds = packetFacts.containerStartSeconds;
-        const video = packetFacts.streams.find((stream) => stream.kind === "video");
+        const video = packetFacts.streams.find((stream) => stream.kind === "video" && !stream.auxiliaryVideo);
         if (video) {
           asset.nativeRate = video.rate ?? video.declaredRate ?? asset.nativeRate;
           asset.nativeVideoFrames = video.frameCount ?? asset.nativeVideoFrames;

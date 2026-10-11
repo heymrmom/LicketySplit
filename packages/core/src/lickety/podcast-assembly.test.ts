@@ -65,6 +65,17 @@ function setup(): PodcastSetup {
 }
 
 describe("buildPodcastAssembly", () => {
+  it("uses timed footage bounds when an attached picture precedes the camera stream", () => {
+    const source = makeWorkflowFixture({ durationSec: 20 });
+    const project = { ...source, mediaLibrary: { items: [...source.mediaLibrary.items, ...media.map((item) => ({ ...source.mediaLibrary.items[0]!, id: `media-${item.id}`, name: item.name, type: item.kind, metadata: { ...source.mediaLibrary.items[0]!.metadata, duration: item.durationSeconds, hasVideo: item.kind === "video", hasAudio: true, audioTrackCount: 2 } }))] } };
+    const saved = structuredClone(setup());
+    const camera = saved.analysis.assets.find((asset) => asset.id === "a1")!;
+    camera.streams = [{ index: 5, kind: "video", auxiliaryVideo: true, startSeconds: 0, durationSeconds: 0.04 }, { index: 0, kind: "video", startSeconds: 0, durationSeconds: 1800 }, { index: 1, kind: "audio", channels: 2 }];
+    const result = buildPodcastAssembly(project, saved, { pictureGapPolicy: "keep-picture-gaps" });
+    const segment = result.project.multicamGroups![0].angles[0].sourceSegments!.find((part) => part.mediaId === "media-a1")!;
+    expect(segment.sourceEndSeconds).toBe(1800);
+  });
+
   it("blocks unresolved decode failures and never materializes an explicitly excluded source", () => {
     const source = makeWorkflowFixture({ durationSec: 20 });
     const project = { ...source, mediaLibrary: { items: [...source.mediaLibrary.items, ...media.map((item) => ({ ...source.mediaLibrary.items[0]!, id: `media-${item.id}`, name: item.name, type: item.kind, metadata: { ...source.mediaLibrary.items[0]!.metadata, duration: item.durationSeconds, hasVideo: item.kind === "video", hasAudio: true, audioTrackCount: 2 } }))] } };

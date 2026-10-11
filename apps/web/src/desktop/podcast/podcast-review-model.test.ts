@@ -4,7 +4,7 @@
 // legacy sync-timeline.test.ts 3–13 / 20–23 / 26–29 split-region spans.
 import { describe, expect, it } from "vitest";
 import type { PodcastAsset, PodcastPlacement, PodcastSetup, PodcastSyncChannel } from "@licketysplit/core/lickety/podcast-types";
-import { clipReview, formatReviewTime, parseReviewTime, podcastReviewState, podcastTimelineModel, podcastTimingRelations, reviewComparison, timelinePercent, timelineSeconds, timelineWaveformPath, PACKET_TIMING_WARNING } from "./podcast-review-model";
+import { clipReview, formatReviewTime, parseReviewTime, podcastReviewState, podcastTimelineModel, podcastTimingRelations, podcastUnknownCoverage, reviewComparison, timelinePercent, timelineSeconds, timelineWaveformPath, PACKET_TIMING_WARNING } from "./podcast-review-model";
 
 function asset(id: string, name: string, kind: "video" | "audio", durationSeconds = 10): PodcastAsset {
   return {
@@ -45,6 +45,24 @@ function setup(state: PodcastSetup["state"] = "review"): PodcastSetup {
 }
 
 describe("podcast review state adapted from legacy review helpers", () => {
+  it("keeps unresolved recording spans classified as unknown coverage", () => {
+    const value = setup();
+    value.placements = [placement("a", "reference", 0), placement("b", "unresolved", 15)];
+    const unknown = podcastUnknownCoverage(podcastTimelineModel(value));
+    expect(unknown).toHaveLength(1);
+    expect(unknown[0]).toMatchObject({ startSeconds: 15, endSeconds: 25, assetIds: ["b"] });
+  });
+  it("ignores auxiliary thumbnail streams when choosing video picture bounds", () => {
+    const value = setup();
+    value.analysis.assets[0].streams = [
+      { index: 0, kind: "video", startSeconds: 0, durationSeconds: 2, auxiliaryVideo: true },
+      { index: 1, kind: "video", startSeconds: 2, durationSeconds: 8 },
+    ];
+    value.placements = [placement("a", "reference", 0)];
+    const video = podcastTimelineModel(value).lanes.find((lane) => lane.kind === "video")?.clips[0];
+    expect(video?.sourceStartSeconds).toBe(2);
+    expect(video?.sourceEndSeconds).toBe(10);
+  });
   it.each(["draft", "canceled", "error", "analyzing"] as const)("keeps approval unavailable for %s without placements", (state) => {
     const value = setup(state);
     value.placements = [];
@@ -136,7 +154,7 @@ describe("podcast timeline adapted from legacy timeline helpers", () => {
     expect(timelineSeconds(model, timelinePercent(model, 26))).toBeCloseTo(26, 8);
   });
 
-  it("summarizes measured adjacent gaps and overlaps while excluding unresolved timing", () => {
+  it("keeps unresolved spans out of confirmed gap and overlap measurements", () => {
     const value = setup();
     value.analysis.assets = [asset("v1", "First camera.mov", "video", 10), asset("v2", "Second camera.mov", "video", 8), asset("v3", "Third camera.mov", "video", 10), asset("v4", "Excluded.mov", "video", 5), asset("v5", "Unresolved.mov", "video", 5)];
     value.groups = [{ id: "camera", name: "Camera", kind: "video", role: "camera", confidence: "high", assetIds: ["v1", "v2", "v3", "v4", "v5"], warnings: [] }];
@@ -146,8 +164,30 @@ describe("podcast timeline adapted from legacy timeline helpers", () => {
     const relations = podcastTimingRelations(podcastTimelineModel(value));
     expect(relations.map(({ kind, durationSeconds, firstName, secondName }) => ({ kind, durationSeconds, firstName, secondName }))).toEqual([
       { kind: "gap", durationSeconds: 3, firstName: "First camera.mov", secondName: "Second camera.mov" },
-      { kind: "overlap", durationSeconds: 2, firstName: "Second camera.mov", secondName: "Third camera.mov" },
     ]);
+  });
+
+  it("does not let unknown camera coverage hide a confirmed audio gap", () => {
+    const value = setup();
+    value.analysis.assets = [
+      asset("v1", "Camera.mov", "video", 20),
+      asset("v2", "Unresolved.mov", "video", 5),
+      asset("a1", "Mic one.wav", "audio", 10),
+      asset("a2", "Mic two.wav", "audio", 10),
+    ];
+    value.groups = [
+      { id: "camera", name: "Camera", kind: "video", role: "camera", confidence: "high", assetIds: ["v1", "v2"], warnings: [] },
+      { id: "audio", name: "Recorder", kind: "audio", role: "dialogue", confidence: "high", assetIds: ["a1", "a2"], warnings: [] },
+    ];
+    value.channels = [channel("a1"), channel("a2")];
+    value.placements = [
+      placement("v1", "reference", 0),
+      placement("v2", "unresolved", 5),
+      placement("a1", "manual", 0),
+      placement("a2", "manual", 15),
+    ];
+    const relations = podcastTimingRelations(podcastTimelineModel(value));
+    expect(relations).toContainEqual(expect.objectContaining({ kind: "gap", laneLabel: "Recorder · camera sound", durationSeconds: 5 }));
   });
 
   it("keeps the furthest coverage leader for nested clips instead of inventing a gap", () => {

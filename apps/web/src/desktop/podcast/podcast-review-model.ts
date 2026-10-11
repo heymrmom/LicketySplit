@@ -156,8 +156,10 @@ function audioSpans(channel: PodcastSyncChannel) {
 
 function sourceBounds(asset: PodcastAsset, channel?: PodcastSyncChannel): Array<{ start: number; end: number }> {
   if (channel) return audioSpans(channel).map((span) => ({ start: span.lo, end: span.hi }));
-  const start = asset.kind === "video" ? asset.streams?.find((stream) => stream.kind === "video")?.startSeconds || 0 : 0;
-  return [{ start, end: start + (asset.nativeVideoDurationSeconds || asset.durationSeconds) }];
+  const video = asset.kind === "video" ? asset.streams?.find((stream) => stream.kind === "video" && !stream.auxiliaryVideo) : undefined;
+  const start = video?.startSeconds || 0;
+  const duration = video?.durationSeconds || asset.nativeVideoDurationSeconds || asset.durationSeconds;
+  return [{ start, end: start + duration }];
 }
 
 function mappingRegions(placement: PodcastPlacement, lo: number, hi: number) {
@@ -255,6 +257,7 @@ export interface PodcastTimingRelation {
 export function podcastTimingRelations(model: PodcastTimelineModel): PodcastTimingRelation[] {
   const relations: PodcastTimingRelation[] = [];
   for (const lane of model.lanes) {
+    const laneUnknown = lane.clips.filter((clip) => clip.status === "unresolved" || clip.attention);
     const verified = lane.clips
       .filter((clip) => ["reference", "measured", "manual"].includes(clip.status) && !clip.attention)
       .sort((a, b) => a.startSeconds - b.startSeconds || a.endSeconds - b.endSeconds);
@@ -263,6 +266,12 @@ export function podcastTimingRelations(model: PodcastTimelineModel): PodcastTimi
     for (let index = 1; index < verified.length; index += 1) {
       const current = verified[index];
       const delta = current.startSeconds - previous.endSeconds;
+      const startSeconds = delta > 0 ? previous.endSeconds : current.startSeconds;
+      const endSeconds = delta > 0 ? current.startSeconds : Math.min(previous.endSeconds, current.endSeconds);
+      if (laneUnknown.some((clip) => startSeconds < clip.endSeconds && endSeconds > clip.startSeconds)) {
+        if (current.endSeconds > previous.endSeconds) previous = current;
+        continue;
+      }
       if (delta > 0.001) {
         relations.push({ kind: "gap", laneLabel: lane.label, firstName: previous.name, secondName: current.name, startSeconds: previous.endSeconds, endSeconds: current.startSeconds, durationSeconds: delta });
       } else if (delta < -0.001) {
@@ -273,6 +282,23 @@ export function podcastTimingRelations(model: PodcastTimelineModel): PodcastTimi
     }
   }
   return relations;
+}
+
+export function podcastUnknownCoverage(model: PodcastTimelineModel): Array<{ startSeconds: number; endSeconds: number; assetIds: string[] }> {
+  const spans = model.lanes.flatMap((lane) => lane.clips
+    .filter((clip) => clip.status === "unresolved" || clip.attention)
+    .map((clip) => ({ startSeconds: clip.startSeconds, endSeconds: clip.endSeconds, assetIds: [clip.assetId] })))
+    .filter((span) => span.endSeconds > span.startSeconds)
+    .sort((a, b) => a.startSeconds - b.startSeconds || a.endSeconds - b.endSeconds);
+  const merged: Array<{ startSeconds: number; endSeconds: number; assetIds: string[] }> = [];
+  for (const span of spans) {
+    const previous = merged.at(-1);
+    if (previous && span.startSeconds <= previous.endSeconds) {
+      previous.endSeconds = Math.max(previous.endSeconds, span.endSeconds);
+      previous.assetIds = [...new Set([...previous.assetIds, ...span.assetIds])];
+    } else merged.push({ ...span });
+  }
+  return merged;
 }
 
 export function timelinePercent(model: PodcastTimelineModel, seconds: number): number {

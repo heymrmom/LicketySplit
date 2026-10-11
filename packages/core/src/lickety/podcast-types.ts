@@ -14,6 +14,8 @@ export interface PodcastStreamFacts {
   index: number;
   kind: "video" | "audio" | "data";
   codec?: string;
+  /** FFprobe disposition marks this video stream as attached art or timed thumbnails, not timed footage. */
+  auxiliaryVideo?: boolean;
   timeBase?: RationalRate;
   startSeconds?: number;
   durationSeconds?: number;

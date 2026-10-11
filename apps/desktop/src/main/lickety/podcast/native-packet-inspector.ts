@@ -91,6 +91,11 @@ export function packetOriginToleranceSeconds(timeBase?: RationalRate, sampleRate
 }
 function parseFinite(value: unknown) { const number = typeof value === "string" || typeof value === "number" ? Number(value) : Number.NaN; return Number.isFinite(number) ? number : undefined; }
 function parsePositive(value: unknown) { const number = parseFinite(value); return number !== undefined && number > 0 ? number : undefined; }
+export function isAuxiliaryVideoDisposition(disposition: unknown) {
+  if (!disposition || typeof disposition !== "object") return false;
+  const value = disposition as Record<string, unknown>;
+  return [value.attached_pic, value.timed_thumbnails].some((flag) => flag === 1 || flag === "1");
+}
 
 function runJson(binary: string, args: string[], signal: AbortSignal) {
   signal.throwIfAborted();
@@ -123,6 +128,7 @@ async function inspectUnlocked(sourcePath: string, signal: AbortSignal, packetSc
     const index = Number(raw.index), codecType = raw.codec_type;
     if (!Number.isInteger(index) || index < 0 || (codecType !== "audio" && codecType !== "video")) continue;
     const kind = codecType;
+    const auxiliaryVideo = kind === "video" && isAuxiliaryVideoDisposition(raw.disposition);
     const rate = parseRatio(raw.avg_frame_rate) ?? parseRatio(raw.r_frame_rate);
     const sampleRate = parsePositive(raw.sample_rate);
     const channels = Number.isInteger(Number(raw.channels)) ? Number(raw.channels) : undefined;
@@ -135,10 +141,11 @@ async function inspectUnlocked(sourcePath: string, signal: AbortSignal, packetSc
       ...(rate ? { rate, declaredRate: rate } : {}), ...(sampleRate ? { sampleRate } : {}), ...(channels !== undefined ? { channels } : {}),
       ...(typeof raw.channel_layout === "string" ? { channelLayout: raw.channel_layout } : {}),
       ...(Number.isSafeInteger(Number(raw.nb_frames)) ? { frameCount: Number(raw.nb_frames) } : {}),
-      ...(Number.isInteger(Number(raw.initial_padding)) ? { initialPadding: Number(raw.initial_padding) } : {}), timestampStatus: packetScan ? "unknown" : "not-scanned",
+      ...(Number.isInteger(Number(raw.initial_padding)) ? { initialPadding: Number(raw.initial_padding) } : {}),
+      ...(auxiliaryVideo ? { auxiliaryVideo: true } : {}), timestampStatus: auxiliaryVideo ? "unsupported" : packetScan ? "unknown" : "not-scanned",
     };
     streams.push(facts);
-    if (!packetScan) continue;
+    if (!packetScan || auxiliaryVideo) continue;
     const scanner = kind === "video" && rate ? new VideoPacketScan(rate.denominator / rate.numerator, startSeconds !== undefined && durationSeconds !== undefined ? startSeconds + durationSeconds : undefined) : kind === "audio" && sampleRate ? new AudioPacketScan(sampleRate) : undefined;
     if (!scanner) { facts.timestampStatus = "unsupported"; warnings.push(`Stream ${index} has no usable native rate for packet verification.`); continue; }
     await new Promise<void>((resolve, reject) => {
@@ -184,7 +191,7 @@ async function inspectUnlocked(sourcePath: string, signal: AbortSignal, packetSc
   const format = json.format && typeof json.format === "object" ? json.format as Record<string, unknown> : undefined;
   const formatTags = format?.tags && typeof format.tags === "object" ? format.tags as Record<string, unknown> : {};
   const streamTags = rawStreams.map((stream) => stream.tags && typeof stream.tags === "object" ? stream.tags as Record<string, unknown> : {});
-  const video = rawStreams.find((stream) => stream.codec_type === "video");
+  const video = rawStreams.find((stream) => stream.codec_type === "video" && !isAuxiliaryVideoDisposition(stream.disposition));
   const audio = rawStreams.find((stream) => stream.codec_type === "audio");
   const metadataTag = (name: string) => {
     const value = formatTags[name] ?? streamTags.map((tags) => tags[name]).find((item) => item !== undefined);

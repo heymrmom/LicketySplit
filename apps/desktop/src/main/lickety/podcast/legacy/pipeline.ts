@@ -176,7 +176,7 @@ export async function analyzeLegacyPodcastSetup(args: {
   for (const placement of placements) {
     const asset = assetById.get(placement.assetId)!;
     for (const stream of asset.streams ?? []) {
-      if (stream.kind !== "audio" && stream.kind !== "video") continue;
+      if ((stream.kind !== "audio" && stream.kind !== "video") || stream.auxiliaryVideo) continue;
       if (stream.timestampStatus !== "continuous" || stream.startSeconds === undefined) {
         const reason = `${stream.kind === "audio" ? "Audio" : "Video"} stream ${stream.index} presentation origin is ${stream.timestampStatus ?? "unknown"}; relative waveform timing remains provisional.`;
         placement.unsupported = [...new Set([...(placement.unsupported ?? []), reason])];

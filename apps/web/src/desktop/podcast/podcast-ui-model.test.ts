@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Project } from "@licketysplit/core";
 import type { PodcastSetup } from "@licketysplit/core/lickety/podcast-types";
-import { buildPodcastReviewPoints, getTimelineMediaIds, readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia } from "./podcast-ui-model";
+import { buildPodcastReviewPoints, getTimelineMediaIds, podcastProgressFraction, readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia } from "./podcast-ui-model";
 import { createEmptyProject } from "../../stores/project/project-helpers";
 
 describe("podcast UI model", () => {
@@ -62,11 +62,32 @@ describe("podcast UI model", () => {
     } as unknown as PodcastSetup;
     const points = buildPodcastReviewPoints(setup);
     expect(points.map((point) => point.label)).toEqual(expect.arrayContaining([
-      "Episode beginning", "Episode middle", "Episode end", "Camera A start", "Camera A end",
+      expect.stringContaining("Episode beginning"), "Episode middle", expect.stringContaining("Episode end"),
     ]));
-    expect(points.find((point) => point.label === "Camera A start")?.projectSeconds).toBe(6);
-    expect(points.find((point) => point.label === "Episode beginning")?.projectSeconds).toBe(6);
-    expect(points.find((point) => point.label === "Camera A end")?.projectSeconds).toBe(10);
+    expect(points.find((point) => point.label.includes("part 1 of 1 start"))?.projectSeconds).toBe(6);
+    expect(points.find((point) => point.label.includes("Episode beginning"))?.projectSeconds).toBe(6);
+    expect(points.find((point) => point.label.includes("part 1 of 1 end"))?.projectSeconds).toBe(10);
+  });
+
+  it("groups episode and source checkpoints at the same boundary", () => {
+    const setup = {
+      groups: [{ id: "g", name: "Main camera", kind: "video", role: "camera", confidence: "high", assetIds: ["a"], warnings: [] }],
+      analysis: { assets: [{ id: "a", name: "Camera A", kind: "video", durationSeconds: 10, streams: [{ index: 0, kind: "video", startSeconds: 0, durationSeconds: 10 }] }] },
+      channels: [],
+      placements: [{ assetId: "a", status: "reference", mapping: { scale: 1, offsetSeconds: 0 }, locked: false, provenance: [] }],
+    } as unknown as PodcastSetup;
+    const points = buildPodcastReviewPoints(setup);
+    expect(points.filter((point) => point.projectSeconds === 0)).toHaveLength(1);
+    expect(points.find((point) => point.projectSeconds === 0)?.label).toContain("Episode beginning");
+    expect(points.find((point) => point.projectSeconds === 0)?.label).toContain("Main camera · part 1 of 1 start");
+  });
+
+  it("reports only real phase counts as determinate progress", () => {
+    expect(podcastProgressFraction({ completed: 48, total: 96 })).toBe(0.5);
+    expect(podcastProgressFraction({ completed: 96, total: 96 })).toBe(1);
+    expect(podcastProgressFraction({ completed: 1, total: 0 })).toBeNull();
+    expect(podcastProgressFraction({ completed: Number.NaN, total: 4 })).toBeNull();
+    expect(podcastProgressFraction({ completed: 8, total: 4 })).toBeNull();
   });
 
   it("omits excluded regions and uses each included section's own mapping", () => {

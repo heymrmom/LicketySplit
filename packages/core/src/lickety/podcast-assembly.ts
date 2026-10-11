@@ -181,7 +181,7 @@ function audioBindings(group: PodcastGroup, asset: PodcastAsset): Array<{ stream
 }
 
 function sourceStreamIndexes(group: PodcastGroup, asset: PodcastAsset): Array<number | undefined> {
-  if (group.role === "camera") return [asset.streams?.find((stream) => stream.kind === "video")?.index];
+  if (group.role === "camera") return [asset.streams?.find((stream) => stream.kind === "video" && !stream.auxiliaryVideo)?.index];
   if (group.role === "dialogue") return [...new Set(audioBindings(group, asset).map((binding) => binding.streamIndex))];
   if (group.role === "scratch") return [asset.streams?.find((stream) => stream.kind === "audio")?.index];
   return [];
@@ -249,7 +249,7 @@ export function buildPodcastAssembly(
         const placement = placementById.get(asset.id);
         if (!media || !placement) throw new Error(`Relink original ${asset.name} before creating the timeline.`);
         const streamIndex = group.role === "camera"
-          ? asset.streams?.find((stream) => stream.kind === "video")?.index
+          ? asset.streams?.find((stream) => stream.kind === "video" && !stream.auxiliaryVideo)?.index
           : asset.streams?.find((stream) => stream.kind === "audio")?.index;
         const slices = slicesFor(asset, placement, streamIndex).map((slice) => normalizeReferenceClock(slice, referenceContainerStart));
         if (!slices.length) continue;

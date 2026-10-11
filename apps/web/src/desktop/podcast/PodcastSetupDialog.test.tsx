@@ -38,6 +38,19 @@ function makeSetup(id = projectId): PodcastSetup {
   };
 }
 
+function makeReviewSetup(): PodcastSetup {
+  const setup = makeSetup();
+  setup.state = "review";
+  setup.referenceAssetId = "asset-1";
+  setup.placements = setup.analysis.assets.map((asset, index) => ({
+    assetId: asset.id,
+    status: index ? "measured" as const : "reference" as const,
+    mapping: { version: 1, scale: 1, offsetSeconds: index ? 12 : 0 },
+    component: "asset-1", locked: false, provenance: ["measured"],
+  }));
+  return setup;
+}
+
 function setProject(): void {
   const empty = createEmptyProject("Episode");
   useProjectStore.setState({ hasOpenProject: true, project: { ...empty, id: projectId, mediaLibrary: { items: media } } });
@@ -181,9 +194,12 @@ describe("PodcastSetupDialog", () => {
     const requestId = vi.mocked(bridge.analyze).mock.calls[0][0].requestId;
     act(() => { emitProgress?.({ setupId: setup.setupId, requestId, phase: "features", completed: 48_000, total: 96_000, message: "Analyzing Host microphone · stream 0 · channel 1" }); });
     expect(screen.getByRole("status").textContent).toContain("Features · 48,000 of 96,000 sample frames");
-    expect(screen.getByRole("status").textContent).toContain("Analyzing Host microphone · stream 0 · channel 1");
+    expect(screen.getByRole("progressbar", { name: "Line-up progress" })).toHaveAttribute("aria-valuenow", "50");
     act(() => { emitProgress?.({ setupId: setup.setupId, requestId, phase: "decode", completed: 2, total: 3, message: "Decoding camera-a.mp4 · stream 0 · channel 1" }); });
     expect(screen.getByRole("status").textContent).toContain("Decode · 2 of 3 audio channels");
+    act(() => { emitProgress?.({ setupId: setup.setupId, requestId, phase: "features", completed: 0, total: 0, message: "Preparing the next source" }); });
+    expect(screen.getByRole("progressbar", { name: "Line-up progress" })).not.toHaveAttribute("aria-valuenow");
+    expect(screen.getByRole("status").textContent).toContain("Preparing the next source");
     fireEvent.click(screen.getByRole("button", { name: "Cancel this run" }));
     await vi.waitFor(() => expect(bridge.cancel).toHaveBeenCalledWith({ requestId: expect.any(String) }));
     expect(useProjectStore.getState().project.timeline.tracks).toEqual([]);
@@ -191,6 +207,59 @@ describe("PodcastSetupDialog", () => {
     await act(async () => { resolveAnalyze?.({ ...setup, state: "canceled" }); });
     expect(useProjectStore.getState().project.timeline.tracks).toEqual([]);
     view.unmount();
+  });
+
+  it("keeps timeline creation behind the guided Finish stage and preserves locked state", async () => {
+    const setup = makeReviewSetup();
+    setup.placements[0].locked = true;
+    bridge.get = vi.fn(async () => setup);
+    restoreSetupForStep(setup, "check", "keep-picture-gaps");
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Check picture and sound" });
+
+    expect(screen.getByRole("heading", { name: "Review Main camera · part 1 of 2" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Unlock recording" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("A lock protects edits; it does not mean this recording was reviewed.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Check coverage" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create editable timeline" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Check coverage" }));
+    expect(screen.getByRole("heading", { name: "Check coverage" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Review summary" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Create editable timeline" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Review summary" }));
+    expect(screen.getAllByRole("heading", { name: "Finish" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Create editable timeline" })).toBeTruthy();
+  });
+
+  it("does not advance the review queue when native timing acceptance fails", async () => {
+    const setup = makeReviewSetup();
+    bridge.get = vi.fn(async () => setup);
+    bridge.update = vi.fn(async () => { throw new Error("Native timing update failed."); });
+    restoreSetupForStep(setup, "check");
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Check picture and sound" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Review note for Main camera · part 1 of 2" }), { target: { value: "Checked the sync point." } });
+    expect((screen.getByRole("textbox", { name: "Review note for Main camera · part 1 of 2" }) as HTMLInputElement).value).toBe("Checked the sync point.");
+    const acceptButton = screen.getByRole("button", { name: "Accept reviewed timing and next" }) as HTMLButtonElement;
+    await vi.waitFor(() => expect(acceptButton.disabled).toBe(false));
+    fireEvent.click(acceptButton);
+    await vi.waitFor(() => expect(bridge.update).toHaveBeenCalledWith(expect.objectContaining({ assetId: "asset-1", acceptTiming: true })));
+    expect((screen.getByRole("combobox", { name: "Recording to check" }) as HTMLSelectElement).value).toBe("asset-1");
+  });
+
+  it("labels unresolved media coverage unknown and omits crossed spans from confirmed gaps", async () => {
+    const setup = makeReviewSetup();
+    setup.placements[1] = { ...setup.placements[1], status: "unresolved", mapping: { version: 1, scale: 1, offsetSeconds: 15 } };
+    bridge.get = vi.fn(async () => setup);
+    restoreSetupForStep(setup, "check", "keep-picture-gaps");
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Check picture and sound" });
+    await screen.findByRole("button", { name: "Check coverage" });
+    fireEvent.click(screen.getByRole("button", { name: "Check coverage" }));
+    expect(screen.getAllByRole("heading", { name: "Confirmed gaps and overlaps" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Unknown coverage" })).toBeTruthy();
+    expect(screen.getByText(/Crossed by recordings that still need a timing decision/)).toBeTruthy();
   });
 
   it("keeps controls locked until cancellation settles, then allows the next run", async () => {
@@ -361,11 +430,11 @@ describe("PodcastSetupDialog", () => {
     restoreSetupForStep(setup, "check");
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await screen.findByRole("heading", { name: "Check picture and sound" });
-    fireEvent.click(screen.getByText("Technical details"));
+    fireEvent.click(screen.getByText("Advanced timing adjustments and evidence"));
     const referenceClock = screen.getByRole("combobox", { name: "Project reference clock" });
     expect((referenceClock as HTMLSelectElement).disabled).toBe(false);
 
-    fireEvent.click(screen.getByRole("button", { name: /Select Main camera, Check these moments/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Section 1:/ }));
     fireEvent.change(screen.getByRole("textbox", { name: "Review note for Main camera section 1" }), { target: { value: "Checked the cut at the visible clap." } });
     fireEvent.change(screen.getByRole("spinbutton", { name: "Offset for Main camera section 1" }), { target: { value: "0.125" } });
     expect((referenceClock as HTMLSelectElement).disabled).toBe(true);
@@ -391,7 +460,7 @@ describe("PodcastSetupDialog", () => {
     restoreSetupForStep(setup, "check");
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await screen.findByRole("heading", { name: "Check picture and sound" });
-    fireEvent.click(screen.getByText("Technical details"));
+    fireEvent.click(screen.getByText("Advanced timing adjustments and evidence"));
     const referenceClock = screen.getByRole("combobox", { name: "Project reference clock" }) as HTMLSelectElement;
     expect([...referenceClock.options].find((option) => option.value === "asset-3")?.disabled).toBe(true);
     fireEvent.change(referenceClock, { target: { value: "asset-2" } });
@@ -431,6 +500,7 @@ describe("PodcastSetupDialog", () => {
     expect(screen.getByRole("button", { name: "Review saved comparison" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Review saved comparison" }));
     await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledWith("media-audio", 0, 1));
+    expect((screen.getByRole("combobox", { name: "Recording to check" }) as HTMLSelectElement).value).toBe("asset-1");
     expect((screen.getByRole("slider", { name: "Episode playhead" }) as HTMLInputElement).value).toBe("3");
     const audio = screen.getByLabelText("Soloed podcast comparison audio") as HTMLAudioElement;
     const video = screen.getByLabelText("Muted podcast source picture preview") as HTMLVideoElement;
@@ -466,9 +536,11 @@ describe("PodcastSetupDialog", () => {
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await screen.findByRole("heading", { name: "Check picture and sound" });
 
-    const createButton = screen.getByRole("button", { name: "Create timeline" });
-    expect((createButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Check coverage" }));
     fireEvent.click(screen.getByRole("radio", { name: /Use another available camera/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Review summary" }));
+    const createButton = screen.getByRole("button", { name: "Create editable timeline" });
+    expect((createButton as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(createButton);
 
     await vi.waitFor(() => expect(applyPodcastSetupMock).toHaveBeenCalledWith(
@@ -490,6 +562,7 @@ describe("PodcastSetupDialog", () => {
 
     const view = render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await screen.findByRole("heading", { name: "Check picture and sound" });
+    fireEvent.click(screen.getByRole("button", { name: "Check coverage" }));
     const keep = screen.getByRole("radio", { name: /Keep picture gaps/ }) as HTMLInputElement;
     const fallback = screen.getByRole("radio", { name: /Use another available camera/ }) as HTMLInputElement;
     expect(keep.checked).toBe(true);
@@ -499,6 +572,7 @@ describe("PodcastSetupDialog", () => {
     view.rerender(<PodcastSetupDialog isOpen={false} onClose={vi.fn()} />);
     view.rerender(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await screen.findByRole("heading", { name: "Check picture and sound" });
+    fireEvent.click(screen.getByRole("button", { name: "Check coverage" }));
     expect((screen.getByRole("radio", { name: /Use another available camera/ }) as HTMLInputElement).checked).toBe(true);
 
     const second = makeSetup("project-b");
@@ -519,6 +593,8 @@ describe("PodcastSetupDialog", () => {
         podcastWizard: { setupId: second.setupId, step: "check", selectedMediaIds: media.map((item) => item.id), groups: second.groups, participants: second.participants, updatedAt: "2026-10-09T12:00:00.000Z" },
       },
     } as typeof empty });
+    await screen.findByRole("button", { name: "Check coverage" });
+    fireEvent.click(screen.getByRole("button", { name: "Check coverage" }));
     await vi.waitFor(() => expect((screen.getByRole("radio", { name: /Keep picture gaps/ }) as HTMLInputElement).checked).toBe(true));
     expect((screen.getByRole("radio", { name: /Use another available camera/ }) as HTMLInputElement).checked).toBe(false);
     view.unmount();
