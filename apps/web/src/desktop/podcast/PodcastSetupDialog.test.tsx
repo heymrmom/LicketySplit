@@ -512,8 +512,14 @@ describe("PodcastSetupDialog", () => {
     await screen.findByRole("heading", { name: "Check picture and sound" });
     await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledWith("media-audio", 0, 0));
     expect(screen.getByRole("button", { name: "Review saved comparison" })).toBeTruthy();
+    await vi.waitFor(() => expect(screen.getByLabelText("Soloed podcast comparison audio").getAttribute("src")).toBe("file:///host.wav"));
+    fireEvent.canPlay(screen.getByLabelText("Soloed podcast comparison audio"));
+    fireEvent.canPlay(screen.getByLabelText("Muted podcast source picture preview"));
     fireEvent.click(screen.getByRole("button", { name: "Review saved comparison" }));
     await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledWith("media-audio", 0, 1));
+    await vi.waitFor(() => expect(screen.getByLabelText("Soloed podcast comparison audio").getAttribute("src")).toBe("file:///host.wav"));
+    fireEvent.canPlay(screen.getByLabelText("Soloed podcast comparison audio"));
+    fireEvent.canPlay(screen.getByLabelText("Muted podcast source picture preview"));
     expect((screen.getByRole("combobox", { name: "Recording to check" }) as HTMLSelectElement).value).toBe("asset-1");
     expect((screen.getByRole("slider", { name: "Episode playhead" }) as HTMLInputElement).value).toBe("3");
     const audio = screen.getByLabelText("Soloed podcast comparison audio") as HTMLAudioElement;
@@ -579,7 +585,7 @@ describe("PodcastSetupDialog", () => {
     await screen.findByRole("button", { name: "Play picture and selected sound" });
 
     fireEvent.click(screen.getByRole("button", { name: "Play picture and selected sound" }));
-    expect(screen.getByText("Starting playback…")).toBeTruthy();
+    expect(screen.getByText("Starting playback…", { selector: "strong" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     expect(screen.getByText("Playback stopped")).toBeTruthy();
     await act(async () => { rejectPlay?.(new Error("late denial")); });
@@ -596,24 +602,24 @@ describe("PodcastSetupDialog", () => {
     await screen.findByRole("heading", { name: "Check picture and sound" });
     await screen.findByRole("button", { name: "Play picture and selected sound" });
     fireEvent.click(screen.getByRole("button", { name: "Play picture and selected sound" }));
-    await screen.findByText("Buffering source media…");
+    await screen.findByText("Buffering source media…", { selector: "strong" });
     const video = screen.getByLabelText("Muted podcast source picture preview");
     const audio = screen.getByLabelText("Soloed podcast comparison audio");
     fireEvent.canPlay(video);
-    expect(screen.getByText("Ready")).toBeTruthy();
+    expect(screen.getByText("Ready", { selector: "span[role=status]" })).toBeTruthy();
     fireEvent.waiting(video);
-    expect(screen.getByText("Buffering source media…")).toBeTruthy();
+    expect(screen.getByText("Buffering source media…", { selector: "strong" })).toBeTruthy();
     fireEvent.seeking(audio);
-    expect(screen.getByText("Buffering source media…")).toBeTruthy();
+    expect(screen.getByText("Buffering source media…", { selector: "strong" })).toBeTruthy();
     fireEvent.canPlay(video);
-    expect(screen.getByText("Ready")).toBeTruthy();
+    expect(screen.getByText("Ready", { selector: "span[role=status]" })).toBeTruthy();
     fireEvent.error(video);
-    expect(screen.getByText("Playback could not start")).toBeTruthy();
+    expect(screen.getByText("Playback could not start", { selector: "strong" })).toBeTruthy();
     expect(screen.getByText("The selected source media could not be read. Check the original recording and try again.")).toBeTruthy();
 
     vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValueOnce(new Error("denied"));
     fireEvent.click(screen.getByRole("button", { name: "Play picture and selected sound" }));
-    await screen.findByText("Playback could not start");
+    await screen.findByText("Playback could not start", { selector: "strong" });
     expect(screen.getByText("The selected source could not start playback.")).toBeTruthy();
   });
 
@@ -724,6 +730,8 @@ describe("PodcastSetupDialog", () => {
     await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledWith("media-1", 0, 0));
     const audio = screen.getByLabelText("Soloed podcast comparison audio") as HTMLAudioElement;
     const video = screen.getByLabelText("Muted podcast source picture preview") as HTMLVideoElement;
+    await vi.waitFor(() => expect(audio.getAttribute("src")).toBe("file:///camera-scratch.m4a"));
+    fireEvent.canPlay(audio);
     const audioPlay = vi.spyOn(audio, "play").mockResolvedValue(undefined);
     const videoPlay = vi.spyOn(video, "play").mockResolvedValue(undefined);
 
@@ -743,6 +751,9 @@ describe("PodcastSetupDialog", () => {
       { index: 2, kind: "audio", startSeconds: 0, durationSeconds: 10, channels: 2 },
     ];
     setup.analysis.assets[0]!.channels = 2;
+    setup.groups[0]!.audioMode = "isolated";
+    setup.groups[0]!.audioBindings = [{ assetId: "asset-1", streamIndex: 2, channel: 1, participantId: "donald" }];
+    setup.participants = [{ id: "donald", name: "Donald Mic" }];
     setup.channels = [1, 2].flatMap((streamIndex) => [0, 1].map((channel) => ({
       ...audioChannel("asset-1"),
       id: `asset-1:${streamIndex}:${channel}`,
@@ -754,22 +765,47 @@ describe("PodcastSetupDialog", () => {
       { assetId: "asset-2", status: "measured", mapping: { version: 1, scale: 1, offsetSeconds: 0 }, locked: false, component: "connected", provenance: [] },
     ];
     bridge.get = vi.fn(async () => setup);
-    const pendingPreviews: Array<(value: string) => void> = [];
-    const ensureAudioStream = vi.fn(() => new Promise<string>((resolve) => pendingPreviews.push(resolve)));
+    const pendingPreviews: Array<{ resolve: (value: string) => void; reject: (reason: Error) => void }> = [];
+    const ensureAudioStream = vi.fn(() => new Promise<string>((resolve, reject) => pendingPreviews.push({ resolve, reject })));
     Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream } } });
     restoreSetupForStep(setup, "check");
 
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await screen.findByRole("heading", { name: "Check picture and sound" });
+    const staleAudioElement = screen.getByLabelText("Soloed podcast comparison audio");
     fireEvent.change(screen.getByRole("combobox", { name: "Audio channel to preview" }), { target: { value: "asset-1:2:1" } });
 
     await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenLastCalledWith("media-1", 1, 1));
-    expect(screen.getByText("Preparing selected sound…")).toBeTruthy();
+    const preparation = screen.getByRole("status", { name: "Preparing selected sound" });
+    expect(preparation.textContent).toContain("Preparing Donald Mic…");
+    expect(preparation.textContent).toContain("Main camera · camera-a.mp4 · Donald Mic");
+    expect(screen.getByLabelText("Muted podcast source picture preview")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Play picture and selected sound" }) as HTMLButtonElement).disabled).toBe(true);
-    pendingPreviews.at(-1)?.("file:///camera-channel.m4a");
-    await vi.waitFor(() => expect(screen.queryByText("Preparing selected sound…")).toBeNull());
+    fireEvent.canPlay(staleAudioElement);
+    expect(screen.getByRole("status", { name: "Preparing selected sound" })).toBeTruthy();
+    pendingPreviews.at(-1)?.reject(new Error("The selected sound could not be prepared."));
+    const retry = await screen.findByRole("button", { name: "Retry sound preparation" });
+    fireEvent.click(retry);
+    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole("status", { name: "Preparing selected sound" }).textContent).toContain("Preparing Donald Mic…");
+    pendingPreviews.at(-1)?.resolve("file:///camera-channel.m4a");
+    const currentAudioElement = screen.getByLabelText("Soloed podcast comparison audio");
+    await vi.waitFor(() => expect(currentAudioElement.getAttribute("src")).toBe("file:///camera-channel.m4a"));
+    expect(screen.getByRole("status", { name: "Preparing selected sound" })).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Play picture and selected sound" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.canPlay(currentAudioElement);
+    await vi.waitFor(() => expect(screen.queryByRole("status", { name: "Preparing selected sound" })).toBeNull());
     expect((screen.getByRole("button", { name: "Play picture and selected sound" }) as HTMLButtonElement).disabled).toBe(false);
-    pendingPreviews.forEach((resolve, index) => { if (index !== pendingPreviews.length - 1) resolve("file:///stale-camera-channel.m4a"); });
+    expect(screen.getByText("Selected sound ready")).toBeTruthy();
+    const videoElement = screen.getByLabelText("Muted podcast source picture preview");
+    fireEvent.click(screen.getByRole("button", { name: "Play picture and selected sound" }));
+    fireEvent.waiting(currentAudioElement);
+    fireEvent.canPlay(videoElement);
+    expect(screen.getByText("Buffering source media…", { selector: "strong" })).toBeTruthy();
+    fireEvent.canPlay(currentAudioElement);
+    expect(screen.getByText("Ready", { selector: "span[role=status]" })).toBeTruthy();
+    pendingPreviews.forEach(({ resolve }, index) => { if (index !== pendingPreviews.length - 1) resolve("file:///stale-camera-channel.m4a"); });
+    expect(screen.getByLabelText("Soloed podcast comparison audio").getAttribute("src")).toBe("file:///camera-channel.m4a");
   });
 
   it("covers stale picture frames and labels both sources when neither covers the playhead", async () => {

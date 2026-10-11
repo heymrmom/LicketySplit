@@ -1,13 +1,15 @@
 /** Persisted algorithm contract. Change algorithmVersion whenever any solver,
  * validation or source-time interpretation changes. Feature version is separate
  * so graph/review changes do not invalidate reusable audio fingerprints. */
+export const INDEPENDENT_REVIEW_RESIDUAL_ALLOWANCE_MS = 15;
+
 export const SYNC_PARAMETERS = {
-  algorithmVersion:'landmarks-ncc-network-9',featureVersion:'landmarks-ncc-network-3',
+  algorithmVersion:'landmarks-ncc-network-10',featureVersion:'landmarks-ncc-network-3',
   analysisSampleRate:8000,featureFFTSize:512,featureHopSamples:256,featureBlockHops:1024,featureContextHops:128,
   maxCandidates:4,fineWindowMaxSeconds:6,fineWindowMinSeconds:1,maxCorrelationInputSeconds:40,
   fittingFractions:[.06,.30,.54,.78],validationFractions:[.18,.42,.66,.90],minFitWindows:3,minValidationWindows:3,
   minUsableRms:1e-5,minCorrelation:.18,minPeakRatio:1.35,competingPeakExclusionSeconds:.02,
-  pairResidualTargetMs:5,graphResidualTargetMs:5,maxAbsolutePairDriftPpm:2000,
+  pairResidualTargetMs:5,graphResidualTargetMs:5,independentReviewResidualAllowanceMs:INDEPENDENT_REVIEW_RESIDUAL_ALLOWANCE_MS,maxAbsolutePairDriftPpm:2000,
   networkFitHuberMs:2.5,networkFitIterations:8,
   boundaryWindowSeconds:6,boundaryFractions:[.19,.39,.63,.81],boundaryInsetSeconds:7,minBoundaryCorrelation:.35,
   boundarySubwindows:3,boundaryPeakExclusionSeconds:.002,boundaryConsistencyMs:2,boundaryChannelCompetition:.85,

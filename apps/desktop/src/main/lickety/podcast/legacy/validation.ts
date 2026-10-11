@@ -3,6 +3,13 @@ import type { SyncProject, SyncReviewCheck, SyncReviewCandidate, SyncProgress, P
 import { projectTime } from './time.js';
 import { windowEvidence } from './window-evidence.js';
 import {mappingRegions,regionAtProject,audioSpans} from './regions.js';
+import { INDEPENDENT_REVIEW_RESIDUAL_ALLOWANCE_MS } from '../parameters.js';
+
+export function independentCheckStatus(evidence: { residualMs: number; usable: boolean; competing: boolean; fitOverlap: boolean }): SyncReviewCheck['status'] {
+ if(evidence.fitOverlap)return 'overlaps-training';
+ if(!evidence.usable||evidence.competing||!Number.isFinite(evidence.residualMs))return 'unverified';
+ return Math.abs(evidence.residualMs)<=INDEPENDENT_REVIEW_RESIDUAL_ALLOWANCE_MS?'pass':'failed';
+}
 /** Held-out checks do not refit any mapping. Test all usable channels against
  * every connected recorder (or another camera when no recorder overlaps).
  * Local signal quality chooses the comparison, never its residual.
@@ -47,10 +54,10 @@ export async function validateClockNetwork(p: SyncProject, progress: (p:SyncProg
    if(!candidates.length)continue;
    const sorted=[...candidates].sort((a,b)=>Number(b.usable)-Number(a.usable)||b.score-a.score||a.channelId.localeCompare(b.channelId));
    const best=sorted[0],competing=sorted.some(c=>c.usable && c.score>=.85*best.score && Math.abs(c.residualMs-best.residualMs)>2);
-   const quality=best.usable && !competing;
+   const status=independentCheckStatus({...best,competing});
    checks.push({assetId:placement.assetId,...best,projectSeconds:t,windowSeconds:6,candidates,
-    reason:competing?'Equally strong channel comparisons disagree.':!best.usable?'Insufficient signal, competing peaks or unstable subwindows.':'Strongest stable common-signal comparison; residual did not affect selection.',
-    status:best.fitOverlap?'overlaps-training':!quality?'unverified':Math.abs(best.residualMs)<=5?'pass':'failed'});
+    reason:competing?'Equally strong channel comparisons disagree.':!best.usable||status==='unverified'?'Insufficient signal, competing peaks, unstable subwindows or invalid residual.':'Strongest stable common-signal comparison; residual did not affect selection.',
+    status});
   }
  }
  return checks;

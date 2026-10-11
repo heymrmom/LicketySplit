@@ -60,7 +60,7 @@ export function clipReview(placement: PodcastPlacement, setup?: PodcastSetup): {
   if (placement.status === "unresolved" || placement.regions?.some((region) => region.status === "unresolved")) {
     const label = placement.component && !placement.provenance.includes("disconnected-component") ? "Check these moments" : "Needs placement";
     const reason = placement.reviewReason === "small-discrepancy"
-      ? "The match has small disagreements beyond the 5 ms precision target. Listen to the flagged moments before accepting or adjusting it."
+      ? "Some timing checks need review. Listen to the flagged moments before accepting or adjusting the match."
       : placement.reviewReason === "conflicting-timing"
         ? "Some checks disagree with the proposed timing. Compare the flagged moments to distinguish a constant offset from a change over time."
         : "There is not enough independent shared sound to confirm this timing. Check playback, retry matching, or place it from a known cue.";
