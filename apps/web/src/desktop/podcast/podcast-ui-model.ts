@@ -57,6 +57,25 @@ export function podcastProgressFraction(progress: { completed: number; total: nu
   return progress.completed / progress.total;
 }
 
+export type PodcastWorkItem = {
+  id: string;
+  assetIds: string[];
+  stage: "inspect" | "features" | "match" | "validate" | "regions" | "save";
+  status: "queued" | "running" | "done" | "reused" | "skipped" | "failed" | "canceled";
+  completed: number;
+  total: number;
+};
+
+export type PodcastWorkLedger = { completed: number; total: number; items: PodcastWorkItem[] };
+
+export function podcastWorkFraction(work: Pick<PodcastWorkLedger, "completed" | "total"> | undefined): number | null {
+  return work ? podcastProgressFraction(work) : null;
+}
+
+export function podcastWorkItemFraction(item: Pick<PodcastWorkItem, "completed" | "total">): number | null {
+  return podcastProgressFraction(item);
+}
+
 export function buildPodcastReviewPoints(setup: PodcastSetup): Array<{ label: string; projectSeconds: number; assetId?: string; assetIds?: string[] }> {
   const points: Array<{ label: string; projectSeconds: number; assetId?: string; assetIds?: string[] }> = [];
   const timeline = podcastTimelineModel(setup);

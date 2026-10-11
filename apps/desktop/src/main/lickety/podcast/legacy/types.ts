@@ -33,7 +33,7 @@ export type SyncRegion = PodcastRegion;
 export type SyncRegionEvidence = PodcastRegionEvidence;
 export type SyncReviewCandidate = PodcastReviewCandidate;
 export type SyncReviewCheck = PodcastReviewCheck;
-export type SyncProgress = { phase: "inspect" | "decode" | "features" | "match" | "solve" | "done"; completed: number; total: number; message: string };
+export type SyncProgress = { assetId?: string; phase: "inspect" | "decode" | "features" | "match" | "solve" | "done"; completed: number; total: number; message: string };
 
 export interface SyncProject {
   schemaVersion: 1;

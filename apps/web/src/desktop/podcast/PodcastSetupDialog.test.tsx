@@ -1,6 +1,6 @@
 import "../../test/install-local-storage-mock";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import type { MediaItem } from "@licketysplit/core";
 import type { PodcastBridge, PodcastProgressEvent, PodcastSetup, PodcastSyncChannel } from "@licketysplit/core/lickety/podcast-types";
 import { useProjectStore } from "../../stores/project-store";
@@ -191,14 +191,27 @@ describe("PodcastSetupDialog", () => {
     expect(screen.getByText("Analysis has not been run for these groups.")).toHaveClass("text-fg");
     fireEvent.click(screen.getByRole("button", { name: "Line up recordings" }));
     await screen.findByRole("status");
+    expect(screen.getByText("Analysis is running. Saved placements will appear after the results are written.")).toBeTruthy();
     const requestId = vi.mocked(bridge.analyze).mock.calls[0][0].requestId;
     act(() => { emitProgress?.({ setupId: setup.setupId, requestId, phase: "features", completed: 48_000, total: 96_000, message: "Analyzing Host microphone · stream 0 · channel 1" }); });
     expect(screen.getByRole("status").textContent).toContain("Features · 48,000 of 96,000 sample frames");
-    expect(screen.getByRole("progressbar", { name: "Line-up progress" })).toHaveAttribute("aria-valuenow", "50");
-    act(() => { emitProgress?.({ setupId: setup.setupId, requestId, phase: "decode", completed: 2, total: 3, message: "Decoding camera-a.mp4 · stream 0 · channel 1" }); });
+    expect(screen.getByRole("progressbar", { name: "Whole line-up progress" })).not.toHaveAttribute("aria-valuenow");
+    act(() => { emitProgress?.({ setupId: setup.setupId, requestId, phase: "decode", completed: 2, total: 3, message: "Decoding camera-a.mp4 · stream 0 · channel 1", work: { completed: 2, total: 10, items: [
+      { id: "asset-1-features", assetIds: ["asset-1"], stage: "features", status: "running", completed: 2, total: 5 },
+      { id: "match:asset-1:asset-2", assetIds: ["asset-1", "asset-2"], stage: "match", status: "done", completed: 1, total: 1 },
+      { id: "match:asset-1:asset-3", assetIds: ["asset-1", "asset-3"], stage: "match", status: "running", completed: 0, total: 1 },
+      { id: "match:asset-1:asset-4", assetIds: ["asset-1", "asset-4"], stage: "match", status: "queued", completed: 0, total: 1 },
+    ] } } as PodcastProgressEvent); });
     expect(screen.getByRole("status").textContent).toContain("Decode · 2 of 3 audio channels");
-    act(() => { emitProgress?.({ setupId: setup.setupId, requestId, phase: "features", completed: 0, total: 0, message: "Preparing the next source" }); });
-    expect(screen.getByRole("progressbar", { name: "Line-up progress" })).not.toHaveAttribute("aria-valuenow");
+    expect(screen.getAllByRole("progressbar", { name: "Whole line-up progress" })).toHaveLength(1);
+    expect(screen.getByRole("progressbar", { name: "Whole line-up progress" })).toHaveAttribute("aria-valuenow", "20");
+    expect(screen.getByText(/Main camera · camera · part 1 of 2 · camera-a.mp4/)).toBeTruthy();
+    expect(screen.getAllByText("Find shared sound")).toHaveLength(2);
+    expect(screen.getAllByText("0 of 1 · running")).toHaveLength(1);
+    expect(screen.getAllByText("1 of 3 · running")).toHaveLength(1);
+    act(() => { emitProgress?.({ setupId: setup.setupId, requestId, phase: "features", completed: 0, total: 0, message: "Preparing the next source", work: { completed: 6, total: 10, items: [{ id: "asset-1-features", assetIds: ["asset-1"], stage: "features", status: "done", completed: 5, total: 5 }] } } as PodcastProgressEvent); });
+    expect(screen.getByRole("progressbar", { name: "Whole line-up progress" })).toHaveAttribute("aria-valuenow", "60");
+    expect(screen.queryByRole("progressbar", { name: "Current phase progress" })).toBeNull();
     expect(screen.getByRole("status").textContent).toContain("Preparing the next source");
     fireEvent.click(screen.getByRole("button", { name: "Cancel this run" }));
     await vi.waitFor(() => expect(bridge.cancel).toHaveBeenCalledWith({ requestId: expect.any(String) }));
@@ -206,6 +219,7 @@ describe("PodcastSetupDialog", () => {
     expect(resolveAnalyze).toBeDefined();
     await act(async () => { resolveAnalyze?.({ ...setup, state: "canceled" }); });
     expect(useProjectStore.getState().project.timeline.tracks).toEqual([]);
+    expect(screen.getByRole("progressbar", { name: "Whole line-up progress" })).toHaveAttribute("aria-valuenow", "60");
     view.unmount();
   });
 
@@ -430,7 +444,7 @@ describe("PodcastSetupDialog", () => {
     restoreSetupForStep(setup, "check");
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await screen.findByRole("heading", { name: "Check picture and sound" });
-    fireEvent.click(screen.getByText("Advanced timing adjustments and evidence"));
+    fireEvent.click(screen.getByText("Timing adjustments and evidence"));
     const referenceClock = screen.getByRole("combobox", { name: "Project reference clock" });
     expect((referenceClock as HTMLSelectElement).disabled).toBe(false);
 
@@ -460,7 +474,7 @@ describe("PodcastSetupDialog", () => {
     restoreSetupForStep(setup, "check");
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await screen.findByRole("heading", { name: "Check picture and sound" });
-    fireEvent.click(screen.getByText("Advanced timing adjustments and evidence"));
+    fireEvent.click(screen.getByText("Timing adjustments and evidence"));
     const referenceClock = screen.getByRole("combobox", { name: "Project reference clock" }) as HTMLSelectElement;
     expect([...referenceClock.options].find((option) => option.value === "asset-3")?.disabled).toBe(true);
     fireEvent.change(referenceClock, { target: { value: "asset-2" } });
@@ -514,6 +528,8 @@ describe("PodcastSetupDialog", () => {
     Object.defineProperty(video, "currentTime", { configurable: true, get: () => videoTime, set: (value: number) => { videoTime = value; } });
     fireEvent.change(screen.getByRole("slider", { name: "Episode playhead" }), { target: { value: "6" } });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Play picture and selected sound" })); });
+    fireEvent.playing(video);
+    fireEvent.playing(audio);
     await vi.waitFor(() => expect(callbacks.length).toBeGreaterThan(0));
     await act(async () => { callbacks.at(-1)?.(performance.now() + 150); });
     expect(screen.getByText("Episode 00:06.000")).toBeTruthy();
@@ -538,6 +554,9 @@ describe("PodcastSetupDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Check coverage" }));
     fireEvent.click(screen.getByRole("radio", { name: /Use another available camera/ }));
+    const fallback = screen.getByRole("radio", { name: /Use another available camera/ });
+    const timeline = screen.getByRole("region", { name: "Recording timing lanes" });
+    expect(fallback.compareDocumentPosition(timeline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Review summary" }));
     const createButton = screen.getByRole("button", { name: "Create editable timeline" });
     expect((createButton as HTMLButtonElement).disabled).toBe(false);
@@ -547,6 +566,87 @@ describe("PodcastSetupDialog", () => {
       expect.objectContaining({ setup, expectedRevision: setup.revision, pictureGapPolicy: "available-camera-fallback" }),
       expect.objectContaining({ bridge }),
     ));
+  });
+
+  it("acknowledges pending playback immediately and ignores a play rejected after Stop", async () => {
+    const setup = makeReviewSetup();
+    bridge.get = vi.fn(async () => setup);
+    restoreSetupForStep(setup, "check", "keep-picture-gaps");
+    let rejectPlay: ((reason: Error) => void) | undefined;
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => new Promise<void>((_resolve, reject) => { rejectPlay = reject; }));
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Check picture and sound" });
+    await screen.findByRole("button", { name: "Play picture and selected sound" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Play picture and selected sound" }));
+    expect(screen.getByText("Starting playback…")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(screen.getByText("Playback stopped")).toBeTruthy();
+    await act(async () => { rejectPlay?.(new Error("late denial")); });
+    expect(screen.queryByText("The selected source could not start playback.")).toBeNull();
+    expect(screen.getByText("Playback stopped")).toBeTruthy();
+  });
+
+  it("uses media readiness events and surfaces rejected playback", async () => {
+    const setup = makeReviewSetup();
+    bridge.get = vi.fn(async () => setup);
+    restoreSetupForStep(setup, "check", "keep-picture-gaps");
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Check picture and sound" });
+    await screen.findByRole("button", { name: "Play picture and selected sound" });
+    fireEvent.click(screen.getByRole("button", { name: "Play picture and selected sound" }));
+    await screen.findByText("Buffering source media…");
+    const video = screen.getByLabelText("Muted podcast source picture preview");
+    const audio = screen.getByLabelText("Soloed podcast comparison audio");
+    fireEvent.canPlay(video);
+    expect(screen.getByText("Ready")).toBeTruthy();
+    fireEvent.waiting(video);
+    expect(screen.getByText("Buffering source media…")).toBeTruthy();
+    fireEvent.seeking(audio);
+    expect(screen.getByText("Buffering source media…")).toBeTruthy();
+    fireEvent.canPlay(video);
+    expect(screen.getByText("Ready")).toBeTruthy();
+    fireEvent.error(video);
+    expect(screen.getByText("Playback could not start")).toBeTruthy();
+    expect(screen.getByText("The selected source media could not be read. Check the original recording and try again.")).toBeTruthy();
+
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValueOnce(new Error("denied"));
+    fireEvent.click(screen.getByRole("button", { name: "Play picture and selected sound" }));
+    await screen.findByText("Playback could not start");
+    expect(screen.getByText("The selected source could not start playback.")).toBeTruthy();
+  });
+
+  it("opens the existing manual cue timing controls for insufficient evidence", async () => {
+    const setup = makeReviewSetup();
+    setup.placements[1] = { ...setup.placements[1], status: "unresolved", reviewReason: "insufficient-evidence" };
+    bridge.get = vi.fn(async () => setup);
+    restoreSetupForStep(setup, "check", "keep-picture-gaps");
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Check picture and sound" });
+    expect(screen.getByText("Not enough independent evidence: use a known cue for manual placement.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open manual cue controls" }));
+    const details = screen.getByText("Timing adjustments and evidence").closest("details");
+    expect(details?.open).toBe(true);
+    expect(screen.getAllByLabelText("Offset for Main camera").length).toBeGreaterThan(0);
+  });
+
+  it("saves advanced note and offset drafts to the native timing update", async () => {
+    const setup = makeReviewSetup();
+    bridge.get = vi.fn(async () => setup);
+    bridge.update = vi.fn(async () => ({ ...setup, revision: setup.revision + 1 }));
+    restoreSetupForStep(setup, "check", "keep-picture-gaps");
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Check picture and sound" });
+    fireEvent.click(screen.getByText("Timing adjustments and evidence"));
+    const placement = screen.getByText("camera-b.mp4", { selector: "strong" }).closest("article");
+    expect(placement).not.toBeNull();
+    fireEvent.change(within(placement!).getByLabelText("Review note for Main camera"), { target: { value: "Matched a clear hand clap" } });
+    fireEvent.change(within(placement!).getByLabelText("Offset for Main camera"), { target: { value: "13.25" } });
+    fireEvent.click(within(placement!).getByRole("button", { name: "Save timing" }));
+    await vi.waitFor(() => expect(bridge.update).toHaveBeenCalledWith(expect.objectContaining({
+      setupId: setup.setupId, assetId: "asset-2", offsetSeconds: 13.25, scale: 1, note: "Matched a clear hand clap",
+    })));
   });
 
   it("persists the gap choice across reopen and restores the new project's own policy", async () => {

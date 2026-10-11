@@ -4,7 +4,8 @@
 // legacy sync-timeline.test.ts 3–13 / 20–23 / 26–29 split-region spans.
 import { describe, expect, it } from "vitest";
 import type { PodcastAsset, PodcastPlacement, PodcastSetup, PodcastSyncChannel } from "@licketysplit/core/lickety/podcast-types";
-import { clipReview, formatReviewTime, parseReviewTime, podcastReviewState, podcastTimelineModel, podcastTimingRelations, podcastUnknownCoverage, reviewComparison, timelinePercent, timelineSeconds, timelineWaveformPath, PACKET_TIMING_WARNING } from "./podcast-review-model";
+import { podcastReviewMappingKey } from "@licketysplit/core/lickety/podcast-types";
+import { clipReview, formatReviewTime, parseReviewTime, podcastReviewState, podcastTimelineModel, podcastTimingRelations, podcastUnknownCoverage, reviewComparison, reviewEvidenceCategories, timelinePercent, timelineSeconds, timelineWaveformPath, PACKET_TIMING_WARNING } from "./podcast-review-model";
 
 function asset(id: string, name: string, kind: "video" | "audio", durationSeconds = 10): PodcastAsset {
   return {
@@ -45,6 +46,36 @@ function setup(state: PodcastSetup["state"] = "review"): PodcastSetup {
 }
 
 describe("podcast review state adapted from legacy review helpers", () => {
+  it("separates insufficient evidence, measured disagreement, and fitting data", () => {
+    const insufficient = { ...placement("b", "unresolved"), reviewReason: "insufficient-evidence" as const };
+    const disagreement = { ...placement("b", "unresolved"), reviewReason: "conflicting-timing" as const };
+    const fitted = placement("b", "measured");
+    expect(reviewEvidenceCategories(insufficient, [])).toContain("insufficient-evidence");
+    expect(reviewEvidenceCategories(disagreement, [{ status: "failed", fitOverlap: false } as never])).toContain("measured-disagreement");
+    expect(reviewEvidenceCategories(fitted, [{ status: "overlaps-training", fitOverlap: true } as never])).toContain("fitting-data");
+  });
+
+  it("labels only a matching scoped review as current and shows its review revision", () => {
+    const value = setup();
+    value.referenceAssetId = "a";
+    const placementValue = value.placements[1];
+    const assetValue = value.analysis.assets.find((asset) => asset.id === placementValue.assetId)!;
+    placementValue.humanAcceptance = {
+      scope: "recording", note: "Checked the clap cue.", at: "now", reviewedRevision: value.revision,
+      sourceId: assetValue.sourceId, sourceDigest: assetValue.sourceDigest,
+      mappingKey: podcastReviewMappingKey(assetValue, placementValue, value.referenceAssetId, undefined, {asset:value.analysis.assets.find(item=>item.id===value.referenceAssetId)!,mapping:value.placements.find(item=>item.assetId===value.referenceAssetId)!.mapping}),
+    };
+    const current = clipReview(placementValue, value);
+    expect(current.label).toBe("Accepted by you");
+    expect(current.reason).toContain("recording");
+    expect(current.reason).toContain(`reviewed revision ${value.revision}`);
+    value.revision += 1; // A revision by itself does not invalidate a matching scope.
+    expect(clipReview(placementValue, value).label).toBe("Accepted by you");
+    placementValue.mapping.offsetSeconds += 0.25;
+    expect(clipReview(placementValue, value).label).toBe("Prior review note");
+    expect(clipReview(placementValue, value).reason).toContain("Review again");
+  });
+
   it("keeps unresolved recording spans classified as unknown coverage", () => {
     const value = setup();
     value.placements = [placement("a", "reference", 0), placement("b", "unresolved", 15)];

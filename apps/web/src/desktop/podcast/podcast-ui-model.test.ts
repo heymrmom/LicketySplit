@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Project } from "@licketysplit/core";
 import type { PodcastSetup } from "@licketysplit/core/lickety/podcast-types";
-import { buildPodcastReviewPoints, getTimelineMediaIds, podcastProgressFraction, readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia } from "./podcast-ui-model";
+import { buildPodcastReviewPoints, getTimelineMediaIds, podcastProgressFraction, podcastWorkFraction, podcastWorkItemFraction, readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia } from "./podcast-ui-model";
 import { createEmptyProject } from "../../stores/project/project-helpers";
 
 describe("podcast UI model", () => {
@@ -88,6 +88,16 @@ describe("podcast UI model", () => {
     expect(podcastProgressFraction({ completed: 1, total: 0 })).toBeNull();
     expect(podcastProgressFraction({ completed: Number.NaN, total: 4 })).toBeNull();
     expect(podcastProgressFraction({ completed: 8, total: 4 })).toBeNull();
+  });
+
+  it("keeps whole-run progress tied to the saved-work denominator across item changes", () => {
+    const first = { completed: 2, total: 7, items: [{ id: "inspect-a", assetIds: ["a"], stage: "inspect" as const, status: "done" as const, completed: 1, total: 1 }] };
+    const later = { ...first, completed: 5, items: [{ id: "match-b", assetIds: ["b"], stage: "match" as const, status: "running" as const, completed: 3, total: 8 }] };
+    expect(podcastWorkFraction(first)).toBeCloseTo(2 / 7);
+    expect(podcastWorkFraction(later)).toBeCloseTo(5 / 7);
+    expect(podcastWorkFraction(undefined)).toBeNull();
+    expect(podcastWorkItemFraction(later.items[0])).toBeCloseTo(3 / 8);
+    expect(podcastWorkItemFraction({ ...later.items[0], completed: 0, total: 0 })).toBeNull();
   });
 
   it("omits excluded regions and uses each included section's own mapping", () => {

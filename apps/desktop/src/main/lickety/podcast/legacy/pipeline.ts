@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { PodcastAsset, PodcastSetup, PodcastSetupMetrics, PodcastSyncChannel } from "../../../../../../../packages/core/src/lickety/podcast-types";
+import type { PodcastWorkLedger } from "../progress-ledger";
 import { DSP_VERSION } from "../dsp";
 import { SYNC_PARAMETERS } from "../parameters";
 import { boundedPcm, extractFeatures, loadFeatures, type ChannelWork, type PodcastAssetRegistry, type PodcastProgressUpdate } from "../engine";
@@ -16,10 +17,6 @@ import type { SyncChannel, SyncProject } from "./types";
 const ANALYSIS_RATE = 8000;
 const DECODER_VERSION = "native-bounded-window-pan-preroll-input-cap-timestamp-fill-v3";
 const waitTurn = () => new Promise<void>((resolve) => setImmediate(resolve));
-
-function progressToLegacy(onProgress: (event: PodcastProgressUpdate) => void) {
-  return (event: import("../engine").PodcastProgressUpdate) => onProgress(event);
-}
 
 function makeReceipt(channel: PodcastSyncChannel, asset: PodcastAsset, audioOrdinal: number) {
   const stream = asset.streams?.find((item) => item.index === channel.streamIndex);
@@ -51,8 +48,10 @@ export async function analyzeLegacyPodcastSetup(args: {
   blockedAssetIds?: string[];
   prepareOnly?: boolean;
   onProgress: (event: PodcastProgressUpdate) => void;
+  work?: PodcastWorkLedger;
 }): Promise<{ setup: PodcastSetup; metrics: PodcastSetupMetrics }> {
   const { setup, registry, audio, cacheDir, signal, retryAssetIds, blockedAssetIds = [], prepareOnly = false, onProgress } = args;
+  const report = (event: PodcastProgressUpdate, id?: string, state: import("../../../../../../../packages/core/src/lickety/podcast-types").PodcastWorkItem["status"] = "running", fraction = 0) => args.work ? args.work.report(event, id, state, fraction) : onProgress(event);
   const allIncluded = [...new Set(setup.groups.flatMap((group) => group.assetIds))];
   const blocked = new Set(blockedAssetIds);
   const included = allIncluded.filter((id) => !blocked.has(id));
@@ -68,7 +67,9 @@ export async function analyzeLegacyPodcastSetup(args: {
   for (let i = 0; i < included.length; i++) {
     signal.throwIfAborted();
     const asset = assetById.get(included[i])!;
-    onProgress({ phase: "inspect", completed: i, total: included.length, message: `Preparing ${asset.name}` });
+    report({ phase: "inspect", completed: i, total: included.length, message: `Preparing ${asset.name}` });
+    const assetChannelCount = (asset.streams ?? []).filter(stream => stream.kind === "audio").reduce((n,stream)=>n+Math.min(stream.channels ?? asset.channels ?? 0,64),0);
+    let assetChannelsDone = 0, assetAllCached = true;
     const registered = await registry.findMedia(asset.mediaId);
     if (!registered) throw new Error(`${asset.name} is unavailable. Relink the original recording before podcast setup.`);
     if (registered.identity.assetId !== asset.sourceId) throw new Error(`${asset.name} was relinked to a different registered source. Revise setup to confirm the replacement.`);
@@ -77,12 +78,14 @@ export async function analyzeLegacyPodcastSetup(args: {
       const stream = audioStreams[ordinal], channelCount = Math.min(stream.channels ?? asset.channels ?? 0, 64);
       for (let channel = 0; channel < channelCount; channel++) {
         signal.throwIfAborted();
-        onProgress({ phase: "decode", completed: channelWork.length, total: totalChannels, message: `Reading ${asset.name}, audio stream ${stream.index}, channel ${channel + 1}` });
-        const extracted = await extractFeatures({ asset, stream, sourceId: registered.identity.assetId, sha256: registered.identity.sha256, audioOrdinal: ordinal, streamIndex: stream.index, channelIndex: channel, audio, directory: cacheDir, signal, onProgress });
+        report({ phase: "decode", completed: channelWork.length, total: totalChannels, message: `Reading ${asset.name}, audio stream ${stream.index}, channel ${channel + 1}` }, `features:${asset.id}`, "running", assetChannelsDone / Math.max(1,assetChannelCount));
+        const extracted = await extractFeatures({ asset, stream, sourceId: registered.identity.assetId, sha256: registered.identity.sha256, audioOrdinal: ordinal, streamIndex: stream.index, channelIndex: channel, audio, directory: cacheDir, signal, onProgress: event => report(event, `features:${asset.id}`, "running", (assetChannelsDone + (event.total > 0 ? Math.min(1,event.completed/event.total) : 0)) / Math.max(1,assetChannelCount)) });
         channelWork.push(extracted.work); decodeSeconds += extracted.decodeSeconds;
         if (extracted.cacheHit) cacheHits++; else cacheMisses++;
+        assetAllCached &&= extracted.cacheHit; assetChannelsDone++;
       }
     }
+    report({ phase: "features", completed: assetChannelsDone, total: assetChannelCount, message: `Prepared sound for ${asset.name}` }, `features:${asset.id}`, !assetChannelCount ? "skipped" : assetAllCached ? "reused" : "done");
     peakRssBytes = Math.max(peakRssBytes, process.memoryUsage().rss);
     await waitTurn();
   }
@@ -133,13 +136,16 @@ export async function analyzeLegacyPodcastSetup(args: {
   for (let i = 0; i < included.length; i++) for (let j = i + 1; j < included.length; j++) {
     signal.throwIfAborted();
     const a = included[i], b = included[j];
-    if (workProject.clockGroups.some((group) => group.confirmed && group.sourceStarts && group.assetIds.includes(a) && group.assetIds.includes(b))) continue;
+    const pairId = `match:${a}:${b}`;
+    const pairEvent = { phase: "match" as const, completed: pairsDone++, total: totalPairs, message: `Checking common audio: ${assetById.get(a)!.name} / ${assetById.get(b)!.name}` };
+    if (workProject.clockGroups.some((group) => group.confirmed && group.sourceStarts && group.assetIds.includes(a) && group.assetIds.includes(b))) { report(pairEvent,pairId,"skipped"); continue; }
     const old = workProject.edges.filter((edge) => edge.a === a && edge.b === b);
     const unchanged = old.every((edge) => [edge.channelA, edge.channelB].every((id) => channels.find((channel) => channel.id === id)?.cacheKey === workProject.channels.find((channel) => channel.id === id)?.cacheKey));
     if (workProject.algorithm === DSP_VERSION && podcastCacheDigest(workProject.parameters) === podcastCacheDigest(SYNC_PARAMETERS) && retryAssetIds && !retryAssetIds.includes(a) && !retryAssetIds.includes(b) && old.length && unchanged) {
-      edges.push(...old); continue;
+      edges.push(...old); report(pairEvent,pairId,"reused"); continue;
     }
-    onProgress({ phase: "match", completed: pairsDone++, total: totalPairs, message: `Checking common audio: ${assetById.get(a)!.name} / ${assetById.get(b)!.name}` });
+    report(pairEvent,pairId);
+    let pairAllCached = true;
     const leftChannels = channels.filter((channel) => channel.assetId === a && channel.usable).sort((x, y) => y.rms - x.rms);
     const rightChannels = channels.filter((channel) => channel.assetId === b && channel.usable).sort((x, y) => y.rms - x.rms);
     const pairEdges: SyncProject["edges"] = [];
@@ -150,7 +156,7 @@ export async function analyzeLegacyPodcastSetup(args: {
       const cached = await cachedPodcastWork(matchDir, "channel-match", identity,
         () => matchChannels(left, right, readFeatures, readPcm, signal), signal,
         (value): value is SyncProject["edges"][number] => !!value && typeof value === "object" && Array.isArray((value as SyncProject["edges"][number]).anchors) && Array.isArray((value as SyncProject["edges"][number]).candidates) && ["measured", "needs-review", "ambiguous", "unmatched"].includes((value as SyncProject["edges"][number]).status));
-      pairEdges.push(cached.value);
+      pairEdges.push(cached.value); pairAllCached &&= cached.cacheHit;
       await waitTurn();
     }
     const quality = (edge: SyncProject["edges"][number]) => edge.anchors.reduce((sum, anchor) => sum + anchor.score * anchor.score, 0) / Math.max(1, edge.anchors.length);
@@ -163,6 +169,7 @@ export async function analyzeLegacyPodcastSetup(args: {
         alternate.status = "needs-review"; alternate.reason = "Alternative channel evidence retained; stronger pair selected for the graph.";
       }
     }
+    report({...pairEvent,completed:pairsDone},pairId,!pairEdges.length ? "skipped" : pairAllCached ? "reused" : "done");
     edges.push(...pairEdges);
     peakRssBytes = Math.max(peakRssBytes, process.memoryUsage().rss);
   }
@@ -186,7 +193,8 @@ export async function analyzeLegacyPodcastSetup(args: {
     placement.unsupported = [...new Set([...(placement.unsupported ?? []), ...channels.filter((channel) => channel.assetId === placement.assetId).flatMap((channel) => audioTimestampBlockers(channel.receipt))])];
   }
 
-  const legacyProgress = progressToLegacy(onProgress);
+  const legacyProgress = (event: PodcastProgressUpdate) => report(event,event.assetId ? `validate:${event.assetId}` : undefined);
+  const regionProgress = (event: PodcastProgressUpdate) => report(event,event.assetId ? `regions:${event.assetId}` : undefined,"running",event.total>0?event.completed/event.total:0);
   let reviewChecks: SyncProject["reviewChecks"] = [];
   let regionEvidence: SyncProject["regionEvidence"] = structuredClone(workProject.regionEvidence ?? []);
   if (prepareOnly) {
@@ -200,7 +208,7 @@ export async function analyzeLegacyPodcastSetup(args: {
       placement.provenance.push(`boundary-validation:${check.residualMs.toFixed(3)}ms at project ${check.projectSeconds.toFixed(3)}s`);
     }
     const regionalIds = [...new Set([...reviewChecks.filter((check) => check.status === "failed").map((check) => check.assetId), ...placements.filter((placement) => placement.regions?.some((region) => region.status === "unresolved")).map((placement) => placement.assetId)])].filter((id) => !retained.has(id));
-    const newEvidence = await proposeRegionalMappings({ ...reviewProject, reviewChecks: [...(workProject.reviewChecks ?? []), ...reviewChecks] }, regionalIds, legacyProgress, readPcm, signal);
+    const newEvidence = await proposeRegionalMappings({ ...reviewProject, reviewChecks: [...(workProject.reviewChecks ?? []), ...reviewChecks] }, regionalIds, regionProgress, readPcm, signal);
     regionEvidence = [...(workProject.regionEvidence ?? []).filter((evidence) => !newEvidence.some((next) => next.assetId === evidence.assetId)), ...newEvidence];
     if (newEvidence.length) reviewChecks = await validateClockNetwork({ ...reviewProject, regionEvidence }, legacyProgress, readPcm, signal, reviewChecks.filter((check) => check.status === "failed").map((check) => check.projectSeconds));
     for (const check of reviewChecks.filter((item) => item.status === "failed")) {
@@ -219,6 +227,10 @@ export async function analyzeLegacyPodcastSetup(args: {
     }
   }
 
+  args.work?.finishStage("validate",prepareOnly ? "skipped" : "done");
+  args.work?.finishStage("regions",prepareOnly ? "skipped" : "done");
+  for (const id of blockedAssetIds) for (const stage of ["features","validate","regions"] as const) report({phase:"solve",completed:0,total:0,message:"Recording left unresolved by recovery choice"},`${stage}:${id}`,"skipped");
+  if (args.work) for (const item of args.work.snapshot().items.filter(item=>item.stage==="match"&&item.assetIds.some(id=>blocked.has(id)))) report({phase:"match",completed:0,total:0,message:"Comparison skipped for excluded recovery source"},item.id,"skipped");
   peakRssBytes = Math.max(peakRssBytes, process.memoryUsage().rss);
   const metrics: PodcastSetupMetrics = { wallSeconds: 0, peakRssBytes, decodeSeconds, cacheHits, cacheMisses };
   const portableChannels: PodcastSyncChannel[] = channels.map(({ receipt: _receipt, audioOrdinal: _ordinal, featureFile: _file, featureCacheKey: _featureKey, ...channel }) => channel);
@@ -229,6 +241,6 @@ export async function analyzeLegacyPodcastSetup(args: {
     state: "review", approval: undefined, transcriptCompatibility: setup.transcriptCompatibility === "unbound" ? "unbound" : "stale",
     warnings: [...new Set(warnings)], metrics,
   };
-  onProgress({ phase: "done", completed: included.length, total: included.length, message: "Native analysis saved for review; unsupported timestamps and unresolved clock regions remain explicit." });
+  report({ phase: "done", completed: included.length, total: included.length, message: "Analysis ready for saving; unsupported timestamps and unresolved clock regions remain explicit." });
   return { setup: result, metrics };
 }

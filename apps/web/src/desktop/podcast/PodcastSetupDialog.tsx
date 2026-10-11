@@ -9,10 +9,10 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Clock3, Pause, Play, Plus, Trash2
 import { useProjectStore } from "../../stores/project-store";
 import { applyPodcastSetup } from "../../services/lickety/podcast";
 import { resolveDesktopMedia, registerDesktopMedia } from "../../services/lickety/desktop-media";
-import { readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia, buildPodcastReviewPoints, podcastProgressFraction, type PodcastPictureGapPolicy } from "./podcast-ui-model";
+import { readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia, buildPodcastReviewPoints, podcastWorkFraction, type PodcastPictureGapPolicy, type PodcastWorkItem, type PodcastWorkLedger } from "./podcast-ui-model";
 import { loadPodcastCheckpoint, savePodcastCheckpoint } from "./podcast-project-draft";
 import { moveGroupAsset, splitPodcastGroup, mergePodcastGroups, excludePodcastAsset, simultaneousPodcastSuggestions, podcastRecorderTimingLinked, setPodcastRecorderTimingLinked } from "./podcast-group-edits";
-import { clipReview, formatReviewTime, PACKET_TIMING_WARNING, podcastReviewState, podcastTimelineModel, podcastTimingRelations, podcastUnknownCoverage, reviewComparison, reviewLabel, timelinePercent, timelineWaveformPath, unwaivedTimingBlockers } from "./podcast-review-model";
+import { clipReview, formatReviewTime, PACKET_TIMING_WARNING, podcastHasCurrentHumanReview, podcastReviewState, podcastTimelineModel, podcastTimingRelations, podcastUnknownCoverage, reviewComparison, reviewEvidenceCategories, reviewLabel, timelinePercent, timelineWaveformPath, unwaivedTimingBlockers } from "./podcast-review-model";
 import { advancePreviewClock, episodeSecondsForSource, PREVIEW_HARD_DRIFT_SECONDS, PREVIEW_UI_INTERVAL_MS, previewCorrection, sourceSecondsForEpisode } from "./podcast-preview-playback";
 
 type PodcastUpdatePatch = Omit<Parameters<PodcastBridge["update"]>[0], "setupId">;
@@ -26,6 +26,7 @@ const STEPS: Array<{ id: PodcastSetupStep; title: string }> = [
 
 type PreviewSource = { assetId: string; streamIndex: number; channel?: number };
 type PodcastReviewStage = "recordings" | "coverage" | "finish";
+type PodcastPreviewStatus = "idle" | "starting" | "buffering" | "ready" | "error";
 
 function friendlyError(error: unknown): string {
   return error instanceof Error ? error.message : "Please try again.";
@@ -79,23 +80,49 @@ function audioPreviewChoices(setup: PodcastSetup): Array<{ id: string; label: st
   return choices;
 }
 
-function PodcastSourceInventory({ setup }: { setup: PodcastSetup }): JSX.Element {
-  return <section aria-label="Recording inventory before line-up" className="rounded border border-border bg-bg-1 p-3">
-    <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-sm font-semibold text-fg">Before line-up</h3><span className="text-xs text-fg-2">Timing is unverified until analysis completes.</span></div>
-    <ul className="mt-2 space-y-2">
-      {setup.groups.map((group) => <li key={group.id} className="min-w-0">
-        <div className="text-xs font-medium">{group.name} · {group.role.replaceAll("-", " ")} · {group.assetIds.length} source{group.assetIds.length === 1 ? "" : "s"}</div>
-        <ol className="mt-1 grid gap-1 sm:grid-cols-2">
-          {group.assetIds.map((assetId, index) => {
-            const asset = setup.analysis.assets.find((candidate) => candidate.id === assetId);
-            const duration = asset?.durationSeconds;
-            return <li key={assetId} className="flex min-w-0 items-center justify-between gap-3 rounded bg-bg-2 px-2 py-1.5 text-xs">
-              <span className="min-w-0 truncate" title={asset?.name ?? assetId}>{index + 1}. {asset?.name ?? assetId}</span>
-              <span className="shrink-0 text-fg-muted">{typeof duration === "number" && duration > 0 ? formatClock(duration) : "Duration unknown"} · Unverified</span>
-            </li>;
-          })}
-        </ol>
-      </li>)}
+function workStageLabel(stage: PodcastWorkItem["stage"]): string {
+  return ({ inspect: "Inspect", features: "Find shared sound", match: "Match", validate: "Check", regions: "Split sections", save: "Save" })[stage];
+}
+
+function WholeRunProgressBar({ work }: { work?: PodcastWorkLedger }): JSX.Element {
+  const fraction = podcastWorkFraction(work);
+  return <div role="progressbar" aria-label="Whole line-up progress" aria-valuemin={0} aria-valuemax={100} aria-valuetext={fraction === null ? "Whole-run progress is indeterminate" : `${Math.round(fraction * 100)}% of whole line-up`} {...(fraction === null ? {} : { "aria-valuenow": Math.round(fraction * 100) })} className="h-2 overflow-hidden rounded-full bg-bg-2"><div className={`h-full rounded-full bg-accent-strong ${fraction === null ? "w-2/5 animate-pulse motion-reduce:animate-none" : "transition-[width] duration-300"}`} style={fraction === null ? undefined : { width: `${fraction * 100}%` }} /></div>;
+}
+
+const podcastWorkStages: PodcastWorkItem["stage"][] = ["inspect", "features", "match", "validate", "regions", "save"];
+const terminalWorkStatuses = new Set<PodcastWorkItem["status"]>(["done", "reused", "skipped"]);
+
+function workStageSummary(items: PodcastWorkItem[]): { completed: number; total: number; status: string } {
+  const completed = items.filter((item) => terminalWorkStatuses.has(item.status)).length;
+  if (!items.length) return { completed: 0, total: 0, status: "not needed" };
+  if (items.some((item) => item.status === "failed")) return { completed, total: items.length, status: "failed" };
+  if (items.some((item) => item.status === "canceled")) return { completed, total: items.length, status: "canceled" };
+  if (items.some((item) => item.status === "running")) return { completed, total: items.length, status: "running" };
+  if (completed === items.length && items.every((item) => item.status === "skipped")) return { completed, total: items.length, status: "skipped" };
+  if (completed === items.length && items.every((item) => item.status === "reused")) return { completed, total: items.length, status: "reused" };
+  if (completed === items.length) return { completed, total: items.length, status: "done" };
+  return { completed, total: items.length, status: "queued" };
+}
+
+function PodcastWorkDashboard({ setup, work, busy = false }: { setup: PodcastSetup; work?: PodcastWorkLedger; busy?: boolean }): JSX.Element {
+  return <section aria-label="Recording line-up progress" className="space-y-3 rounded border border-border bg-bg-1 p-3">
+    <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-sm font-semibold text-fg">Recording line-up</h3><span className="text-xs text-fg-2">Each original keeps its own stage and saved progress.</span></div>
+    {!busy && <WholeRunProgressBar work={work} />}
+    {!work && <p className="text-xs text-fg-2">Per-recording stages are unavailable for this progress event. The current phase is shown above.</p>}
+    <ul className="space-y-2">
+      {setup.groups.flatMap((group) => group.assetIds.map((assetId, index) => {
+        const asset = setup.analysis.assets.find((candidate) => candidate.id === assetId);
+        const itemWork = work?.items.filter((item) => item.assetIds.includes(assetId)) ?? [];
+        const stageWork = podcastWorkStages.map((stage) => {
+          const items = itemWork.filter((item) => item.stage === stage);
+          return { stage, items, summary: workStageSummary(items) };
+        });
+        const sourceName = (id: string) => setup.analysis.assets.find((candidate) => candidate.id === id)?.name ?? id;
+        return <li key={assetId} className="min-w-0 rounded bg-bg-2 px-3 py-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2"><span className="min-w-0 truncate text-xs font-medium" title={asset?.name ?? assetId}>{group.name} · {group.role.replaceAll("-", " ")} · part {index + 1} of {group.assetIds.length} · {asset?.name ?? assetId}</span><span className="shrink-0 text-xs text-fg-muted">{typeof asset?.durationSeconds === "number" && asset.durationSeconds > 0 ? formatClock(asset.durationSeconds) : "Duration unknown"}</span></div>
+          {work ? <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-3 xl:grid-cols-6">{stageWork.map(({ stage, items, summary }) => <div key={stage} className="min-w-0 rounded border border-border/70 px-2 py-1" title={`${workStageLabel(stage)}: ${summary.status}, ${summary.completed} of ${summary.total} work items`}><span className="block truncate text-[10px] text-fg-muted">{workStageLabel(stage)}</span><span className={`block truncate text-[11px] ${summary.status === "failed" || summary.status === "canceled" ? "text-yellow-300" : summary.status === "running" ? "text-fg" : "text-fg-2"}`}>{summary.status === "not needed" ? "0 of 0 · skipped" : `${summary.completed} of ${summary.total} · ${summary.status}`}</span>{stage === "match" && items.length > 1 && <details className="mt-1 text-[10px] text-fg-2"><summary className="cursor-pointer">Pair details</summary><ul className="mt-1 space-y-1">{items.map((item) => <li key={item.id} className="break-words">{item.assetIds.filter((id) => id !== assetId).map(sourceName).join(", ") || "Other recording"} · {item.status}</li>)}</ul></details>}</div>)}</div> : <p className="mt-1 text-xs text-fg-muted">No per-recording stage data in this run</p>}
+        </li>;
+      }))}
     </ul>
   </section>;
 }
@@ -120,6 +147,8 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
   const [notice, setNotice] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [progressEvent, setProgressEvent] = useState<PodcastProgressEvent | null>(null);
+  const [lastWork, setLastWork] = useState<PodcastWorkLedger | undefined>();
+  const [lastWorkSetupId, setLastWorkSetupId] = useState<string | null>(null);
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [alternateMediaId, setAlternateMediaId] = useState("");
@@ -223,6 +252,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
     return bridge.onProgress((event) => {
       if (event.requestId !== requestIdRef.current) return;
       setProgressEvent(event);
+      if (event.work) { setLastWork(event.work); setLastWorkSetupId(event.setupId); }
       setProgress(event.message);
     });
   }, [isOpen, bridge]);
@@ -266,7 +296,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
     if (!bridge) { setError("Podcast preparation requires the desktop app."); return; }
     if (!selectedMediaIds.length) { setError("Choose at least one imported video or audio recording first."); return; }
     if (requestIdRef.current) return;
-    setBusy(true); setError(null); setNotice(null); setProgress("Preparing selected originals"); setProgressEvent(null); setRunStartedAt(null); setElapsedSeconds(0); setCancelling(false); cancellingRef.current = false;
+    setBusy(true); setError(null); setNotice(null); setProgress("Preparing selected originals"); setProgressEvent(null); setLastWork(undefined); setLastWorkSetupId(null); setRunStartedAt(null); setElapsedSeconds(0); setCancelling(false); cancellingRef.current = false;
     const requestId = crypto.randomUUID(); requestIdRef.current = requestId;
     try {
       const missingMediaId = selectedMediaIds.find((mediaId) => !mediaItems.some((candidate) => candidate.id === mediaId));
@@ -310,7 +340,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
   const runAnalysis = useCallback(async () => {
     if (!setup || !bridge) return;
     if (requestIdRef.current) return;
-    setBusy(true); setError(null); setNotice(null); setProgress("Checking original recordings"); setProgressEvent(null); setRunStartedAt(null); setElapsedSeconds(0); setCancelling(false); cancellingRef.current = false;
+    setBusy(true); setError(null); setNotice(null); setProgress("Checking original recordings"); setProgressEvent(null); setLastWork(undefined); setLastWorkSetupId(null); setRunStartedAt(null); setElapsedSeconds(0); setCancelling(false); cancellingRef.current = false;
     const requestId = crypto.randomUUID(); requestIdRef.current = requestId;
     try {
       const latest = await bridge.get({ setupId: setup.setupId });
@@ -371,7 +401,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
     const requestId = crypto.randomUUID();
     requestIdRef.current = requestId;
     cancellingRef.current = false;
-    setCancelling(false); setBusy(true); setError(null); setNotice(null); setProgress("Saving recovery choice"); setProgressEvent(null); setRunStartedAt(Date.now()); setElapsedSeconds(0);
+    setCancelling(false); setBusy(true); setError(null); setNotice(null); setProgress("Saving recovery choice"); setProgressEvent(null); setLastWork(undefined); setLastWorkSetupId(null); setRunStartedAt(Date.now()); setElapsedSeconds(0);
     try {
       const result = await bridge.analyze({ setupId: setup.setupId, requestId, recovery });
       if (requestIdRef.current !== requestId) return;
@@ -540,7 +570,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                 return <button key={item.id} type="button" aria-current={isCurrent ? "step" : undefined} disabled={selectionLocked || !enabled} onClick={() => setStage(item.id)} className={`min-h-14 border-b-2 px-3 py-2 text-left ${isCurrent ? "border-accent bg-accent-soft text-fg" : `border-transparent ${enabled ? "text-fg-2" : "text-fg-muted"}`}`}><span className="mr-2 text-xs">{index + 1}</span><strong className="text-sm">{item.title}</strong></button>;
               })}
             </nav>
-            {busy && requestIdRef.current && <div ref={progressStatusRef} tabIndex={-1} className="z-30 border-b border-accent/50 bg-bg-1 p-3 text-fg shadow-md outline-none" role="status" aria-live="polite" aria-atomic="true"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><strong className="block text-sm text-fg">{progressEvent ? progressLabel(progressEvent) : progress ?? "Preparing line-up…"}</strong><span className="mt-1 block break-words text-sm text-fg-2">{progressEvent?.message ?? progress ?? "Starting analysis"}</span>{(() => { const fraction = progressEvent ? podcastProgressFraction(progressEvent) : null; return <div className="mt-2 h-2 overflow-hidden rounded-full bg-bg-2" role="progressbar" aria-label="Line-up progress" aria-valuemin={0} aria-valuemax={100} aria-valuetext={fraction === null ? "Current phase progress is indeterminate" : `${Math.round(fraction * 100)}% of current phase`} {...(fraction === null ? {} : { "aria-valuenow": Math.round(fraction * 100) })}><div className={`h-full rounded-full bg-accent-strong transition-[width] duration-300 ${fraction === null ? "w-2/5 animate-pulse motion-reduce:animate-none" : ""}`} style={fraction === null ? undefined : { width: `${fraction * 100}%` }} /></div>; })()}{runStartedAt !== null && <span className="mt-1 block text-xs text-fg-muted">Elapsed {formatClock(elapsedSeconds)}</span>}</div><button type="button" disabled={cancelling} onClick={cancelAnalysis} className="min-h-9 shrink-0 rounded border border-border px-3 text-sm text-fg underline disabled:opacity-60">{cancelling ? "Cancellation pending…" : "Cancel this run"}</button></div></div>}
+            {busy && requestIdRef.current && <div ref={progressStatusRef} tabIndex={-1} className="z-30 border-b border-accent/50 bg-bg-1 p-3 text-fg shadow-md outline-none" role="status" aria-live="polite" aria-atomic="true"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><strong className="block text-sm text-fg">Podcast analysis is running</strong><span className="mt-1 block break-words text-xs text-fg-2">Current: {progressEvent ? progressLabel(progressEvent) : progress ?? "Preparing line-up…"}</span><span className="mt-1 block break-words text-sm text-fg-2">{progressEvent?.message ?? progress ?? "Starting analysis"}</span>{runStartedAt !== null && <span className="mt-1 block text-xs text-fg-muted">Elapsed {formatClock(elapsedSeconds)}</span>}<div className="mt-2"><WholeRunProgressBar work={progressEvent ? progressEvent.setupId === setup?.setupId ? progressEvent.work : undefined : lastWorkSetupId === setup?.setupId ? lastWork : undefined} /></div></div><button type="button" disabled={cancelling} onClick={cancelAnalysis} className="min-h-9 shrink-0 rounded border border-border px-3 text-sm text-fg underline disabled:opacity-60">{cancelling ? "Cancellation pending…" : "Cancel this run"}</button></div></div>}
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
               {error && <div role="alert" className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-fg">{error}</div>}
               {notice && <div role="status" className="mb-4 rounded-md border border-border bg-bg-2 p-3 text-sm text-fg">{notice}</div>}
@@ -586,7 +616,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                   </article>;
                 })}</div>
               </section>}
-              {step === "lineup" && setup && <section className="space-y-4" aria-labelledby="podcast-lineup-title"><div><h2 id="podcast-lineup-title" className="text-lg font-semibold text-fg">Line up the original recordings</h2><p className="mt-1 text-sm text-fg-2">Line-up checks original source timing. Each group stays visible for review; no timeline is created during analysis.</p></div><PodcastSourceInventory setup={setup} />{setup.decodeFailure && (() => {
+              {step === "lineup" && setup && <section className="space-y-4" aria-labelledby="podcast-lineup-title"><div><h2 id="podcast-lineup-title" className="text-lg font-semibold text-fg">Line up the original recordings</h2><p className="mt-1 text-sm text-fg-2">Line-up checks original source timing. Each group stays visible for review; no timeline is created during analysis.</p></div><PodcastWorkDashboard setup={setup} work={lastWorkSetupId === setup.setupId ? lastWork : undefined} busy={busy} />{setup.decodeFailure && (() => {
                 const failure = setup.decodeFailure;
                 const failedAsset = setup.analysis.assets.find((asset) => asset.id === failure.assetId);
                 const sourceLabel = failedAsset?.name ?? mediaName(mediaItems, failedAsset?.mediaId ?? failure.assetId);
@@ -594,7 +624,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                 const alternatives = mediaItems.filter((item) => item.id !== failedAsset?.mediaId);
                 const reason = failure.reason === "interior-short-read" ? "The decoder stopped before the requested samples ended." : failure.reason === "unverified-eof" ? "The decoder reached an end that could not be confirmed." : "The unverified audio tail exceeded the provisional gap tolerance.";
                 return <section aria-labelledby="podcast-recovery-title" className="space-y-3 rounded border border-yellow-500/50 bg-yellow-500/5 p-4 text-fg"><h3 id="podcast-recovery-title" className="text-base font-semibold text-fg">One recording could not be verified</h3><p className="text-sm text-fg"><strong>{sourceLabel}</strong> · stream {failure.streamIndex + 1}, channel {failure.channelIndex + 1} · {formatClock(failure.startSample / failure.sampleRate)} · {reason}</p><p className="text-xs text-fg-2">{failure.validSamples.toLocaleString()} of {failure.requestedSamples.toLocaleString()} requested audio samples were available at {failure.sampleRate.toLocaleString()} samples per second. Keep this source assigned while you choose what to do; it will not be auto-aligned.</p>{continued ? <p role="status" className="rounded bg-bg-1 p-3 text-sm text-fg">The remaining verified recordings may continue. This original stays assigned and excluded from automatic alignment until you resolve the source manually.</p> : <><div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => void recoverDecodeFailure("continue-unresolved")} className="min-h-9 rounded border border-border px-3 text-sm text-fg disabled:opacity-60">Continue with this recording unresolved</button><button type="button" disabled={busy} onClick={() => void recoverDecodeFailure("save-and-stop")} className="min-h-9 rounded border border-border px-3 text-sm text-fg disabled:opacity-60">Save setup and stop</button></div><div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"><label className="text-xs text-fg">Use another imported copy<select value={alternateMediaId} onChange={(event) => setAlternateMediaId(event.target.value)} disabled={busy || !alternatives.length} className="mt-1 block min-h-10 w-full rounded border border-border bg-bg px-2 py-2 text-sm text-fg"><option value="">Choose another audio or video file</option>{alternatives.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button type="button" disabled={busy || !alternateMediaId || !alternatives.some((item) => item.id === alternateMediaId)} onClick={() => void recoverDecodeFailure("use-alternate-copy", alternateMediaId)} className="min-h-10 rounded border border-border px-3 text-sm text-fg disabled:opacity-60">Revalidate and use copy</button></div>{!alternatives.length && <p className="text-xs text-fg-2">Import another copy from Recordings first. Group and participant assignments will be kept.</p>}</>}</section>;
-              })()}{setup.placements.length > 0 && <PodcastTimelineOverview setup={setup} model={setupTimelineModel!} playheadSeconds={0} />}<div className="rounded border border-border bg-bg-1 p-4 text-fg"><p className="text-sm text-fg">{setup.placements.length ? `${setup.placements.length} saved placements are available to review.` : "Analysis has not been run for these groups."}</p><p className="mt-1 text-xs text-fg-2">After line-up, review each recording’s measured gaps, overlaps, and confidence. Unresolved sources stay visible until you choose how to handle them.</p>{setup.warnings.map((warning, index) => <p key={`${warning}-${index}`} className="mt-2 text-xs text-yellow-300">{warning}</p>)}</div></section>}
+              })()}{setup.placements.length > 0 && <PodcastTimelineOverview setup={setup} model={setupTimelineModel!} playheadSeconds={0} />}<div className="rounded border border-border bg-bg-1 p-4 text-fg"><p className="text-sm text-fg">{busy ? "Analysis is running. Saved placements will appear after the results are written." : setup.placements.length ? `${setup.placements.length} saved placements are available to review.` : "Analysis has not been run for these groups."}</p><p className="mt-1 text-xs text-fg-2">After line-up, review each recording’s measured gaps, overlaps, and confidence. Unresolved sources stay visible until you choose how to handle them.</p>{setup.warnings.map((warning, index) => <p key={`${warning}-${index}`} className="mt-2 text-xs text-yellow-300">{warning}</p>)}</div></section>}
               {step === "check" && setup && <>{setup.decodeFailure?.resolution === "unresolved-excluded" && <div role="alert" className="mb-4 rounded border border-yellow-500/50 bg-yellow-500/5 p-3 text-sm">{mediaName(mediaItems, setup.analysis.assets.find((asset) => asset.id === setup.decodeFailure?.assetId)?.mediaId ?? setup.decodeFailure.assetId)} remains assigned and excluded from automatic alignment because its audio could not be verified. The remaining verified recordings can continue.</div>}<PodcastTimingReview setup={setup} groups={groups} mediaItems={mediaItems} audioChoices={audioChoices} busy={busy} stage={reviewStage} onStageChange={setReviewStage} canFinishTimeline={canFinishTimeline} pictureGapPolicy={pictureGapPolicy} onPictureGapPolicyChange={changePictureGapPolicy} onUpdate={updateTiming} onRetry={() => void runAnalysis()} /></>}
             </div>
           </LayoutContent>
@@ -625,7 +655,7 @@ function PodcastTimelineOverview({ model, playheadSeconds, waveform, waveformCha
             const width = Math.max(0, ((clip.endSeconds - clip.startSeconds) / model.durationSeconds) * 100);
             const fill = clip.status === "unresolved" || clip.attention ? "border border-yellow-600 bg-yellow-400 text-fg" : clip.status === "excluded" ? "border border-border bg-bg-3 text-fg-muted" : clip.status === "not-aligned" ? "border border-border bg-fg-muted text-fg" : "border border-accent bg-accent-soft text-fg";
             const placement = setup?.placements.find((item) => item.assetId === clip.assetId);
-            const review = placement ? clipReview(placement) : undefined;
+            const review = placement ? clipReview(placement, setup) : undefined;
             const label = setup ? reviewLabel(setup, clip.assetId) : clip.name;
             const reason = review?.reason ?? "Source timing has not been analyzed yet.";
             return <button key={clip.id} type="button" disabled={!onSelectClip} title={`${label} · ${review?.label ?? clip.status} · ${formatReviewTime(clip.startSeconds)}–${formatReviewTime(clip.endSeconds)}. ${reason}`} aria-label={`Select ${label}, ${review?.label ?? clip.status}, ${formatReviewTime(clip.startSeconds)} to ${formatReviewTime(clip.endSeconds)}. ${reason}`} onClick={() => onSelectClip?.(clip, lane.kind)} className={`absolute inset-y-1 overflow-hidden rounded text-left text-[10px] text-fg ${fill} disabled:cursor-default`} style={{ left: `${left}%`, width: `${width}%` }}><span className="relative z-10 truncate px-1">{clip.name}</span></button>;
@@ -645,6 +675,15 @@ function PodcastTimelineOverview({ model, playheadSeconds, waveform, waveformCha
   </section>;
 }
 
+function PodcastPictureGapPolicyControl({ policy, onChange, disabled }: { policy: PodcastPictureGapPolicy | null; onChange: (policy: PodcastPictureGapPolicy) => void; disabled: boolean }): JSX.Element {
+  return <fieldset disabled={disabled} className="space-y-2 rounded border border-border bg-bg-1 p-3">
+    <legend className="px-1 text-sm font-medium">When the selected camera has no picture</legend>
+    <p className="text-xs text-fg-2">Choose what the timeline should show during confirmed camera gaps.</p>
+    <label className="flex items-start gap-2 text-sm"><input type="radio" name="picture-gap-policy" value="keep-picture-gaps" checked={policy === "keep-picture-gaps"} onChange={() => onChange("keep-picture-gaps")} /><span><strong>Keep picture gaps</strong><span className="mt-0.5 block text-xs text-fg-2">Leave missing camera coverage blank.</span></span></label>
+    <label className="flex items-start gap-2 text-sm"><input type="radio" name="picture-gap-policy" value="available-camera-fallback" checked={policy === "available-camera-fallback"} onChange={() => onChange("available-camera-fallback")} /><span><strong>Use another available camera</strong><span className="mt-0.5 block text-xs text-fg-2">Show another camera that has coverage at that time.</span></span></label>
+  </fieldset>;
+}
+
 function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, stage, onStageChange, canFinishTimeline, pictureGapPolicy, onPictureGapPolicyChange, onUpdate, onRetry }: {
   setup: PodcastSetup;
   groups: PodcastGroup[];
@@ -661,7 +700,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
 }): JSX.Element {
   const placementRows = setup.placements.filter((placement) => groups.some((group) => group.assetIds.includes(placement.assetId)));
   const videoAssets = setup.analysis.assets.filter((asset) => asset.kind === "video" && groups.some((group) => group.assetIds.includes(asset.id)));
-  const initialReviewAssetId = placementRows.find((placement) => clipReview(placement).attention)?.assetId ?? videoAssets[0]?.id ?? placementRows[0]?.assetId ?? "";
+  const initialReviewAssetId = placementRows.find((placement) => clipReview(placement, setup).attention)?.assetId ?? videoAssets[0]?.id ?? placementRows[0]?.assetId ?? "";
   const initialAudioChoiceId = audioChoices.find((choice) => choice.source.assetId === initialReviewAssetId)?.id ?? audioChoices[0]?.id ?? "";
   const [reviewAssetId, setReviewAssetId] = useState(initialReviewAssetId);
   const [videoAssetId, setVideoAssetId] = useState(videoAssets.some((asset) => asset.id === initialReviewAssetId) ? initialReviewAssetId : videoAssets[0]?.id ?? "");
@@ -672,6 +711,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
   const [audioPreparing, setAudioPreparing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [previewStatus, setPreviewStatus] = useState<PodcastPreviewStatus>("idle");
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [mappingDrafts, setMappingDrafts] = useState<Record<string, { offsetSeconds: string; scale: string }>>({});
   const [splitDrafts, setSplitDrafts] = useState<Record<string, string>>({});
@@ -680,7 +720,11 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
   const videoLeaseRef = useRef<VideoDecoderLease | null>(null);
   const videoLeasePinnedRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const advancedTimingRef = useRef<HTMLDetailsElement | null>(null);
   const previewClockRef = useRef({ timelineSeconds: 0, wallMs: 0 });
+  const previewAttemptRef = useRef(0);
+  const activePreviewAttemptRef = useRef<number | null>(null);
+  const previewReadyRef = useRef(false);
   const previewDriftStartedRef = useRef(new Map<string, number>());
   const previewLastPaintRef = useRef(0);
   const activeVideo = videoAssets.find((asset) => asset.id === videoAssetId);
@@ -712,6 +756,56 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     if (pinned) lease.pin();
     else lease.unpin();
   };
+
+  const stopPreviewPlayback = (): void => {
+    previewAttemptRef.current += 1;
+    activePreviewAttemptRef.current = null;
+    previewReadyRef.current = false;
+    videoRef.current?.pause();
+    audioRef.current?.pause();
+    setVideoPreviewPinned(false);
+    setPreviewPlaying(false);
+    setPreviewStatus("idle");
+  };
+
+  const handlePreviewReady = (): void => {
+    if (activePreviewAttemptRef.current === null) return;
+    previewReadyRef.current = true;
+    setPreviewStatus("ready");
+    setPreviewPlaying(true);
+  };
+
+  const handlePreviewBuffering = (): void => {
+    if (activePreviewAttemptRef.current === null) return;
+    previewReadyRef.current = false;
+    setPreviewStatus("buffering");
+  };
+
+  const handlePreviewMediaError = (): void => {
+    const attempt = activePreviewAttemptRef.current;
+    if (attempt !== null) handlePreviewFailure(attempt, "The selected source media could not be read. Check the original recording and try again.");
+  };
+
+  const handlePreviewFailure = (attempt: number, message = "The selected source could not start playback."): void => {
+    if (previewAttemptRef.current !== attempt) return;
+    activePreviewAttemptRef.current = null;
+    videoRef.current?.pause();
+    audioRef.current?.pause();
+    setVideoPreviewPinned(false);
+    setPreviewPlaying(false);
+    setPreviewStatus("error");
+    setPreviewError(message);
+  };
+
+  useEffect(() => {
+    previewAttemptRef.current += 1;
+    activePreviewAttemptRef.current = null;
+    setPreviewStatus("idle");
+    setPreviewPlaying(false);
+    videoRef.current?.pause();
+    audioRef.current?.pause();
+    setVideoPreviewPinned(false);
+  }, [videoAssetId, audioChoiceId]);
 
   useEffect(() => {
     setPreviewError(null);
@@ -850,14 +944,23 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
   const togglePlayback = async () => {
     const video = videoRef.current; const audio = audioRef.current;
     if (!video && !audio) return;
-    if (previewPlaying) { video?.pause(); audio?.pause(); setVideoPreviewPinned(false); setPreviewPlaying(false); return; }
+    if (previewStatus !== "idle" && previewStatus !== "error") { stopPreviewPlayback(); return; }
+    const attempt = ++previewAttemptRef.current;
+    activePreviewAttemptRef.current = attempt;
+    previewReadyRef.current = false;
+    setPreviewError(null);
+    setPreviewStatus("starting");
+    setPreviewPlaying(false);
     seek(playheadSeconds);
     const videoSource = activeVideo ? mapToSource(activeVideo.id, playheadSeconds, "video") : null;
     const audioSource = activeAudio ? mapToSource(activeAudio.source.assetId, playheadSeconds, "audio") : null;
     const playPromises = [videoSource?.inBounds ? video?.play() : undefined, audioSource?.inBounds ? audio?.play() : undefined].filter((promise): promise is Promise<void> => Boolean(promise));
-    await Promise.allSettled(playPromises);
+    if (!playPromises.length) { handlePreviewFailure(attempt, "No picture or sound covers this episode time. Choose a review point inside a recording."); return; }
+    const results = await Promise.allSettled(playPromises);
+    if (previewAttemptRef.current !== attempt) return;
+    if (results.some((result) => result.status === "rejected")) { handlePreviewFailure(attempt); return; }
+    if (!previewReadyRef.current) setPreviewStatus("buffering");
     setVideoPreviewPinned(Boolean(videoSource?.inBounds && video && !video.paused));
-    setPreviewPlaying(Boolean(videoUrl || audioUrl));
   };
 
   useEffect(() => {
@@ -885,7 +988,8 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
         if (element.paused) {
           element.currentTime = expected.fileRelative;
           element.playbackRate = baseRate;
-          void element.play().then(() => { if (key === "video") setVideoPreviewPinned(true); }).catch(() => setPreviewError("The selected source could not start playback."));
+          const attempt = previewAttemptRef.current;
+          void element.play().then(() => { if (previewAttemptRef.current === attempt && key === "video") setVideoPreviewPinned(true); }).catch(() => handlePreviewFailure(attempt));
           return;
         }
         if (key === "video") setVideoPreviewPinned(true);
@@ -918,6 +1022,8 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
 
   const videoAtPlayhead = activeVideo ? mapToSource(activeVideo.id, playheadSeconds, "video") : null;
   const audioAtPlayhead = activeAudio ? mapToSource(activeAudio.source.assetId, playheadSeconds, "audio") : null;
+  const previewActive = previewStatus === "starting" || previewStatus === "buffering" || previewStatus === "ready";
+  const previewStatusLabel = previewStatus === "starting" ? "Starting playback…" : previewStatus === "buffering" ? "Buffering source media…" : previewStatus === "ready" ? "Ready" : previewStatus === "error" ? "Playback could not start" : "Playback stopped";
 
   const updatePlacement = (assetId: string, patch: PodcastUpdatePatch) => onUpdate({ ...patch, assetId });
   const noteKey = (assetId: string, regionId?: string) => `${assetId}${regionId ? `:${regionId}` : ""}`;
@@ -972,15 +1078,16 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     if (choice) setAudioChoiceId(choice.id);
   };
   const coverageUnknown = podcastUnknownCoverage(timelineModel);
-  const activeState = activePlacement ? clipReview(activePlacement) : null;
+  const activeState = activePlacement ? clipReview(activePlacement, setup) : null;
+  const activeEvidenceCategories = activePlacement ? reviewEvidenceCategories(activePlacement, setup.reviewChecks?.filter((check) => check.assetId === activePlacement.assetId) ?? []) : [];
   const activePlacementIndex = placementRows.findIndex((placement) => placement.assetId === reviewAssetId);
   const acceptTimingAndNext = async () => {
     if (!activePlacement || !activeCanAccept || !activeReviewNote.trim()) return;
     const saved = await onUpdate({ assetId: activePlacement.assetId, acceptTiming: true, note: activeReviewNote });
     if (!saved || !placementRows.length) return;
     const remaining = placementRows.slice(Math.max(0, activePlacementIndex) + 1);
-    const next = remaining.find((placement) => clipReview(placement).attention)
-      ?? remaining.find((placement) => placement.status !== "excluded" && !placement.humanAcceptance);
+    const next = remaining.find((placement) => clipReview(placement, setup).attention)
+      ?? remaining.find((placement) => placement.status !== "excluded" && !podcastHasCurrentHumanReview(setup, placement));
     if (next) selectReviewAsset(next.assetId);
     else onStageChange("coverage");
   };
@@ -992,29 +1099,29 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
       <section className="space-y-3 rounded border border-border bg-bg-1 p-3" aria-label="Synchronized source preview">
         <div className="grid gap-2 sm:grid-cols-2"><label className="space-y-1 text-xs"><span>Camera picture</span><select aria-label="Camera source to preview" className="block w-full rounded border border-border bg-bg px-2 py-2 text-sm" value={videoAssetId} onChange={(event) => setVideoAssetId(event.target.value)} disabled={busy}>{videoAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label><label className="space-y-1 text-xs"><span>Sound to compare</span><select aria-label="Audio channel to preview" className="block w-full rounded border border-border bg-bg px-2 py-2 text-sm" value={audioChoiceId} onChange={(event) => setAudioChoiceId(event.target.value)} disabled={busy}>{audioChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}</select></label></div>
-        <div className="relative flex aspect-video max-h-[28vh] min-h-[160px] items-center justify-center overflow-hidden rounded bg-black"><video ref={videoRef} src={videoUrl ?? undefined} muted preload="metadata" playsInline aria-label="Muted podcast source picture preview" className="max-h-full max-w-full object-contain" />{activeVideo && !videoAtPlayhead?.inBounds ? <div role="status" className="absolute inset-0 z-10 flex items-center justify-center bg-black px-4 text-center text-sm text-white">No picture from this source at this time.</div> : !videoUrl && <span className="text-xs text-white/70">{activeVideo ? "Loading camera preview…" : "Choose a camera source"}</span>}</div>
-        <audio ref={audioRef} src={audioUrl ?? undefined} preload="metadata" aria-label="Soloed podcast comparison audio" />
+        <div className="relative flex aspect-video max-h-[28vh] min-h-[160px] items-center justify-center overflow-hidden rounded bg-black"><video ref={videoRef} src={videoUrl ?? undefined} muted preload="metadata" playsInline onCanPlay={handlePreviewReady} onPlaying={handlePreviewReady} onWaiting={handlePreviewBuffering} onStalled={handlePreviewBuffering} onSeeking={handlePreviewBuffering} onError={handlePreviewMediaError} aria-label="Muted podcast source picture preview" className="max-h-full max-w-full object-contain" />{activeVideo && !videoAtPlayhead?.inBounds ? <div role="status" className="absolute inset-0 z-10 flex items-center justify-center bg-black px-4 text-center text-sm text-white">No picture from this source at this time.</div> : !videoUrl && <span className="text-xs text-white/70">{activeVideo ? "Loading camera preview…" : "Choose a camera source"}</span>}</div>
+        <audio ref={audioRef} src={audioUrl ?? undefined} preload="metadata" onCanPlay={handlePreviewReady} onPlaying={handlePreviewReady} onWaiting={handlePreviewBuffering} onStalled={handlePreviewBuffering} onSeeking={handlePreviewBuffering} onError={handlePreviewMediaError} aria-label="Soloed podcast comparison audio" />
         {waveform && activeChannel && <svg viewBox="0 0 480 34" role="img" aria-label="Prepared audio waveform summary" className="h-8 w-full text-accent"><path d={timelineWaveformPath(waveform, activeChannel, waveform.sourceStartSeconds, waveform.sourceStartSeconds + waveform.durationSeconds, 480, 34)} fill="none" stroke="currentColor" strokeWidth="1" /></svg>}
         {comparison && <div className="flex flex-wrap items-center gap-2 text-xs text-fg-2"><span>{comparison.evidence ? "Connected timing evidence is saved for this recording." : "Comparison channel is for listening only; no timing evidence is implied."}</span>{comparison.evidence && comparisonChoice && <button type="button" disabled={busy} onClick={() => { setAudioChoiceId(comparisonChoice.id); seek(comparison.start); }} className="min-h-8 rounded border border-border px-2 underline">Review saved comparison</button>}</div>}
         {activeAudio && !audioAtPlayhead?.inBounds && <p role="status" className="text-xs text-fg-2">No selected sound from this source at this time.</p>}
         {audioPreparing && <p role="status" className="text-xs text-fg-2">Preparing selected sound…</p>}
-        <div className="flex flex-wrap items-center gap-3"><button type="button" disabled={(!videoUrl && !audioUrl) || audioPreparing} aria-label={previewPlaying ? "Pause picture and selected sound" : "Play picture and selected sound"} onClick={() => void togglePlayback()} className="flex min-h-9 items-center gap-2 rounded bg-accent-strong px-3 text-sm text-white">{previewPlaying ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}{previewPlaying ? "Pause" : "Play picture and selected sound"}</button><button type="button" disabled={!videoUrl && !audioUrl} onClick={() => { videoRef.current?.pause(); audioRef.current?.pause(); setVideoPreviewPinned(false); setPreviewPlaying(false); }} className="flex min-h-9 items-center gap-2 rounded border border-border px-3 text-sm"><Pause size={14} aria-hidden />Stop</button><span className="text-xs tabular-nums text-fg-muted">Episode {formatClock(playheadSeconds)}</span></div>
+        <div className="flex flex-wrap items-center gap-3"><button type="button" disabled={(!videoUrl && !audioUrl) || audioPreparing} aria-label={previewActive ? "Pause picture and selected sound" : "Play picture and selected sound"} onClick={() => void togglePlayback()} className="flex min-h-9 items-center gap-2 rounded bg-accent-strong px-3 text-sm text-white">{previewActive ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}{previewActive ? "Pause" : "Play picture and selected sound"}</button><button type="button" disabled={!videoUrl && !audioUrl} onClick={stopPreviewPlayback} className="flex min-h-9 items-center gap-2 rounded border border-border px-3 text-sm"><Pause size={14} aria-hidden />Stop</button><span className="text-xs tabular-nums text-fg-muted">Episode {formatClock(playheadSeconds)}</span><span role="status" aria-live="polite" className="text-xs text-fg-2">{previewStatusLabel}</span></div>
         <label className="flex items-center gap-3 text-xs"><span className="w-12">Position</span><input aria-label="Episode playhead" type="range" min={0} max={Math.max(1, ...points.map((point) => point.projectSeconds))} step={0.01} value={Math.min(playheadSeconds, Math.max(1, ...points.map((point) => point.projectSeconds)))} onChange={(event) => seek(Number(event.target.value))} className="min-w-0 flex-1" /><span>{formatClock(playheadSeconds)}</span></label>
         {previewError && <p role="status" className="text-xs text-yellow-300">{previewError}</p>}
       </section>
       <div className="space-y-4">
-      {activePlacement && <section aria-label="Recording review decision" className="space-y-2 rounded border border-border bg-bg-1 p-3 text-fg"><div><h3 className="text-sm font-semibold text-fg">Review {activeRolePart}</h3><p className="mt-1 text-xs text-fg-2">{activeState?.label} · {activePlacement.status}. {activeState?.reason}</p>{activePlacement.exception && <p className="mt-1 text-xs text-fg-2">Saved note: {activePlacement.exception}</p>}{activeReviewBlockers.map((blocker) => <p key={blocker} className="mt-1 text-xs text-yellow-300">Needs attention: {blocker}</p>)}</div><label className="block text-xs">What did you check?<input aria-label={`Review note for ${activeRolePart}`} type="text" value={activeReviewNote} disabled={busy || activePlacement.locked} placeholder="Add a note about what you saw or heard." className="mt-1 block w-full rounded border border-border bg-bg px-2 py-2 text-sm" onChange={(event) => { const value = event.currentTarget.value; setReviewNotes((current) => ({ ...current, [noteKey(activePlacement.assetId)]: value })); }} /></label><div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => void updatePlacement(activePlacement.assetId, { locked: !activePlacement.locked })} className="min-h-9 rounded border border-border px-3 text-sm">{activePlacement.locked ? "Unlock recording" : "Lock recording"}</button><button type="button" disabled={busy || activePlacement.locked || !activeReviewNote.trim()} onClick={() => void updatePlacement(activePlacement.assetId, { excluded: activePlacement.status !== "excluded", note: activeReviewNote })} className="min-h-9 rounded border border-border px-3 text-sm">{activePlacement.status === "excluded" ? "Include recording" : "Leave out recording"}</button>{activeCanAccept && <button type="button" disabled={busy || !activeReviewNote.trim()} onClick={() => void acceptTimingAndNext()} className="min-h-9 rounded bg-accent-strong px-3 text-sm text-white">Accept reviewed timing and next</button>}{activePlacement.locked && <p className="self-center text-xs text-fg-2">A lock protects edits; it does not mean this recording was reviewed.</p>}{!activePlacement.locked && <p className="self-center text-xs text-fg-2">For timing changes, open Advanced timing adjustments below.</p>}</div></section>}
+      {activePlacement && <section aria-label="Recording review decision" className="space-y-2 rounded border border-border bg-bg-1 p-3 text-fg"><div><h3 className="text-sm font-semibold text-fg">Review {activeRolePart}</h3><p className="mt-1 text-xs text-fg-2">{activeState?.label} · {activePlacement.status}. {activeState?.reason}</p>{activePlacement.exception && <p className="mt-1 text-xs text-fg-2">Saved note: {activePlacement.exception}</p>}{activeReviewBlockers.map((blocker) => <p key={blocker} className="mt-1 text-xs text-yellow-300">Needs attention: {blocker}</p>)}{activeEvidenceCategories.map((category) => <p key={category} className="mt-1 text-xs text-yellow-300">{category === "insufficient-evidence" ? "Not enough independent evidence: use a known cue for manual placement." : category === "measured-disagreement" ? "Measured disagreement: one offset fits a constant shift; a changing shift needs timing sections." : "Fitting data: this evidence proposed the timing and does not independently confirm it."}</p>)}</div><label className="block text-xs">What did you check?<input aria-label={`Review note for ${activeRolePart}`} type="text" value={activeReviewNote} disabled={busy || activePlacement.locked} placeholder="Add a note about what you saw or heard." className="mt-1 block w-full rounded border border-border bg-bg px-2 py-2 text-sm" onChange={(event) => { const value = event.currentTarget.value; setReviewNotes((current) => ({ ...current, [noteKey(activePlacement.assetId)]: value })); }} /></label><div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={() => void updatePlacement(activePlacement.assetId, { locked: !activePlacement.locked })} className="min-h-9 rounded border border-border px-3 text-sm">{activePlacement.locked ? "Unlock recording" : "Lock recording"}</button><button type="button" disabled={busy || activePlacement.locked || !activeReviewNote.trim()} onClick={() => void updatePlacement(activePlacement.assetId, { excluded: activePlacement.status !== "excluded", note: activeReviewNote })} className="min-h-9 rounded border border-border px-3 text-sm">{activePlacement.status === "excluded" ? "Include recording" : "Leave out recording"}</button>{activeCanAccept && <button type="button" disabled={busy || !activeReviewNote.trim()} onClick={() => void acceptTimingAndNext()} className="min-h-9 rounded bg-accent-strong px-3 text-sm text-white">Accept reviewed timing and next</button>}{!activePlacement.locked && <button type="button" disabled={busy} onClick={() => { const details = advancedTimingRef.current; if (details) { details.open = true; details.scrollIntoView?.({ block: "nearest" }); } }} className="min-h-9 rounded border border-border px-3 text-sm">{activeEvidenceCategories.includes("insufficient-evidence") ? "Open manual cue controls" : activeEvidenceCategories.includes("measured-disagreement") ? "Open offset and section controls" : "Open timing controls"}</button>}{activePlacement.locked && <p className="self-center text-xs text-fg-2">A lock protects edits; it does not mean this recording was reviewed.</p>}</div></section>}
       <section className="space-y-3 rounded border border-border bg-bg-1 p-3 text-fg" aria-label="Review checkpoints"><div><h3 className="text-sm font-semibold text-fg">Quick review points</h3><p className="mt-1 text-xs text-fg-2">A few useful moments for this recording.</p></div><div className="max-h-[220px] space-y-1 overflow-y-auto">{points.filter((point) => !point.assetIds?.length || point.assetIds.includes(reviewAssetId) || point.assetId === reviewAssetId).map((point, index) => <button key={`${point.assetId ?? "episode"}:${point.projectSeconds}:${index}`} type="button" onClick={() => seek(point.projectSeconds)} className="flex min-h-9 w-full items-center justify-between gap-2 rounded px-2 text-left text-xs hover:bg-bg-2"><span className="truncate">{point.label}</span><span className="shrink-0 tabular-nums text-fg-muted">{formatClock(point.projectSeconds)}</span></button>)}</div></section>
       </div>
     </div>
     </>}
-    {stage === "coverage" && <section className="space-y-4" aria-label="Episode coverage review"><div><h3 className="text-base font-semibold text-fg">Confirmed gaps and overlaps</h3><p className="mt-1 text-sm text-fg-2">These measurements use verified timing only. Tiny seam differences are informational and do not change saved timing.</p></div><PodcastTimelineOverview setup={setup} model={timelineModel} playheadSeconds={playheadSeconds} waveform={waveform} waveformChannel={activeChannel} onSelectClip={selectClip} />{coverageUnknown.length > 0 && <section aria-label="Unknown coverage" className="rounded border border-yellow-500/40 bg-yellow-500/5 p-3"><h3 className="text-sm font-semibold text-fg">Unknown coverage</h3><p className="mt-1 text-xs text-fg-2">Crossed by recordings that still need a timing decision; these spans are not counted as confirmed gaps or overlaps.</p><ul className="mt-2 space-y-1 text-xs">{coverageUnknown.map((span) => <li key={`${span.startSeconds}:${span.endSeconds}`}>{formatReviewTime(span.startSeconds)}–{formatReviewTime(span.endSeconds)} · {span.assetIds.map((id) => reviewLabel(setup, id)).join(", ")}</li>)}</ul></section>}<fieldset disabled={busy} className="space-y-2 rounded border border-border bg-bg-1 p-3"><legend className="px-1 text-sm font-medium">When the selected camera has no picture</legend><p className="text-xs text-fg-2">Choose what the timeline should show during confirmed camera gaps.</p><label className="flex items-start gap-2 text-sm"><input type="radio" name="picture-gap-policy" value="keep-picture-gaps" checked={pictureGapPolicy === "keep-picture-gaps"} onChange={() => onPictureGapPolicyChange("keep-picture-gaps")} /><span><strong>Keep picture gaps</strong><span className="mt-0.5 block text-xs text-fg-2">Leave missing camera coverage blank.</span></span></label><label className="flex items-start gap-2 text-sm"><input type="radio" name="picture-gap-policy" value="available-camera-fallback" checked={pictureGapPolicy === "available-camera-fallback"} onChange={() => onPictureGapPolicyChange("available-camera-fallback")} /><span><strong>Use another available camera</strong><span className="mt-0.5 block text-xs text-fg-2">Show another camera that has coverage at that time.</span></span></label></fieldset></section>}
-    {stage === "finish" && <section className="space-y-4" aria-label="Timeline finish summary"><div><h3 className="text-base font-semibold text-fg">Finish</h3><p className="mt-1 text-sm text-fg-2">The timeline remains editable. One undo restores the project to its current state.</p></div><div className="grid gap-3 sm:grid-cols-2"><section className="rounded border border-border bg-bg-1 p-3"><h4 className="text-sm font-semibold text-fg">Included recordings ({placementRows.filter((placement) => placement.status !== "excluded").length})</h4><ul className="mt-2 space-y-1 text-xs">{placementRows.filter((placement) => placement.status !== "excluded").map((placement) => <li key={placement.assetId}>{reviewLabel(setup, placement.assetId)} · {setup.analysis.assets.find((asset) => asset.id === placement.assetId)?.name ?? placement.assetId}</li>)}</ul></section><section className="rounded border border-border bg-bg-1 p-3"><h4 className="text-sm font-semibold text-fg">Left out ({placementRows.filter((placement) => placement.status === "excluded").length})</h4>{placementRows.some((placement) => placement.status === "excluded") ? <ul className="mt-2 space-y-1 text-xs">{placementRows.filter((placement) => placement.status === "excluded").map((placement) => <li key={placement.assetId}>{reviewLabel(setup, placement.assetId)} · {placement.exception || "Excluded by your choice"}</li>)}</ul> : <p className="mt-2 text-xs text-fg-2">No recordings left out.</p>}</section></div><section aria-label="Timeline blockers" className="rounded border border-border p-3"><h4 className="text-sm font-semibold text-fg">Before creating the timeline</h4>{reviewState.attention.length ? <ul className="mt-2 space-y-2 text-sm">{reviewState.attention.map((placement) => <li key={placement.assetId}><strong>{reviewLabel(setup, placement.assetId)}</strong> · {clipReview(placement).reason}{unwaivedTimingBlockers(placement).map((blocker) => <span key={blocker} className="block text-xs text-yellow-300">{blocker}</span>)}<button type="button" className="mt-1 min-h-8 rounded border border-border px-2 text-xs underline" onClick={() => { selectReviewAsset(placement.assetId); onStageChange("recordings"); }}>Review this recording</button></li>)}</ul> : <p className="mt-1 text-sm text-fg-2">{canFinishTimeline ? "No unresolved timing blockers." : "Saved results are not ready to create a timeline. Return to Line up to continue or review saved alignment."}</p>}{!pictureGapPolicy && <p className="mt-2 text-sm text-yellow-300">Choose a camera-gap option in Check coverage before creating the timeline.</p>}{setup.analysisProposal && <p className="mt-2 text-sm text-yellow-300">Apply or discard the staged timing proposal before creating the timeline.</p>}</section></section>}
-    <details className="rounded border border-border p-3"><summary className="min-h-8 cursor-pointer text-sm font-medium">Advanced timing adjustments and evidence</summary><div className="mt-3 space-y-4"><div className="max-w-xl"><label className="block text-sm">Project reference clock<select aria-label="Project reference clock" className="mt-1 block w-full rounded border border-border bg-bg px-2 py-2 text-sm" value={setup.referenceAssetId ?? ""} disabled={busy || hasUnsavedTimingEdits || Boolean(setup.analysisProposal) || !hasAlternativeReference} onChange={(event) => void onUpdate({ referenceAssetId: event.target.value })}><option value="">Choose a connected recording</option>{setup.placements.map((placement) => <option key={placement.assetId} value={placement.assetId} disabled={referenceOptionDisabled(placement)}>{reviewLabel(setup, placement.assetId)}</option>)}</select></label><p className="mt-1 text-xs text-fg-2">Choose a connected, reviewed recording as the episode clock. Excluded, unresolved, and region-split recordings cannot be references.</p></div>
+    {stage === "coverage" && <section className="space-y-4" aria-label="Episode coverage review"><PodcastPictureGapPolicyControl policy={pictureGapPolicy} onChange={onPictureGapPolicyChange} disabled={busy} /><div><h3 className="text-base font-semibold text-fg">Confirmed gaps and overlaps</h3><p className="mt-1 text-sm text-fg-2">These measurements use verified timing only. Tiny seam differences are informational and do not change saved timing.</p></div><PodcastTimelineOverview setup={setup} model={timelineModel} playheadSeconds={playheadSeconds} waveform={waveform} waveformChannel={activeChannel} onSelectClip={selectClip} />{coverageUnknown.length > 0 && <section aria-label="Unknown coverage" className="rounded border border-yellow-500/40 bg-yellow-500/5 p-3"><h3 className="text-sm font-semibold text-fg">Unknown coverage</h3><p className="mt-1 text-xs text-fg-2">Crossed by recordings that still need a timing decision; these spans are not counted as confirmed gaps or overlaps.</p><ul className="mt-2 space-y-1 text-xs">{coverageUnknown.map((span) => <li key={`${span.startSeconds}:${span.endSeconds}`}>{formatReviewTime(span.startSeconds)}–{formatReviewTime(span.endSeconds)} · {span.assetIds.map((id) => reviewLabel(setup, id)).join(", ")}</li>)}</ul></section>}</section>}
+    {stage === "finish" && <section className="space-y-4" aria-label="Timeline finish summary"><div><h3 className="text-base font-semibold text-fg">Finish</h3><p className="mt-1 text-sm text-fg-2">The timeline remains editable. One undo restores the project to its current state.</p></div><div className="grid gap-3 sm:grid-cols-2"><section className="rounded border border-border bg-bg-1 p-3"><h4 className="text-sm font-semibold text-fg">Included recordings ({placementRows.filter((placement) => placement.status !== "excluded").length})</h4><ul className="mt-2 space-y-1 text-xs">{placementRows.filter((placement) => placement.status !== "excluded").map((placement) => <li key={placement.assetId}>{reviewLabel(setup, placement.assetId)} · {setup.analysis.assets.find((asset) => asset.id === placement.assetId)?.name ?? placement.assetId}</li>)}</ul></section><section className="rounded border border-border bg-bg-1 p-3"><h4 className="text-sm font-semibold text-fg">Left out ({placementRows.filter((placement) => placement.status === "excluded").length})</h4>{placementRows.some((placement) => placement.status === "excluded") ? <ul className="mt-2 space-y-1 text-xs">{placementRows.filter((placement) => placement.status === "excluded").map((placement) => <li key={placement.assetId}>{reviewLabel(setup, placement.assetId)} · {placement.exception || "Excluded by your choice"}</li>)}</ul> : <p className="mt-2 text-xs text-fg-2">No recordings left out.</p>}</section></div><section aria-label="Timeline blockers" className="rounded border border-border p-3"><h4 className="text-sm font-semibold text-fg">Before creating the timeline</h4>{reviewState.attention.length ? <ul className="mt-2 space-y-2 text-sm">{reviewState.attention.map((placement) => <li key={placement.assetId}><strong>{reviewLabel(setup, placement.assetId)}</strong> · {clipReview(placement, setup).reason}{unwaivedTimingBlockers(placement).map((blocker) => <span key={blocker} className="block text-xs text-yellow-300">{blocker}</span>)}<button type="button" className="mt-1 min-h-8 rounded border border-border px-2 text-xs underline" onClick={() => { selectReviewAsset(placement.assetId); onStageChange("recordings"); }}>Review this recording</button></li>)}</ul> : <p className="mt-1 text-sm text-fg-2">{canFinishTimeline ? "No unresolved timing blockers." : "Saved results are not ready to create a timeline. Return to Line up to continue or review saved alignment."}</p>}{!pictureGapPolicy && <p className="mt-2 text-sm text-yellow-300">Choose a camera-gap option in Check coverage before creating the timeline.</p>}{setup.analysisProposal && <p className="mt-2 text-sm text-yellow-300">Apply or discard the staged timing proposal before creating the timeline.</p>}</section></section>}
+    <details ref={advancedTimingRef} className="rounded border border-border p-3"><summary className="min-h-8 cursor-pointer text-sm font-medium">Timing adjustments and evidence</summary><div className="mt-3 space-y-4"><div className="max-w-xl"><label className="block text-sm">Project reference clock<select aria-label="Project reference clock" className="mt-1 block w-full rounded border border-border bg-bg px-2 py-2 text-sm" value={setup.referenceAssetId ?? ""} disabled={busy || hasUnsavedTimingEdits || Boolean(setup.analysisProposal) || !hasAlternativeReference} onChange={(event) => void onUpdate({ referenceAssetId: event.target.value })}><option value="">Choose a connected recording</option>{setup.placements.map((placement) => <option key={placement.assetId} value={placement.assetId} disabled={referenceOptionDisabled(placement)}>{reviewLabel(setup, placement.assetId)}</option>)}</select></label><p className="mt-1 text-xs text-fg-2">Choose a connected, reviewed recording as the episode clock. Excluded, unresolved, and region-split recordings cannot be references.</p></div>
     <section className="space-y-3 text-fg" aria-label="Placement decisions"><h3 className="text-sm font-semibold text-fg">Review timing and evidence</h3><div className="space-y-3">{placementRows.map((placement) => {
       const asset = setup.analysis.assets.find((candidate) => candidate.id === placement.assetId);
       const label = reviewLabel(setup, placement.assetId);
-      const status = clipReview(placement);
+      const status = clipReview(placement, setup);
       const note = noteFor(placement.assetId);
       const draft = mappingDraft(placement.assetId, placement.mapping);
       const blockers = unwaivedTimingBlockers(placement);
@@ -1022,16 +1129,16 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
       const selected = selectedRegion?.assetId === placement.assetId;
       return <article key={placement.assetId} className={`space-y-3 rounded border p-3 ${selected ? "border-accent" : "border-border"}`}>
         <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><strong className="block truncate text-sm">{asset?.name ?? label}</strong><span className={`text-xs ${status.attention ? "text-yellow-300" : "text-fg-muted"}`}>{status.label} · {placement.status}</span><p className="mt-1 text-xs text-fg-muted">{status.reason}</p>{placement.reviewReason && <p className="mt-1 text-xs text-yellow-300">{placement.reviewReason.replaceAll("-", " ")}</p>}{placement.exception && <p className="mt-1 text-xs text-fg-muted">Saved note: {placement.exception}</p>}</div><button type="button" className="min-h-8 rounded border border-border px-2 text-xs" onClick={() => focusAsset(placement.assetId)}>Preview recording</button></div>
-        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end text-xs"><label>Offset (seconds)<input aria-label={`Offset for ${label}`} type="number" step="0.001" value={draft.offsetSeconds} disabled={busy || placement.locked || Boolean(placement.regions?.length)} className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => setMappingDrafts((current) => ({ ...current, [noteKey(placement.assetId)]: { ...draft, offsetSeconds: event.target.value } }))} /></label><label>Clock scale<input aria-label={`Clock scale for ${label}`} type="number" min="0.9" max="1.1" step="0.0001" value={draft.scale} disabled={busy || placement.locked || Boolean(placement.regions?.length)} className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => setMappingDrafts((current) => ({ ...current, [noteKey(placement.assetId)]: { ...draft, scale: event.target.value } }))} /></label><button type="button" className="min-h-9 rounded border border-border px-3" disabled={busy || placement.locked || Boolean(placement.regions?.length) || !note.trim() || Number(draft.offsetSeconds) === placement.mapping.offsetSeconds && Number(draft.scale) === placement.mapping.scale} onClick={() => void saveMapping(placement.assetId, placement.mapping)}>Save timing</button></div>
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end text-xs"><label>Offset (seconds)<input aria-label={`Offset for ${label}`} type="number" step="0.001" value={draft.offsetSeconds} disabled={busy || placement.locked || Boolean(placement.regions?.length)} className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => { const value = event.currentTarget.value; setMappingDrafts((current) => ({ ...current, [noteKey(placement.assetId)]: { ...draft, offsetSeconds: value } })); }} /></label><label>Clock scale<input aria-label={`Clock scale for ${label}`} type="number" min="0.9" max="1.1" step="0.0001" value={draft.scale} disabled={busy || placement.locked || Boolean(placement.regions?.length)} className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => { const value = event.currentTarget.value; setMappingDrafts((current) => ({ ...current, [noteKey(placement.assetId)]: { ...draft, scale: value } })); }} /></label><button type="button" className="min-h-9 rounded border border-border px-3" disabled={busy || placement.locked || Boolean(placement.regions?.length) || !note.trim() || Number(draft.offsetSeconds) === placement.mapping.offsetSeconds && Number(draft.scale) === placement.mapping.scale} onClick={() => void saveMapping(placement.assetId, placement.mapping)}>Save timing</button></div>
         {placement.regions?.length ? <div className="space-y-2 rounded border border-border p-3"><strong className="text-xs">Timing sections</strong>{placement.regions.map((region, index) => {
           const regionDraft = mappingDraft(placement.assetId, region.mapping, region.id);
           const regionNote = noteFor(placement.assetId, region.id);
           const regionSelected = selectedRegion?.assetId === placement.assetId && selectedRegion.regionId === region.id;
-          return <div key={region.id} className={`space-y-2 rounded p-2 ${regionSelected ? "bg-accent-soft" : "bg-bg-2"}`}><div className="flex flex-wrap items-center justify-between gap-2"><button type="button" className="text-left text-xs font-medium underline" onClick={() => focusAsset(placement.assetId, region.id)}>Section {index + 1}: {formatClock(region.sourceStartSeconds)}–{formatClock(region.sourceEndSeconds)} source · {region.status}</button><span className="text-xs text-fg-muted">{region.note || region.provenance.at(-1) || "No section note saved"}</span></div><div className="grid gap-2 sm:grid-cols-2"><label className="text-xs">Offset (seconds)<input aria-label={`Offset for ${label} section ${index + 1}`} type="number" step="0.001" value={regionDraft.offsetSeconds} disabled={busy || placement.locked || region.locked} className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => setMappingDrafts((current) => ({ ...current, [noteKey(placement.assetId, region.id)]: { ...regionDraft, offsetSeconds: event.target.value } }))} /></label><label className="text-xs">Clock scale<input aria-label={`Clock scale for ${label} section ${index + 1}`} type="number" min="0.9" max="1.1" step="0.0001" value={regionDraft.scale} disabled={busy || placement.locked || region.locked} className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => setMappingDrafts((current) => ({ ...current, [noteKey(placement.assetId, region.id)]: { ...regionDraft, scale: event.target.value } }))} /></label></div><label className="block text-xs">Section review note<input aria-label={`Review note for ${label} section ${index + 1}`} type="text" value={regionNote} disabled={busy} placeholder="What did you hear or see at this section?" className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => setReviewNotes((current) => ({ ...current, [noteKey(placement.assetId, region.id)]: event.target.value }))} /></label><div className="flex flex-wrap gap-2"><button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy || region.locked || placement.locked || !regionNote.trim()} onClick={() => void saveMapping(placement.assetId, region.mapping, region.id)}>Save section timing</button><button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy} onClick={() => void updatePlacement(placement.assetId, { regionId: region.id, locked: !region.locked })}>{region.locked ? "Unlock section" : "Lock section"}</button><button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy || region.locked || placement.locked || !regionNote.trim()} onClick={() => void updatePlacement(placement.assetId, { regionId: region.id, excluded: region.status !== "excluded", note: regionNote })}>{region.status === "excluded" ? "Include section" : "Leave out section"}</button>{canAccept && <button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy || !regionNote.trim()} onClick={() => void updatePlacement(placement.assetId, { regionId: region.id, acceptTiming: true, note: regionNote })}>Accept section timing</button>}</div></div>;
+          return <div key={region.id} className={`space-y-2 rounded p-2 ${regionSelected ? "bg-accent-soft" : "bg-bg-2"}`}><div className="flex flex-wrap items-center justify-between gap-2"><button type="button" className="text-left text-xs font-medium underline" onClick={() => focusAsset(placement.assetId, region.id)}>Section {index + 1}: {formatClock(region.sourceStartSeconds)}–{formatClock(region.sourceEndSeconds)} source · {region.status}</button><span className="text-xs text-fg-muted">{region.note || region.provenance.at(-1) || "No section note saved"}</span></div><div className="grid gap-2 sm:grid-cols-2"><label className="text-xs">Offset (seconds)<input aria-label={`Offset for ${label} section ${index + 1}`} type="number" step="0.001" value={regionDraft.offsetSeconds} disabled={busy || placement.locked || region.locked} className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => { const value = event.currentTarget.value; setMappingDrafts((current) => ({ ...current, [noteKey(placement.assetId, region.id)]: { ...regionDraft, offsetSeconds: value } })); }} /></label><label className="text-xs">Clock scale<input aria-label={`Clock scale for ${label} section ${index + 1}`} type="number" min="0.9" max="1.1" step="0.0001" value={regionDraft.scale} disabled={busy || placement.locked || region.locked} className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => { const value = event.currentTarget.value; setMappingDrafts((current) => ({ ...current, [noteKey(placement.assetId, region.id)]: { ...regionDraft, scale: value } })); }} /></label></div><label className="block text-xs">Section review note<input aria-label={`Review note for ${label} section ${index + 1}`} type="text" value={regionNote} disabled={busy} placeholder="What did you hear or see at this section?" className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => { const value = event.currentTarget.value; setReviewNotes((current) => ({ ...current, [noteKey(placement.assetId, region.id)]: value })); }} /></label><div className="flex flex-wrap gap-2"><button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy || region.locked || placement.locked || !regionNote.trim()} onClick={() => void saveMapping(placement.assetId, region.mapping, region.id)}>Save section timing</button><button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy} onClick={() => void updatePlacement(placement.assetId, { regionId: region.id, locked: !region.locked })}>{region.locked ? "Unlock section" : "Lock section"}</button><button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy || region.locked || placement.locked || !regionNote.trim()} onClick={() => void updatePlacement(placement.assetId, { regionId: region.id, excluded: region.status !== "excluded", note: regionNote })}>{region.status === "excluded" ? "Include section" : "Leave out section"}</button>{canAccept && <button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy || !regionNote.trim()} onClick={() => void updatePlacement(placement.assetId, { regionId: region.id, acceptTiming: true, note: regionNote })}>Accept section timing</button>}</div></div>;
         })}</div> : null}
-        <label className="block text-xs">Review note<input aria-label={`Review note for ${label}`} type="text" value={note} disabled={busy} placeholder="Describe what you checked before changing or accepting timing." className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => setReviewNotes((current) => ({ ...current, [noteKey(placement.assetId)]: event.target.value }))} /></label>
+        <label className="block text-xs">Review note<input aria-label={`Review note for ${label}`} type="text" value={note} disabled={busy} placeholder="Describe what you checked before changing or accepting timing." className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => { const value = event.currentTarget.value; setReviewNotes((current) => ({ ...current, [noteKey(placement.assetId)]: value })); }} /></label>
         <div className="flex flex-wrap gap-2"><button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy} onClick={() => void updatePlacement(placement.assetId, { locked: !placement.locked })}>{placement.locked ? "Unlock recording" : "Lock recording"}</button><button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy || placement.locked || placement.regions?.some((region) => region.locked) || placement.status === "excluded" && !note.trim()} onClick={() => void updatePlacement(placement.assetId, { excluded: placement.status !== "excluded", note: note.trim() || undefined })}>{placement.status === "excluded" ? "Include recording" : "Leave out recording"}</button>{canAccept && <button type="button" className="min-h-8 rounded border border-border px-2 text-xs" disabled={busy || !note.trim()} onClick={() => void updatePlacement(placement.assetId, { acceptTiming: true, note })}>Accept reviewed timing</button>}{blockers.includes(PACKET_TIMING_WARNING) && <button type="button" className="min-h-8 rounded border border-yellow-500/50 px-2 text-xs" disabled={busy || placement.locked || !note.trim()} onClick={() => void updatePlacement(placement.assetId, { waiveUnsupported: true, note })}>Save timing warning exception</button>}</div>
-        <div className="grid gap-2 sm:grid-cols-[minmax(140px,0.4fr)_minmax(0,1fr)_auto] sm:items-end rounded border border-border p-2"><label className="text-xs">Split at source time (seconds)<input aria-label={`Split ${label} at source time`} type="number" min="0" step="0.001" value={splitDrafts[placement.assetId] ?? ""} disabled={busy || placement.locked} className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => setSplitDrafts((current) => ({ ...current, [placement.assetId]: event.target.value }))} /></label><span className="text-xs text-fg-muted">Use a visible sync change or recording break as the boundary. The saved note records your reason.</span><button type="button" className="min-h-9 rounded border border-border px-3 text-xs" disabled={busy || placement.locked || !note.trim() || !Number.isFinite(Number(splitDrafts[placement.assetId])) || !splitDrafts[placement.assetId]} onClick={() => void updatePlacement(placement.assetId, { splitSourceSeconds: Number(splitDrafts[placement.assetId]), note })}>Split timing section</button></div>
+        <div className="grid gap-2 sm:grid-cols-[minmax(140px,0.4fr)_minmax(0,1fr)_auto] sm:items-end rounded border border-border p-2"><label className="text-xs">Split at source time (seconds)<input aria-label={`Split ${label} at source time`} type="number" min="0" step="0.001" value={splitDrafts[placement.assetId] ?? ""} disabled={busy || placement.locked} className="mt-1 block w-full rounded border border-border bg-bg px-2 py-1.5" onChange={(event) => { const value = event.currentTarget.value; setSplitDrafts((current) => ({ ...current, [placement.assetId]: value })); }} /></label><span className="text-xs text-fg-muted">Use a visible sync change or recording break as the boundary. The saved note records your reason.</span><button type="button" className="min-h-9 rounded border border-border px-3 text-xs" disabled={busy || placement.locked || !note.trim() || !Number.isFinite(Number(splitDrafts[placement.assetId])) || !splitDrafts[placement.assetId]} onClick={() => void updatePlacement(placement.assetId, { splitSourceSeconds: Number(splitDrafts[placement.assetId]), note })}>Split timing section</button></div>
       </article>;
     })}</div>{!placementRows.length && <p className="rounded border border-yellow-500/40 p-3 text-sm text-fg">No placements are saved yet. Return to Line up and run analysis or choose a manual reference.</p>}</section>
     <section aria-label="Timing evidence and unresolved checks" className="rounded border border-border p-3"><h3 className="text-sm font-medium">Timing evidence and unresolved checks</h3><div className="mt-2 space-y-2">{setup.reviewChecks?.map((check, index) => <div key={`${check.assetId}:${index}`} className="flex flex-wrap items-center gap-2 border-t border-border py-2 text-xs"><span className="font-medium">{setup.analysis.assets.find((asset) => asset.id === check.assetId)?.name ?? check.assetId}</span><span>{check.status}</span><span>residual {check.residualMs.toFixed(2)} ms</span><span>score {check.score.toFixed(3)}</span>{check.reason && <span>{check.reason}</span>}</div>)}{setup.warnings.map((warning, index) => <p key={`${warning}:${index}`} className="text-xs text-yellow-300">{warning}</p>)}</div></section></div></details>

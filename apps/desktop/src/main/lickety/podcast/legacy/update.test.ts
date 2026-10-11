@@ -82,3 +82,23 @@ it("splits the raw presented source interval and retains the boundary note", () 
   ]);
   expect(project.placements[0].regions![0].provenance.at(-1)).toContain("Visible clap drift boundary");
 });
+
+it('binds human review to source, mapping and revision and invalidates on reference change', () => {
+  const project=fixture();project.placements[1].component='a';
+  applyPodcastUpdate(project,update({assetId:'b',acceptTiming:true,note:'Checked shared clap'}));
+  expect(project.placements[1].humanAcceptance).toMatchObject({reviewedRevision:5,sourceId:'source-b',scope:'recording'});
+  expect(project.placements[1].humanAcceptance?.mappingKey).toBeTruthy();
+  applyPodcastUpdate(project,update({assetId:'b',locked:true}));
+  expect(project.placements[1].humanAcceptance?.reviewedRevision).toBe(5);
+  applyPodcastUpdate(project,update({referenceAssetId:'b'}));
+  expect(project.placements[1].humanAcceptance).toBeUndefined();
+});
+
+it('invalidates dependent review when reference source content changes without changing its asset ID', () => {
+  const project=fixture();project.placements[1].component='a';project.analysis.assets[0].sourceDigest='original';
+  applyPodcastUpdate(project,update({assetId:'b',acceptTiming:true,note:'Checked shared clap'}));
+  expect(project.placements[1].humanAcceptance?.mappingKey).toBeTruthy();
+  project.analysis.assets[0].sourceDigest='replacement';
+  applyPodcastUpdate(project,update({assetId:'b',locked:true}));
+  expect(project.placements[1].humanAcceptance).toBeUndefined();
+});

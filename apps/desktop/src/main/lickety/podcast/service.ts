@@ -9,6 +9,7 @@ import { assertPodcastSetup } from "../../../../../../packages/core/src/lickety/
 import { NativeAudioAnalysis, PodcastAudioReadError } from "../audio-analysis";
 import { atomicJson } from "../asset-registry";
 import { inspectPodcastMedia } from "./native-packet-inspector";
+import { PodcastWorkLedger } from "./progress-ledger";
 import { groupPodcastAssets } from "./intake";
 import { podcastSequenceMetadata, timecodeFromSampleReference } from "./legacy/intake-metadata";
 import { analyzeLegacyPodcastSetup as analyzePodcastSetup } from "./legacy/pipeline";
@@ -428,8 +429,10 @@ export class PodcastNativeService {
     const hasTiming = setup.placements.length > 0;
     setup.state = "analyzing"; setup.progress = { completed: 0, total: setup.groups.flatMap((group) => group.assetIds).length, message: "Starting native analysis" }; setup.updatedAt = now(); await this.save(setup);
     const started = performance.now();
+    const included = [...new Set(setup.groups.flatMap((group) => group.assetIds))];
+    const work = new PodcastWorkLedger(included, onProgress);
+    work.report({ phase: "inspect", completed: 0, total: included.length, message: "Planning line-up work" });
     try {
-      const included = [...new Set(setup.groups.flatMap((group) => group.assetIds))];
       const inspectIds: string[] | undefined = recovery ? [] : undefined;
       for (let index = 0; index < included.length; index++) {
         signal.throwIfAborted();
@@ -438,8 +441,8 @@ export class PodcastNativeService {
         if (!registered || registered.identity.assetId !== asset.sourceId) throw new Error(`${asset.name} was relinked. Revise Setup to confirm the current original before analysis.`);
         asset.sourceDigest = registered.identity.sha256;
         const original = await this.registry.resolve(asset.sourceId, "original");
-        if (inspectIds && !inspectIds.includes(asset.id)) continue;
-        onProgress({ phase: "inspect", completed: index, total: included.length, message: `Verifying presented timestamps for ${asset.name}` });
+        if (inspectIds && !inspectIds.includes(asset.id)) { work.report({ phase: "inspect", completed: index + 1, total: included.length, message: `Reusing verified timestamps for ${asset.name}` }, `inspect:${asset.id}`, "reused"); continue; }
+        work.report({ phase: "inspect", completed: index, total: included.length, message: `Verifying presented timestamps for ${asset.name}` }, `inspect:${asset.id}`);
         const packetFacts = await this.inspectPackets(original.path, signal);
         asset.streams = packetFacts.streams;
         if (packetFacts.containerStartSeconds !== undefined) asset.containerStartSeconds = packetFacts.containerStartSeconds;
@@ -451,14 +454,19 @@ export class PodcastNativeService {
           if (asset.timecodeOrigin === "embedded" && asset.nativeRate) asset.sourceTimecodeRate = asset.nativeRate;
         }
         setup.warnings.push(...packetFacts.warnings.map((warning) => `${asset.name}: ${warning}`));
+        work.report({ phase: "inspect", completed: index + 1, total: included.length, message: `Verified timestamps for ${asset.name}` }, `inspect:${asset.id}`, "done");
         await waitTurn();
       }
       await this.save(setup);
       const activeIds = included.filter((id) => !blockedAssetIds.includes(id));
       if (!activeIds.length) {
-        setup.state = "review"; setup.progress = undefined; setup.updatedAt = now(); await this.save(setup); return setup;
+        for (const item of work.snapshot().items.filter(item => item.id !== "save")) work.report({phase:"solve",completed:0,total:0,message:"Recording excluded by recovery choice"},item.id,"skipped");
+        setup.state = "review"; setup.progress = undefined; setup.updatedAt = now();
+        work.report({phase:"done",completed:0,total:1,message:"Saving recovery results"},"save");
+        await this.save(setup);
+        work.report({phase:"done",completed:1,total:1,message:"Recovery results saved"},"save","done"); return setup;
       }
-      const result = await analyzePodcastSetup({ setup, registry: this.registry, audio: this.audio, cacheDir: this.analysisDir, signal, retryAssetIds, blockedAssetIds: [...new Set(blockedAssetIds)], prepareOnly, onProgress });
+      const result = await analyzePodcastSetup({ setup, registry: this.registry, audio: this.audio, cacheDir: this.analysisDir, signal, retryAssetIds, blockedAssetIds: [...new Set(blockedAssetIds)], prepareOnly, onProgress, work });
       result.metrics.wallSeconds = (performance.now() - started) / 1000;
       result.setup.metrics = result.metrics;
       result.setup.updatedAt = now(); result.setup.progress = undefined;
@@ -467,8 +475,12 @@ export class PodcastNativeService {
       } else {
         result.setup.revision = setup.revision;
       }
-      await this.save(result.setup); return result.setup;
+      work.report({ phase: "done", completed: 0, total: 1, message: "Saving line-up results" }, "save");
+      await this.save(result.setup);
+      work.report({ phase: "done", completed: 1, total: 1, message: "Line-up results saved for review" }, "save", "done");
+      return result.setup;
     } catch (error) {
+      work.fail(signal.aborted);
       const latest = await this.get(setupId).catch(() => setup);
       latest.state = signal.aborted ? "canceled" : "error"; latest.progress = undefined; latest.updatedAt = now();
       if (error instanceof PodcastAudioReadError) latest.decodeFailure = error.decodeFailure;

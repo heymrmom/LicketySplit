@@ -35,8 +35,9 @@ import {
 import { ToolcraftButton as Button } from "@licketysplit/ui";
 import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
 import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTooltip as Tooltip } from "@licketysplit/ui";
 import { useProjectStore } from "../../stores/project-store";
-import { previewProxyCache, usePreviewProxyStore } from "../../stores/preview-proxy-store";
+import { previewProxyCache, retryNativePreviewPreparation, usePreviewProxyStore } from "../../stores/preview-proxy-store";
 import { useTimelineStore } from "../../stores/timeline-store";
 import { useUIStore } from "../../stores/ui-store";
 import { useThemeStore } from "../../stores/theme-store";
@@ -110,6 +111,10 @@ import {
 } from "./preview/index";
 import { snapCanvasPosition } from "./preview/canvas-snapping";
 import { captureNativeVideoFrame } from "./preview/video-frame";
+import { PreviewPreparationStatus } from "./preview/PreviewPreparationStatus";
+import { getActivePreviewMediaId } from "./preview/active-preview-media";
+import { getKeyboardScrubTarget } from "./preview/scrub-controls";
+import { desktopMediaAvailable } from "../../services/lickety/desktop-media";
 import {
   createBudgetedPreviewDecoder,
   PendingVideoDecoderReservations,
@@ -1491,6 +1496,20 @@ export const Preview: React.FC = () => {
   }, [isScrubbing]);
 
   const isPlaying = playbackState === "playing";
+
+  const activePreviewMediaId = useMemo(
+    () => getActivePreviewMediaId(timelineTracks, playheadPosition, getOriginalMediaItem, mediaClipHasVisual),
+    [getOriginalMediaItem, mediaClipHasVisual, playheadPosition, timelineTracks],
+  );
+  const activePreviewPreparation = usePreviewProxyStore((state) =>
+    activePreviewMediaId ? state.entries[activePreviewMediaId] : undefined,
+  );
+  const showNativePreparationStatus =
+    desktopMediaAvailable() &&
+    activePreviewMediaId !== null &&
+    (activePreviewPreparation?.status === "queued" ||
+      activePreviewPreparation?.status === "encoding" ||
+      activePreviewPreparation?.status === "error");
 
   const motionPathClip = React.useMemo(() => {
     if (!motionPathMode || !motionPathClipId) return null;
@@ -6703,7 +6722,7 @@ export const Preview: React.FC = () => {
       const target = event.target as HTMLElement;
       if (
         target.closest(
-          "input, textarea, select, button, [contenteditable='true']",
+          "input, textarea, select, button, [role='slider'], [contenteditable='true']",
         )
       ) {
         return;
@@ -7763,6 +7782,20 @@ export const Preview: React.FC = () => {
     },
     [actualEndTime, seekTo],
   );
+  const handleScrubKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const target = getKeyboardScrubTarget(
+        event.key,
+        playheadPosition,
+        actualEndTime || 10,
+        event.shiftKey,
+      );
+      if (target === null) return;
+      event.preventDefault();
+      seekTo(target);
+    },
+    [actualEndTime, playheadPosition, seekTo],
+  );
 
   const handleSkipBack = useCallback(() => {
     seekRelative(-5);
@@ -7967,6 +8000,17 @@ export const Preview: React.FC = () => {
               cursor: hoveredGraphicClipId && !isPlaying ? "pointer" : "default",
             }}
           />
+
+          {showNativePreparationStatus && (
+            <PreviewPreparationStatus
+              entry={activePreviewPreparation}
+              onRetry={() => {
+                if (activePreviewMediaId) {
+                  void retryNativePreviewPreparation(activePreviewMediaId);
+                }
+              }}
+            />
+          )}
 
           {videoDecoderNotice && (
             <div
@@ -8407,8 +8451,17 @@ export const Preview: React.FC = () => {
         }`}
       >
         {/* Scrub Bar - integrated at top of controls */}
+        <Tooltip content="Seek preview · ←/→ 1s, Shift+←/→ 5s, Page Up/Down 10%, Home/End" delayDuration={0}>
         <div
-          className="h-1.5 bg-bg-2 cursor-pointer group hover:h-2.5 transition-all relative"
+          role="slider"
+          tabIndex={0}
+          aria-label="Preview seek"
+          aria-valuemin={0}
+          aria-valuemax={actualEndTime || 10}
+          aria-valuenow={Math.min(playheadPosition, actualEndTime || 10)}
+          aria-valuetext={`${formatTime(playheadPosition)} of ${formatTime(actualEndTime)}`}
+          onKeyDown={handleScrubKeyDown}
+          className="h-1.5 bg-bg-2 cursor-pointer group hover:h-2.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent transition-all relative"
           onClick={handleScrubClick}
         >
           <div
@@ -8418,6 +8471,7 @@ export const Preview: React.FC = () => {
             <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity transform scale-0 group-hover:scale-100 duration-100 border border-black/20" />
           </div>
         </div>
+        </Tooltip>
 
         {/* Controls row */}
         <div className="h-12 px-4 flex items-center gap-3">
@@ -8430,17 +8484,20 @@ export const Preview: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4 mx-auto">
-          <IconButton
-            label="Skip back 5s"
-            icon={<SkipBack size={18} />}
-            variant="ghost"
-            size="sm"
-            onClick={handleSkipBack}
-            className="w-8 h-8 grid place-items-center rounded-md text-fg-2 hover:bg-hover hover:text-fg transition-colors"
-          />
-          <IconButton
-            label={playbackLockedReason ?? (isPlaying ? "Pause" : "Play")}
-            icon={
+          <Tooltip content="Skip back 5 seconds · ↑" delayDuration={0}>
+            <IconButton
+              label="Skip back 5s"
+              icon={<SkipBack size={18} />}
+              variant="ghost"
+              size="sm"
+              onClick={handleSkipBack}
+              className="w-8 h-8 grid place-items-center rounded-md text-fg-2 hover:bg-hover hover:text-fg transition-colors"
+            />
+          </Tooltip>
+          <Tooltip content="Play or pause · Space" delayDuration={0}>
+            <IconButton
+              label={playbackLockedReason ?? (isPlaying ? "Pause" : "Play")}
+              icon={
               isPlaying ? (
                 <Pause size={18} fill="currentColor" />
               ) : playbackLockedReason ? (
@@ -8448,53 +8505,60 @@ export const Preview: React.FC = () => {
               ) : (
                 <Play size={18} fill="currentColor" className="ml-0.5" />
               )
-            }
-            variant="ghost"
-            size="md"
-            onClick={() => {
-              togglePlayback();
-            }}
-            isDisabled={Boolean(playbackLockedReason)}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-              playbackLockedReason
-                ? "bg-bg-2 text-fg-muted cursor-not-allowed"
-                : "bg-bg-2 text-fg hover:bg-bg-3"
-            }`}
-          />
-          <IconButton
-            label="Skip forward 5s"
-            icon={<SkipForward size={18} />}
-            variant="ghost"
-            size="sm"
-            onClick={handleSkipForward}
-            className="w-8 h-8 grid place-items-center rounded-md text-fg-2 hover:bg-hover hover:text-fg transition-colors"
-          />
+              }
+              variant="ghost"
+              size="md"
+              onClick={() => {
+                togglePlayback();
+              }}
+              isDisabled={Boolean(playbackLockedReason)}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                playbackLockedReason
+                  ? "bg-bg-2 text-fg-muted cursor-not-allowed"
+                  : "bg-bg-2 text-fg hover:bg-bg-3"
+              }`}
+            />
+          </Tooltip>
+          <Tooltip content="Skip forward 5 seconds · ↓" delayDuration={0}>
+            <IconButton
+              label="Skip forward 5s"
+              icon={<SkipForward size={18} />}
+              variant="ghost"
+              size="sm"
+              onClick={handleSkipForward}
+              className="w-8 h-8 grid place-items-center rounded-md text-fg-2 hover:bg-hover hover:text-fg transition-colors"
+            />
+          </Tooltip>
         </div>
 
         <div className="flex gap-1.5 items-center">
-          <IconButton
-            label={loopEnabled ? "Disable preview loop" : "Enable preview loop"}
-            title={`Loop ${formatTime(previewLoopRange?.start ?? 0)} to ${formatTime(previewLoopRange?.end ?? 0)} • I: mark start • O: mark end • Shift+L: toggle`}
-            icon={<Repeat size={16} />}
-            aria-pressed={loopEnabled}
-            variant="ghost"
-            size="sm"
-            onClick={handleToggleLoop}
-            isDisabled={actualEndTime <= 0 || exportState.isExporting}
-            className={`w-[34px] h-[34px] grid place-items-center rounded-[7px] transition-colors ${loopEnabled ? "bg-accent/15 text-accent" : "bg-bg-2 text-fg-2 hover:bg-bg-3 hover:text-fg"}`}
-          />
-          <IconButton
-            label={isMuted ? "Unmute" : "Mute"}
-            icon={isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsMuted(!isMuted)}
-            className={`w-[34px] h-[34px] grid place-items-center rounded-[7px] transition-colors ${
-              isMuted
-                ? "bg-bg-2 text-status-error"
-                : "bg-bg-2 text-fg-2 hover:text-fg hover:bg-bg-3"
-            }`}
-          />
+          <Tooltip content="Repeat the marked range or the full timeline · I/O mark range, Shift+L toggle" delayDuration={0}>
+            <IconButton
+              label={loopEnabled ? "Disable preview loop" : "Enable preview loop"}
+              title={`Loop ${formatTime(previewLoopRange?.start ?? 0)} to ${formatTime(previewLoopRange?.end ?? 0)} · I: mark start · O: mark end · Shift+L: toggle`}
+              icon={<Repeat size={16} />}
+              aria-pressed={loopEnabled}
+              variant="ghost"
+              size="sm"
+              onClick={handleToggleLoop}
+              isDisabled={actualEndTime <= 0 || exportState.isExporting}
+              className={`w-[34px] h-[34px] grid place-items-center rounded-[7px] transition-colors ${loopEnabled ? "bg-accent/15 text-accent" : "bg-bg-2 text-fg-2 hover:bg-bg-3 hover:text-fg"}`}
+            />
+          </Tooltip>
+          <Tooltip content="Mute or unmute preview audio" delayDuration={0}>
+            <IconButton
+              label={isMuted ? "Unmute" : "Mute"}
+              icon={isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsMuted(!isMuted)}
+              className={`w-[34px] h-[34px] grid place-items-center rounded-[7px] transition-colors ${
+                isMuted
+                  ? "bg-bg-2 text-status-error"
+                  : "bg-bg-2 text-fg-2 hover:text-fg hover:bg-bg-3"
+              }`}
+            />
+          </Tooltip>
 
           {/* Aspect ratio (project canvas size) */}
           <div className="relative">

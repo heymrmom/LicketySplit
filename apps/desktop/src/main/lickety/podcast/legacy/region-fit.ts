@@ -107,7 +107,7 @@ export async function proposeRegionalMappings(p:SyncProject,ids:string[],progres
   for(let i=0,center=lo+10;center<hi-3.1;i++,center+=12){
    await mediaCheckpoint(signal);const role=i%2===0?'fit':'validation';
    const candidates:SyncRegionEvidence[]=[];
-   progress({phase:'solve',completed:i,total:Math.ceil((hi-lo)/12),message:`Testing separate clock regions: ${p.analysis.assets.find(a=>a.id===id)!.name}`});
+   progress({assetId:id,phase:'solve',completed:i,total:Math.max(0,Math.ceil((hi-lo-13.1)/12)),message:`Testing separate clock regions: ${p.analysis.assets.find(a=>a.id===id)!.name}`});
    const windowSeconds=6,half=windowSeconds/2;
    for(const shift of role==='fit'?[0,-2,2,-4,4,-6,6,-8,8,-10,10,-1,1,-3,3,-5,5,-7,7,-9,9]:[0]) {
    const t=center+shift;if(role==='fit'&&retained.some(v=>Math.abs(t-v.time)<v.half+half+.1))continue;

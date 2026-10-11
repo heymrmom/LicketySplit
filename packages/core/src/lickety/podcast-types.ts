@@ -171,7 +171,7 @@ export interface PodcastPlacement {
   unsupported?: string[];
   regions?: PodcastRegion[];
   reviewReason?: "small-discrepancy" | "conflicting-timing" | "insufficient-evidence";
-  humanAcceptance?: { scope: "recording" | "section"; note: string; at: string };
+  humanAcceptance?: { scope: "recording" | "section"; note: string; at: string; reviewedRevision?: number; sourceId?: string; sourceDigest?: string; regionId?: string; mappingKey?: string };
   timingWaiver?: { reasons: string[]; note: string; waivedAt: string };
 }
 
@@ -390,9 +390,20 @@ export interface PodcastPlacementUpdate {
 export interface PodcastSetupRequest { setupId: string }
 export interface PodcastApprovalRequest { setupId: string; expectedRevision: number }
 export interface PodcastCancelRequest { requestId: string }
+export interface PodcastWorkItem {
+  id: string;
+  assetIds: string[];
+  stage: "inspect" | "features" | "match" | "validate" | "regions" | "save";
+  status: "queued" | "running" | "done" | "reused" | "skipped" | "failed" | "canceled";
+  completed: number;
+  total: number;
+}
+export interface PodcastWorkProgress { completed: number; total: number; items: PodcastWorkItem[] }
+
 export interface PodcastProgressEvent {
   setupId: string;
   requestId: string;
+  work?: PodcastWorkProgress;
   phase: "inspect" | "decode" | "features" | "match" | "solve" | "done";
   completed: number;
   total: number;
@@ -575,4 +586,21 @@ export function assertPodcastSetup(value: unknown): asserts value is PodcastSetu
   if (setup.timingUndo !== undefined) validateSnapshot(setup.timingUndo);
   validateReview(setup.reviewChecks, setup.regionEvidence, setup.validationReservations, setup.channels);
   if (setup.sourceHistory !== undefined && (!Array.isArray(setup.sourceHistory) || setup.sourceHistory.some((entry) => !isRecord(entry) || !Number.isInteger(entry.revision) || typeof entry.reason !== "string" || typeof entry.assetId !== "string" || (!assets.has(entry.assetId) && !isRecord(entry.asset)) || (entry.asset !== undefined && (!isRecord(entry.asset) || entry.asset.id !== entry.assetId))))) fail("Invalid podcast source history.");
+}
+
+/** Review provenance is a portable equality key, not a cryptographic approval.
+ * Unrelated revisions (such as locking another clip) do not erase a review. */
+export interface PodcastReviewReference { asset: PodcastAsset; mapping: PodcastTimeMapping }
+export function podcastReviewMappingKey(asset: PodcastAsset, placement: PodcastPlacement, referenceAssetId: string | undefined, regionId?: string, reference?: PodcastReviewReference): string {
+  const regions = regionId ? placement.regions?.filter(region => region.id === regionId) : placement.regions;
+  return JSON.stringify([asset.sourceId, asset.sourceDigest ?? null, asset.containerStartSeconds ?? 0, asset.durationSeconds, referenceAssetId ?? null,
+    reference ? [reference.asset.sourceId, reference.asset.sourceDigest ?? null, reference.asset.containerStartSeconds ?? 0, reference.mapping] : null,
+    regionId ?? null, regionId ? null : placement.mapping,
+    regions?.map(region => [region.id, region.sourceStartSeconds, region.sourceEndSeconds, region.mapping, region.status === "excluded"]) ?? null]);
+}
+export function podcastHumanReviewIsCurrent(asset: PodcastAsset, placement: PodcastPlacement, referenceAssetId: string | undefined, reference?: PodcastReviewReference): boolean {
+  const review = placement.humanAcceptance;
+  return !!review?.mappingKey && review.sourceId === asset.sourceId && review.sourceDigest === asset.sourceDigest &&
+    (!review.regionId || !!placement.regions?.some(region => region.id === review.regionId)) &&
+    review.mappingKey === podcastReviewMappingKey(asset, placement, referenceAssetId, review.regionId, reference);
 }

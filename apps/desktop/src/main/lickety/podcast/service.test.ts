@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import type { PodcastProgressUpdate } from "./engine";
 import { mkdtemp, rm } from "node:fs/promises";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -436,7 +438,20 @@ describe("native podcast setup revision and live analysis", () => {
       const initial = await service.inspect({ projectId, mediaIds: ["media-a", "media-b"] });
       const sameInput = structuredClone(initial);
       const legacy = await analyzeLegacyPodcastSetup({ setup: sameInput, registry: harness.registry as never, audio: audio as never, cacheDir: legacyCache, signal: new AbortController().signal, onProgress: () => undefined });
-      const adapted = await service.analyze(initial.setupId, "550e8400-e29b-41d4-a716-446655440099", new AbortController().signal, () => undefined);
+      const progress: PodcastProgressUpdate[] = [];
+      const adapted = await service.analyze(initial.setupId, "550e8400-e29b-41d4-a716-446655440099", new AbortController().signal, event => {
+        progress.push(event);
+        if (event.work && event.work.completed === event.work.total) {
+          const persisted = JSON.parse(readFileSync(path.join(directory,"setups",`${initial.setupId}.json`),"utf8"));
+          expect(persisted.state).toBe("review"); expect(persisted.placements.length).toBeGreaterThan(0);
+        }
+      });
+      const work = progress.flatMap(event => event.work ? [event.work] : []);
+      expect(new Set(work.map(item=>item.total)).size).toBe(1);
+      expect(work.map(item=>item.completed)).toEqual([...work.map(item=>item.completed)].sort((a,b)=>a-b));
+      expect(work.at(-1)?.completed).toBe(work.at(-1)?.total);
+      expect(work.slice(0,-1).every(item=>item.completed<item.total)).toBe(true);
+      expect(work.at(-1)?.items.find(item=>item.id==='save')?.status).toBe('done');
 
       const grouping = (setup: typeof initial) => setup.groups.map(({ id: _id, name, kind, role, assetIds }) => ({ name, kind, role, assetIds }));
       const placements = (setup: typeof initial) => setup.placements.map(({ assetId, mapping, status, component }) => ({ assetId, scale: mapping.scale, offsetSeconds: mapping.offsetSeconds, status, component }));

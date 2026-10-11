@@ -11,7 +11,7 @@ const CONTEXT_FRAMES = 128 * HOP;
 const WINDOW_FRAMES = ANALYSIS_RATE * 10;
 const DECODER_VERSION = "native-bounded-window-verified-receipts-tail-output-cap-v6";
 const WAVEFORM_STAGE = "channel-waveform-v1";
-export interface PodcastProgressUpdate { phase: "inspect" | "decode" | "features" | "match" | "solve" | "done"; completed: number; total: number; message: string }
+export interface PodcastProgressUpdate { work?: import("../../../../../../packages/core/src/lickety/podcast-types").PodcastWorkProgress; assetId?: string; phase: "inspect" | "decode" | "features" | "match" | "solve" | "done"; completed: number; total: number; message: string }
 export interface PodcastAssetRegistry { findMedia(mediaId: string): Promise<RegisteredAsset | undefined> }
 interface Features { version: string; identityKey: string; cacheKey: string; frames: number; requestedFrames: number; coverage: "complete" | "verified-eof-tail"; coverageReceipts: PodcastDecodeReceipt[]; hashes: Hash[]; min: number[]; max: number[]; rms: number; clippedFraction: number }
 export interface ChannelWork { channel: PodcastSyncChannel; audioOrdinal: number; featureFile: string; featureCacheKey: string; receipt: import("./legacy/types").DecodeReceipt }

@@ -111,6 +111,7 @@ export const Timeline: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const tracksRef = useRef<HTMLDivElement>(null);
   const trackHeadersRef = useRef<HTMLDivElement>(null);
+  const initialPlayheadVisibilityProjectRef = useRef<string | null>(null);
   const suppressNextBackgroundClickRef = useRef(false);
   const trackDragPointerYRef = useRef<number | null>(null);
   const trackDragAutoScrollFrameRef = useRef<number | null>(null);
@@ -485,6 +486,26 @@ export const Timeline: React.FC = () => {
       element.scrollLeft = scrollX;
     }
   }, [scrollX]);
+
+  useEffect(() => {
+    const el = tracksRef.current;
+    if (
+      !el ||
+      viewportWidth <= 0 ||
+      initialPlayheadVisibilityProjectRef.current === project.id
+    ) return;
+
+    const playheadPixels = playheadPosition * pixelsPerSecond;
+    const isVisible = playheadPixels >= scrollX && playheadPixels <= scrollX + viewportWidth;
+    if (!isVisible) {
+      const leftMargin = Math.min(Math.max(viewportWidth * 0.12, 60), 220);
+      const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+      const nextScrollX = Math.max(0, Math.min(maxScroll, playheadPixels - leftMargin));
+      el.scrollLeft = nextScrollX;
+      setScrollX(nextScrollX);
+    }
+    initialPlayheadVisibilityProjectRef.current = project.id;
+  }, [pixelsPerSecond, playheadPosition, project.id, scrollX, setScrollX, viewportWidth]);
 
   useEffect(() => {
     if (playbackState !== "playing") return;

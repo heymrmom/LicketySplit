@@ -5,6 +5,7 @@ import type {
   PodcastSyncChannel,
   PodcastWaveformSummary,
 } from "@licketysplit/core/lickety/podcast-types";
+import { podcastHumanReviewIsCurrent } from "@licketysplit/core/lickety/podcast-types";
 
 /**
  * Adapted from the legacy renderer helpers in src/sync-review-state.ts and
@@ -14,6 +15,19 @@ import type {
  */
 
 export const PACKET_TIMING_WARNING = "VFR or packet timeline discontinuity: region mapping required before approval.";
+
+export type PodcastReviewEvidenceCategory = "insufficient-evidence" | "measured-disagreement" | "fitting-data";
+
+export function reviewEvidenceCategories(
+  placement: PodcastPlacement,
+  checks: Array<Pick<NonNullable<PodcastSetup["reviewChecks"]>[number], "status" | "fitOverlap">>,
+): PodcastReviewEvidenceCategory[] {
+  const categories: PodcastReviewEvidenceCategory[] = [];
+  if (placement.reviewReason === "insufficient-evidence" || checks.some((check) => check.status === "unverified")) categories.push("insufficient-evidence");
+  if (placement.reviewReason === "small-discrepancy" || placement.reviewReason === "conflicting-timing" || checks.some((check) => check.status === "failed" && !check.fitOverlap)) categories.push("measured-disagreement");
+  if (checks.some((check) => check.fitOverlap || check.status === "overlaps-training")) categories.push("fitting-data");
+  return categories;
+}
 
 export function unwaivedTimingBlockers(placement: PodcastPlacement): string[] {
   const waiver = placement.timingWaiver;
@@ -32,7 +46,15 @@ function regionAtProject(placement: PodcastPlacement, projectSeconds: number): b
     projectSeconds < region.sourceEndSeconds * region.mapping.scale + region.mapping.offsetSeconds).length === 1;
 }
 
-export function clipReview(placement: PodcastPlacement): { label: string; attention: boolean; reason: string } {
+export function podcastHasCurrentHumanReview(setup: PodcastSetup, placement: PodcastPlacement): boolean {
+  const asset = setup.analysis.assets.find((candidate) => candidate.id === placement.assetId);
+  const referenceAsset = setup.analysis.assets.find(item => item.id === setup.referenceAssetId);
+  const referencePlacement = setup.placements.find(item => item.assetId === setup.referenceAssetId);
+  const reference = referenceAsset && referencePlacement ? {asset:referenceAsset,mapping:referencePlacement.mapping} : undefined;
+  return Boolean(asset && podcastHumanReviewIsCurrent(asset, placement, setup.referenceAssetId, reference));
+}
+
+export function clipReview(placement: PodcastPlacement, setup?: PodcastSetup): { label: string; attention: boolean; reason: string } {
   if (placement.status === "excluded") return { label: "Left out", attention: false, reason: "This clip is excluded from the synchronized timeline." };
   if (unwaivedTimingBlockers(placement).length) return { label: "Timing needs attention", attention: true, reason: "This timing cannot be safely applied yet. Review the reason below, adjust it, or leave this clip out." };
   if (placement.status === "unresolved" || placement.regions?.some((region) => region.status === "unresolved")) {
@@ -44,7 +66,14 @@ export function clipReview(placement: PodcastPlacement): { label: string; attent
         : "There is not enough independent shared sound to confirm this timing. Check playback, retry matching, or place it from a known cue.";
     return { label, attention: true, reason };
   }
-  if (placement.humanAcceptance) return { label: "Accepted by you", attention: false, reason: `${placement.humanAcceptance.note} Automatic evidence remains unchanged.` };
+  if (placement.humanAcceptance) {
+    const current = Boolean(setup && podcastHasCurrentHumanReview(setup, placement));
+    const scope = placement.humanAcceptance.scope === "section" ? `section ${placement.humanAcceptance.regionId ?? "unknown"}` : "recording";
+    const revision = placement.humanAcceptance.reviewedRevision === undefined ? "reviewed revision unavailable" : `reviewed revision ${placement.humanAcceptance.reviewedRevision}`;
+    return current
+      ? { label: "Accepted by you", attention: false, reason: `${placement.humanAcceptance.note} Current review scope: ${scope}; ${revision}. Automatic evidence remains unchanged.` }
+      : { label: "Prior review note", attention: false, reason: `${placement.humanAcceptance.note} Earlier scope: ${scope}; ${revision}. Review again because this note is not bound to the current source and timing.` };
+  }
   if (placement.status === "manual" || placement.regions?.some((region) => region.status === "manual")) return { label: "Placed manually", attention: false, reason: "Your saved placement is in use. Check playback before applying." };
   if (placement.timingWaiver) return { label: "Timing warning waived", attention: false, reason: "The current timing is retained with your saved exception note. Check picture and sound before applying." };
   if (placement.status === "reference") return { label: "Timing reference", attention: false, reason: "This clip sets the timeline’s timing. Check its placement before applying." };
@@ -52,7 +81,7 @@ export function clipReview(placement: PodcastPlacement): { label: string; attent
 }
 
 export function podcastReviewState(setup: PodcastSetup) {
-  const attention = setup.placements.filter((placement) => clipReview(placement).attention);
+  const attention = setup.placements.filter((placement) => clipReview(placement, setup).attention);
   const hasResults = setup.placements.length > 0;
   const approved = hasResults && setup.state === "approved" && setup.approval?.revision === setup.revision && Boolean(setup.approval.mappingDigest);
   const resumable = ["draft", "canceled", "error", "analyzing"].includes(setup.state) || !hasResults || (setup.state === "approved" && !approved);

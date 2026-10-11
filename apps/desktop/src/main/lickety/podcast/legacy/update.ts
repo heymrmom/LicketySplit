@@ -1,3 +1,4 @@
+import { podcastReviewMappingKey, podcastHumanReviewIsCurrent } from "../../../../../../../packages/core/src/lickety/podcast-types";
 import type { PodcastUpdateRequest } from "../../../../../../../packages/core/src/lickety/podcast-types";
 import type { SyncProject } from "./types";
 import { assertRecorderConstraints, refreshNativeTimingBlockers } from "./approval";
@@ -115,6 +116,19 @@ export function applyPodcastUpdate(project: SyncProject, update: PodcastUpdateRe
       }
       if (update.locked !== undefined) placement.locked = update.locked;
     }
+  }
+  const referenceAsset = project.analysis.assets.find(item => item.id === project.referenceAssetId);
+  const referencePlacement = project.placements.find(item => item.assetId === project.referenceAssetId);
+  const reviewReference = referenceAsset && referencePlacement ? {asset: referenceAsset, mapping: referencePlacement.mapping} : undefined;
+  if (update.acceptTiming) {
+    const placement = project.placements.find(item => item.assetId === update.assetId)!;
+    const asset = project.analysis.assets.find(item => item.id === placement.assetId)!;
+    placement.humanAcceptance = { ...placement.humanAcceptance!, reviewedRevision: project.revision + 1, sourceId: asset.sourceId,
+      sourceDigest: asset.sourceDigest, regionId: update.regionId, mappingKey: podcastReviewMappingKey(asset, placement, project.referenceAssetId, update.regionId, reviewReference) };
+  }
+  for (const placement of project.placements) {
+    const asset = project.analysis.assets.find(item => item.id === placement.assetId);
+    if (placement.humanAcceptance?.mappingKey && (!asset || !podcastHumanReviewIsCurrent(asset, placement, project.referenceAssetId, reviewReference))) placement.humanAcceptance = undefined;
   }
   assertRecorderConstraints(project);
   refreshNativeTimingBlockers(project);

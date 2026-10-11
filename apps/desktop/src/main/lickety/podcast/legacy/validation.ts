@@ -20,9 +20,10 @@ export async function validateClockNetwork(p: SyncProject, progress: (p:SyncProg
   const lo=Math.min(...sourceBounds.map(b=>b.lo)),hi=Math.max(...sourceBounds.map(b=>b.hi));
   const times=[lo+7,lo+(hi-lo)*.19,lo+(hi-lo)*.39,lo+(hi-lo)*.63,lo+(hi-lo)*.81,hi-7,...extraSeconds];
   for(let t=lo+13;t<hi-3.1;t+=120)times.push(t);
-  for(const t of [...new Set(times)].filter(t=>t>=lo+3.1 && t<=hi-3.1)) {
+  const checkpoints=[...new Set(times)].filter(t=>t>=lo+3.1 && t<=hi-3.1);
+  for(const [checkpointIndex,t] of checkpoints.entries()) {
    await mediaCheckpoint(signal);
-   progress({phase:'solve',completed:checks.length,total:placements.length*6,message:`Checking independent common sound: ${p.analysis.assets.find(a=>a.id===placement.assetId)!.name}`});
+   progress({assetId:placement.assetId,phase:'solve',completed:checkpointIndex,total:checkpoints.length,message:`Checking independent common sound: ${p.analysis.assets.find(a=>a.id===placement.assetId)!.name}`});
    const candidates:SyncReviewCandidate[]=[];
    const other=placements.filter(v=>v.assetId!==placement.assetId&&(v.status==='reference'||v.status==='measured'||v.status==='manual'&&v.locked));
    // All standalone recorder channels first. If none carries usable common
