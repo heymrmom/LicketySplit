@@ -26,7 +26,36 @@ describe("visible proxy workflow", () => {
     generation.generate.mockReset().mockResolvedValue(new Blob(["proxy"]));
     previewProxyCache.syncProject(project);
   });
-  afterEach(() => { cleanup(); previewProxyCache.syncProject(null); });
+  afterEach(() => { cleanup(); previewProxyCache.syncProject(null); delete (window as unknown as { licketysplit?: unknown }).licketysplit; });
+
+  it("shows truthful queued, preparing, prepared, and retry states for desktop proxies", () => {
+    Object.assign(window, { licketysplit: { platform: "desktop", lickety: {} } });
+    const entry = { source: item, preset: "low" as const, status: "queued" as const, progress: 0, enabled: true, createdAt: Date.now() };
+    act(() => previewProxyCache.store.setState({ entries: { [item.id]: entry } }));
+    render(<><PreviewProxyControls item={item} /><PreviewProxyBadge mediaId={item.id} /></>);
+    expect(screen.getByRole("status")).toHaveTextContent("Queued — one video at a time");
+    expect(screen.getByText("Preview queued")).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Proxy quality" })).not.toBeInTheDocument();
+    expect(screen.getByText(/smaller disk preview.*Exports always use your original video/i)).toBeInTheDocument();
+    expect(screen.queryByText(/720p|256 MB|tab/i)).not.toBeInTheDocument();
+
+    act(() => previewProxyCache.store.setState({ entries: { [item.id]: { ...entry, status: "encoding" } } }));
+    expect(screen.getByRole("status")).toHaveTextContent("Preparing preview…");
+    expect(screen.getByText("Preparing preview")).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+
+    act(() => previewProxyCache.store.setState({ entries: { [item.id]: { ...entry, status: "ready", blob: new Blob(["proxy"]), width: 960, height: 540 } } }));
+    expect(screen.getByText("Preview prepared")).toBeInTheDocument();
+    expect(screen.getByText(/Disk preview prepared · playback verifies the source when opened/)).toBeInTheDocument();
+    expect(screen.queryByText("Original preview")).not.toBeInTheDocument();
+
+    act(() => previewProxyCache.store.setState({ entries: { [item.id]: { ...entry, status: "error", error: "Native preparation failed" } } }));
+    expect(screen.getByText("Preview preparation failed")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Native preparation failed");
+    expect(screen.getByRole("button", { name: "Prepare disk preview" })).toBeInTheDocument();
+    expect(screen.queryByText("Original preview")).not.toBeInTheDocument();
+  });
 
   it("creates the selected quality, shows dimensions and toggles preview without changing the project", async () => {
     render(<><PreviewProxyControls item={item} /><PreviewProxyBadge mediaId={item.id} /></>);

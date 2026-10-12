@@ -56,7 +56,133 @@ describe("project/export proxy isolation", () => {
     expect(previewProxyCache.store.getState().projectId).toBeNull();
   });
 });
-it('desktop defers unused library identities until a current or selected clip needs preparation',async()=>{const {makeWorkflowFixture}=await import('@licketysplit/core/lickety/test-fixtures');const {useUIStore}=await import('./ui-store');const fixture=makeWorkflowFixture();const findAsset=vi.fn(async(mediaId:string)=>({identity:{assetId:mediaId,mediaId,sha256:'sha',byteLength:1},originalUri:`licketysplit-media://${mediaId}/original`,durationMs:20000}));Object.assign(window,{licketysplit:{platform:'desktop',lickety:{findAsset,originalUri:async(mediaId:string)=>`licketysplit-media://${mediaId}/original`,resourceProfile:async()=>({lowMemory:true}),resolve:async(id:string)=>`licketysplit-media://${id}/original`,ensureProxy:async(id:string)=>({assetId:id,sourceSha256:'sha',proxyUri:`licketysplit-media://${id}/proxy`,version:1,width:960,height:540,sourceStartPTS:0,proxyStartPTS:0,durationMs:20000})}}});useUIStore.setState({selectedItems:[]});useProjectStore.setState({hasOpenProject:true,project:{...fixture,timeline:{...fixture.timeline,tracks:[]}}});await new Promise(resolve=>setTimeout(resolve,20));expect(findAsset).not.toHaveBeenCalled();useUIStore.setState({selectedItems:[{type:'clip',id:'cam-b'}]});await vi.waitFor(()=>expect(findAsset).toHaveBeenCalledWith('cam-b'));expect(findAsset).not.toHaveBeenCalledWith('cam-a');await vi.waitFor(()=>expect(previewProxyCache.store.getState().entries['cam-b']?.status).toBe('ready'));delete window.licketysplit;useUIStore.setState({selectedItems:[]});});
+it("prepares eligible desktop library videos in order before the first preview request", async () => {
+  const { makeWorkflowFixture } = await import("@licketysplit/core/lickety/test-fixtures");
+  const { useUIStore } = await import("./ui-store");
+  const fixture = makeWorkflowFixture();
+  const findAsset = vi.fn(async (mediaId: string) => ({ identity: { assetId: mediaId, mediaId, sha256: "sha", byteLength: 1 }, originalUri: `licketysplit-media://${mediaId}/original`, durationMs: 20_000 }));
+  const ensureProxy = vi.fn(async (assetId: string) => ({ assetId, sourceSha256: "sha", proxyUri: `licketysplit-media://${assetId}/proxy`, version: 1, width: 960, height: 540, sourceStartPTS: 0, proxyStartPTS: 0, durationMs: 20_000 }));
+  Object.assign(window, { licketysplit: { platform: "desktop", lickety: { findAsset, originalUri: async (mediaId: string) => `licketysplit-media://${mediaId}/original`, resourceProfile: async () => ({ lowMemory: true }), resolve: async (id: string) => `licketysplit-media://${id}/original`, ensureProxy } } });
+  useUIStore.setState({ selectedItems: [] });
+  useProjectStore.setState({ hasOpenProject: true, project: { ...fixture, timeline: { ...fixture.timeline, tracks: [] } } });
+  await vi.waitFor(() => expect(ensureProxy).toHaveBeenCalledTimes(2));
+  expect(findAsset.mock.calls.map(([mediaId]) => mediaId)).toEqual(["cam-a", "cam-b"]);
+  expect(previewProxyCache.store.getState().entries["cam-a"]?.status).toBe("ready");
+  expect(previewProxyCache.store.getState().entries["cam-b"]?.status).toBe("ready");
+  delete window.licketysplit;
+  useUIStore.setState({ selectedItems: [] });
+});
+
+it("keeps only one native background proxy request active at a time", async () => {
+  const { makeWorkflowFixture } = await import("@licketysplit/core/lickety/test-fixtures");
+  const { useUIStore } = await import("./ui-store");
+  const fixture = makeWorkflowFixture();
+  const pending: Array<{ id: string; resolve: (receipt: object) => void }> = [];
+  const items = fixture.mediaLibrary.items.filter((item) => item.id === "cam-a" || item.id === "cam-b").map((item) => ({
+    ...item,
+    blob: new Blob([item.id]),
+    nativeSource: {
+      identity: { assetId: `asset-${item.id}`, mediaId: item.id, sha256: `sha-${item.id}`, byteLength: 1 },
+      originalUri: `licketysplit-media://${item.id}/original`,
+      durationMs: 20_000,
+    },
+    metadata: { ...item.metadata, width: 3840, height: 2160, canDecodeVideo: true },
+  }));
+  const ensureProxy = vi.fn((assetId: string, _options?: { requestId?: string; priority?: "foreground" | "background" }) => new Promise<object>((resolve) => pending.push({
+    id: assetId,
+    resolve: (receipt) => resolve(receipt),
+  })));
+  Object.assign(window, {
+    licketysplit: {
+      platform: "desktop",
+      lickety: {
+        originalUri: async (mediaId: string) => `licketysplit-media://${mediaId}/original`,
+        resolve: async (assetId: string) => `licketysplit-media://${assetId}/original`,
+        resourceProfile: async () => ({ lowMemory: true }),
+        ensureProxy,
+      },
+    },
+  });
+  useUIStore.setState({ selectedItems: [] });
+  useProjectStore.setState({ hasOpenProject: true, project: { ...fixture, mediaLibrary: { ...fixture.mediaLibrary, items }, timeline: { ...fixture.timeline, tracks: [] } } });
+
+  await vi.waitFor(() => expect(ensureProxy).toHaveBeenCalledTimes(1));
+  expect(ensureProxy.mock.calls[0][0]).toBe("asset-cam-a");
+  expect(ensureProxy.mock.calls[0][1]).toEqual(expect.objectContaining({ priority: "background", requestId: expect.any(String) }));
+  expect(pending).toHaveLength(1);
+  pending[0].resolve({ assetId: "asset-cam-a", sourceSha256: "sha-cam-a", proxyUri: "licketysplit-media://cam-a/proxy", version: 1, width: 960, height: 540, sourceStartPTS: 0, proxyStartPTS: 0, durationMs: 20_000 });
+  await vi.waitFor(() => expect(ensureProxy).toHaveBeenCalledTimes(2));
+  expect(ensureProxy.mock.calls[1][0]).toBe("asset-cam-b");
+  pending[1].resolve({ assetId: "asset-cam-b", sourceSha256: "sha-cam-b", proxyUri: "licketysplit-media://cam-b/proxy", version: 1, width: 960, height: 540, sourceStartPTS: 0, proxyStartPTS: 0, durationMs: 20_000 });
+  await vi.waitFor(() => expect(previewProxyCache.store.getState().entries["cam-b"]?.status).toBe("ready"));
+  delete window.licketysplit;
+  useUIStore.setState({ selectedItems: [] });
+});
+
+it("sends only the latest selection as foreground while unrelated background work is held", async () => {
+  const { makeWorkflowFixture } = await import("@licketysplit/core/lickety/test-fixtures");
+  const { useUIStore } = await import("./ui-store");
+  const fixture = makeWorkflowFixture();
+  const template = fixture.mediaLibrary.items.find((item) => item.id === "cam-a")!;
+  const items = Array.from({ length: 20 }, (_, index) => {
+    const id = `camera-${index}`;
+    return { ...template, id, name: `${id}.mp4`, blob: new Blob([id]), nativeSource: { identity: { assetId: `asset-${id}`, mediaId: id, sha256: `sha-${id}`, byteLength: 1 }, originalUri: `licketysplit-media://${id}/original`, durationMs: 20_000 }, metadata: { ...template.metadata, width: 3840, height: 2160, canDecodeVideo: true } };
+  });
+  const clipTemplate = fixture.timeline.tracks.flatMap((track) => track.clips)[0]!;
+  const clips = items.map((item, index) => ({ ...clipTemplate, id: `clip-${item.id}`, mediaId: item.id, startTime: index * 5, duration: 2 }));
+  const pending: Array<{ id: string; resolve: (receipt: object) => void }> = [];
+  const canceled: string[] = [];
+  const ensureProxy = vi.fn((assetId: string, _options?: { requestId?: string; priority?: "foreground" | "background" }) => new Promise<object>((resolve) => pending.push({ id: assetId, resolve: (receipt) => resolve(receipt) })));
+  Object.assign(window, { licketysplit: { platform: "desktop", lickety: { originalUri: async (id: string) => `licketysplit-media://${id}/original`, resolve: async (id: string) => `licketysplit-media://${id}/original`, resourceProfile: async () => ({ lowMemory: true }), ensureProxy, cancelMedia: vi.fn(async (requestId: string) => { canceled.push(requestId); }) } } });
+  useUIStore.setState({ selectedItems: items.map((item) => ({ type: "clip", id: `clip-${item.id}` })) });
+  const tracks = fixture.timeline.tracks.map((track, index) => index === 0 ? { ...track, clips: [...track.clips, ...clips] } : track);
+  useProjectStore.setState({ hasOpenProject: true, project: { ...fixture, mediaLibrary: { ...fixture.mediaLibrary, items }, timeline: { ...fixture.timeline, tracks } } });
+
+  await vi.waitFor(() => expect(ensureProxy).toHaveBeenCalledTimes(2));
+  const foreground = ensureProxy.mock.calls.find((call) => call[1]?.priority === "foreground");
+  const background = ensureProxy.mock.calls.find((call) => call[1]?.priority === "background");
+  expect(foreground?.[0]).toBe("asset-camera-19");
+  expect(background?.[0]).toBe("asset-camera-18");
+  expect(ensureProxy.mock.calls).toHaveLength(2);
+
+  const backgroundRequest = background![1]!.requestId!;
+  pending.find((request) => request.id === "asset-camera-19")!.resolve({ assetId: "asset-camera-19", sourceSha256: "sha-camera-19", proxyUri: "licketysplit-media://camera-19/proxy", version: 1, width: 960, height: 540, sourceStartPTS: 0, proxyStartPTS: 0, durationMs: 20_000 });
+  await vi.waitFor(() => expect(previewProxyCache.store.getState().entries["camera-19"]?.status).toBe("ready"));
+
+  useProjectStore.setState({ hasOpenProject: false, project: createEmptyProject("Closed") });
+  await vi.waitFor(() => expect(canceled).toContain(backgroundRequest));
+  for (const request of pending) request.resolve({ assetId: request.id, sourceSha256: request.id.replace("asset-", "sha-"), proxyUri: `licketysplit-media://${request.id.replace("asset-", "")}/proxy`, version: 1, width: 960, height: 540, sourceStartPTS: 0, proxyStartPTS: 0, durationMs: 20_000 });
+  delete window.licketysplit;
+  useUIStore.setState({ selectedItems: [] });
+});
+
+it("restarts a canceled foreground consumer when selection returns to its source", async () => {
+  const { makeWorkflowFixture } = await import("@licketysplit/core/lickety/test-fixtures");
+  const { useUIStore } = await import("./ui-store");
+  const fixture = makeWorkflowFixture();
+  const items = fixture.mediaLibrary.items.filter((item) => item.id === "cam-a" || item.id === "cam-b").map((item) => ({
+    ...item,
+    blob: new Blob([item.id]),
+    nativeSource: { identity: { assetId: `asset-${item.id}`, mediaId: item.id, sha256: `sha-${item.id}`, byteLength: 1 }, originalUri: `licketysplit-media://${item.id}/original`, durationMs: 20_000 },
+    metadata: { ...item.metadata, width: 3840, height: 2160, canDecodeVideo: true },
+  }));
+  const pending: Array<{ id: string; resolve: (receipt: object) => void }> = [];
+  const ensureProxy = vi.fn((assetId: string, _options?: { requestId?: string; priority?: "foreground" | "background" }) => new Promise<object>((resolve) => pending.push({ id: assetId, resolve: (receipt) => resolve(receipt) })));
+  Object.assign(window, { licketysplit: { platform: "desktop", lickety: { originalUri: async (id: string) => `licketysplit-media://${id}/original`, resolve: async (id: string) => `licketysplit-media://${id}/original`, resourceProfile: async () => ({ lowMemory: true }), ensureProxy, cancelMedia: vi.fn(async () => undefined) } } });
+  useUIStore.setState({ selectedItems: [{ type: "clip", id: "cam-a" }] });
+  useProjectStore.setState({ hasOpenProject: true, project: { ...fixture, mediaLibrary: { ...fixture.mediaLibrary, items }, timeline: { ...fixture.timeline, tracks: [] } } });
+  await vi.waitFor(() => expect(ensureProxy.mock.calls.some((call) => call[0] === "asset-cam-a" && call[1]?.priority === "foreground")).toBe(true));
+  useUIStore.setState({ selectedItems: [{ type: "clip", id: "cam-b" }] });
+  await vi.waitFor(() => expect(ensureProxy.mock.calls.some((call) => call[0] === "asset-cam-b" && call[1]?.priority === "foreground")).toBe(true));
+  useUIStore.setState({ selectedItems: [{ type: "clip", id: "cam-a" }] });
+  await vi.waitFor(() => expect(ensureProxy.mock.calls.filter((call) => call[0] === "asset-cam-a" && call[1]?.priority === "foreground")).toHaveLength(2));
+  const aRequests = ensureProxy.mock.calls.filter((call) => call[0] === "asset-cam-a" && call[1]?.priority === "foreground");
+  expect(aRequests[0]?.[1]?.requestId).not.toBe(aRequests[1]?.[1]?.requestId);
+  [...pending].reverse().find((request) => request.id === "asset-cam-a")!.resolve({ assetId: "asset-cam-a", sourceSha256: "sha-cam-a", proxyUri: "licketysplit-media://cam-a/proxy", version: 1, width: 960, height: 540, sourceStartPTS: 0, proxyStartPTS: 0, durationMs: 20_000 });
+  await vi.waitFor(() => expect(previewProxyCache.store.getState().entries["cam-a"]?.status).toBe("ready"));
+  delete window.licketysplit;
+  useUIStore.setState({ selectedItems: [] });
+});
 
 it("retries native preview preparation after a transient original URI failure", async () => {
   const { makeWorkflowFixture } = await import("@licketysplit/core/lickety/test-fixtures");
@@ -88,7 +214,8 @@ it("retries native preview preparation after a transient original URI failure", 
 
   await retryNativePreviewPreparation(item.id);
 
-  await vi.waitFor(() => expect(previewProxyCache.store.getState().entries[item.id]?.status).toBe("ready"));
+  await vi.waitFor(() => expect(previewProxyCache.store.getState().entries[item.id]?.status).not.toBe("encoding"));
+  expect(previewProxyCache.store.getState().entries[item.id]?.status).toBe("ready");
   expect(attempts).toBe(2);
   const readyItem = previewProxyCache.resolve(fixture.id, item);
   expect(readyItem?.blob?.size).toBe(0);
@@ -169,7 +296,7 @@ it("ignores a native preparation error after the project switches to a replaceme
   useUIStore.setState({ selectedItems: [] });
   useProjectStore.setState({ hasOpenProject: true, project: { ...withNoTimelineClips, id: "old-project" } });
   useUIStore.setState({ selectedItems: [{ type: "clip", id: originalItem.id }] });
-  await vi.waitFor(() => expect(profileCalls).toBe(1));
+  await vi.waitFor(() => expect(profileCalls).toBeGreaterThan(0));
 
   const replacementItem = { ...originalItem, blob: new Blob(["replacement source"]) };
   useProjectStore.setState({

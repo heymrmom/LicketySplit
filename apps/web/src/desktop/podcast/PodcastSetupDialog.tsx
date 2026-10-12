@@ -7,6 +7,7 @@ import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from
 import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent, ToolcraftLayoutFooter as LayoutFooter } from "@licketysplit/ui";
 import { AlertTriangle, ArrowLeft, ArrowRight, Clock3, Pause, Play, Plus, Trash2 } from "@/icons/lucide-compat";
 import { useProjectStore } from "../../stores/project-store";
+import { cancelNativeMediaBackground, runNativeMediaBackground } from "../../stores/preview-proxy-store";
 import { applyPodcastSetup } from "../../services/lickety/podcast";
 import { resolveDesktopMedia, registerDesktopMedia } from "../../services/lickety/desktop-media";
 import { readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia, buildPodcastReviewPoints, podcastWorkFraction, type PodcastPictureGapPolicy, type PodcastWorkItem, type PodcastWorkLedger } from "./podcast-ui-model";
@@ -78,6 +79,31 @@ function audioPreviewChoices(setup: PodcastSetup): Array<{ id: string; label: st
     }
   }
   return choices;
+}
+
+function assignedProgramAudioSources(setup: PodcastSetup): Array<{ assetId: string; streamIndex: number; channel?: number; trackIndex: number }> {
+  const result: Array<{ assetId: string; streamIndex: number; channel?: number; trackIndex: number }> = [];
+  const seen = new Set<string>();
+  for (const group of setup.groups) {
+    if (group.audioMode !== "shared-mix" && group.audioMode !== "isolated") continue;
+    for (const assetId of group.assetIds) {
+      const asset = setup.analysis.assets.find((candidate) => candidate.id === assetId);
+      if (!asset) continue;
+      const audioStreams = (asset.streams ?? []).filter((stream) => stream.kind === "audio");
+      for (const [trackIndex, stream] of audioStreams.entries()) {
+        if (group.audioMode === "shared-mix") {
+          const key = `${assetId}:${trackIndex}:shared`;
+          if (!seen.has(key)) result.push({ assetId, streamIndex: stream.index, trackIndex });
+          seen.add(key);
+        } else for (const binding of group.audioBindings ?? []) if (binding.assetId === assetId && binding.streamIndex === stream.index && binding.participantId && setup.participants.some((participant) => participant.id === binding.participantId)) {
+          const key = `${assetId}:${trackIndex}:${binding.channel}`;
+          if (!seen.has(key)) result.push({ assetId, streamIndex: stream.index, channel: binding.channel, trackIndex });
+          seen.add(key);
+        }
+      }
+    }
+  }
+  return result;
 }
 
 function workStageLabel(stage: PodcastWorkItem["stage"]): string {
@@ -153,6 +179,8 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [alternateMediaId, setAlternateMediaId] = useState("");
   const [pictureGapPolicy, setPictureGapPolicy] = useState<PodcastPictureGapPolicy | null>(null);
+  const [programAudioPreparation, setProgramAudioPreparation] = useState<"idle" | "preparing" | "prepared" | "error">("idle");
+  const programAudioRequests = useRef<{ key: string; requestIds: string[]; cancelled: boolean } | null>(null);
   const requestIdRef = useRef<string | null>(null);
   const cancellingRef = useRef(false);
   const importingRef = useRef(false);
@@ -551,6 +579,47 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
   };
 
   const audioChoices = useMemo(() => setup ? audioPreviewChoices({ ...setup, groups }) : [], [setup, groups]);
+  const assignedAudio = useMemo(() => setup ? assignedProgramAudioSources({ ...setup, groups }) : [], [setup, groups]);
+  const assignedAudioKey = useMemo(() => JSON.stringify([project.id, setup?.setupId, assignedAudio]), [project.id, setup?.setupId, assignedAudio]);
+  useEffect(() => {
+    const previous = programAudioRequests.current;
+    if (previous) {
+      previous.cancelled = true;
+      for (const requestId of previous.requestIds) void window.licketysplit?.lickety?.cancelMedia(requestId).catch(() => undefined);
+      cancelNativeMediaBackground("podcast-assigned-program-audio");
+      programAudioRequests.current = null;
+    }
+    if (!isOpen || !setup || setup.projectId !== project.id || !assignedAudio.length || !window.licketysplit?.lickety?.ensureAudioStream) {
+      setProgramAudioPreparation("idle");
+      return;
+    }
+    const active = { key: assignedAudioKey, requestIds: assignedAudio.map(() => crypto.randomUUID()), cancelled: false };
+    programAudioRequests.current = active;
+    setProgramAudioPreparation("preparing");
+    void runNativeMediaBackground(async () => {
+      try {
+        for (const [index, source] of assignedAudio.entries()) {
+          if (active.cancelled || programAudioRequests.current !== active || useProjectStore.getState().project.id !== project.id) return;
+          const podcastAsset = setup.analysis.assets.find((candidate) => candidate.id === source.assetId);
+          const item = podcastAsset && useProjectStore.getState().getMediaItem(podcastAsset.mediaId);
+          const placement = setup.placements.find((candidate) => candidate.assetId === source.assetId);
+          if (!podcastAsset || !item || item.isPlaceholder || placement?.status === "excluded" || setup.decodeFailure?.resolution === "unresolved-excluded" && setup.decodeFailure.assetId === source.assetId) continue;
+          const registered = await registerDesktopMedia(item);
+          if (active.cancelled || programAudioRequests.current !== active || useProjectStore.getState().project.id !== project.id) return;
+          await window.licketysplit!.lickety!.ensureAudioStream(registered.identity.assetId, source.trackIndex, source.channel, { requestId: active.requestIds[index], priority: "background" });
+        }
+        if (!active.cancelled && programAudioRequests.current === active) setProgramAudioPreparation("prepared");
+      } catch {
+        if (!active.cancelled && programAudioRequests.current === active) setProgramAudioPreparation("error");
+      }
+    }, "podcast-assigned-program-audio");
+    return () => {
+      active.cancelled = true;
+      for (const requestId of active.requestIds) void window.licketysplit?.lickety?.cancelMedia(requestId).catch(() => undefined);
+      cancelNativeMediaBackground("podcast-assigned-program-audio");
+      if (programAudioRequests.current === active) programAudioRequests.current = null;
+    };
+  }, [isOpen, project.id, setup, assignedAudio, assignedAudioKey, mediaItems]);
   const recorderSuggestions = useMemo(() => setup ? simultaneousPodcastSuggestions(setup.analysis, groups) : [], [setup, groups]);
   const setupTimelineModel = useMemo(() => setup ? podcastTimelineModel({ ...setup, groups }) : null, [setup, groups]);
   const setupReviewState = useMemo(() => setup ? podcastReviewState(setup) : null, [setup]);
@@ -571,6 +640,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
               })}
             </nav>
             {busy && requestIdRef.current && <div ref={progressStatusRef} tabIndex={-1} className="z-30 border-b border-accent/50 bg-bg-1 p-3 text-fg shadow-md outline-none" role="status" aria-live="polite" aria-atomic="true"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><strong className="block text-sm text-fg">Podcast analysis is running</strong><span className="mt-1 block break-words text-xs text-fg-2">Current: {progressEvent ? progressLabel(progressEvent) : progress ?? "Preparing line-up…"}</span><span className="mt-1 block break-words text-sm text-fg-2">{progressEvent?.message ?? progress ?? "Starting analysis"}</span>{runStartedAt !== null && <span className="mt-1 block text-xs text-fg-muted">Elapsed {formatClock(elapsedSeconds)}</span>}<div className="mt-2"><WholeRunProgressBar work={progressEvent ? progressEvent.setupId === setup?.setupId ? progressEvent.work : undefined : lastWorkSetupId === setup?.setupId ? lastWork : undefined} /></div></div><button type="button" disabled={cancelling} onClick={cancelAnalysis} className="min-h-9 shrink-0 rounded border border-border px-3 text-sm text-fg underline disabled:opacity-60">{cancelling ? "Cancellation pending…" : "Cancel this run"}</button></div></div>}
+            {programAudioPreparation !== "idle" && <div className="border-b border-border px-3 py-2 text-xs text-fg-2" role="status" aria-live="polite">{programAudioPreparation === "preparing" ? "Preparing assigned program audio for review…" : programAudioPreparation === "prepared" ? "Assigned program audio is prepared for review; playback will verify it before starting." : "Assigned program audio could not be prepared yet. You can continue setup and retry from review."}</div>}
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
               {error && <div role="alert" className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-fg">{error}</div>}
               {notice && <div role="status" className="mb-4 rounded-md border border-border bg-bg-2 p-3 text-sm text-fg">{notice}</div>}
@@ -838,6 +908,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     setVideoUrl(null);
     if (!videoMedia) return;
     let active = true;
+    const requestId = crypto.randomUUID();
     let url: string | null = null;
     let lease: VideoDecoderLease | null = null;
     lease = videoDecoderBudget.reserve(() => {
@@ -857,7 +928,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
       return;
     }
     videoLeaseRef.current = lease;
-    void resolveDesktopMedia(videoMedia, "preview").then((resolvedUrl) => {
+    void resolveDesktopMedia(videoMedia, "preview", false, { requestId, priority: "foreground" }).then((resolvedUrl) => {
       if (!active || !lease?.active) {
         if (resolvedUrl.startsWith("blob:")) URL.revokeObjectURL(resolvedUrl);
         return;
@@ -875,6 +946,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     });
     return () => {
       active = false;
+      void window.licketysplit?.lickety?.cancelMedia?.(requestId).catch(() => undefined);
       if (videoLeaseRef.current === lease) {
         videoLeaseRef.current = null;
         videoLeasePinnedRef.current = false;
@@ -897,6 +969,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     setAudioUrl(null);
     if (!audioMedia || !activeAudio) return;
     let active = true;
+    const requestId = crypto.randomUUID();
     setAudioPreparing(true);
     const bridge = window.licketysplit?.lickety;
     if (!bridge?.ensureAudioStream) { setAudioUrl(null); setAudioPreparing(false); setAudioPreparationError("The selected original audio is not registered for preview yet."); return; }
@@ -907,8 +980,8 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
       setAudioPreparationError("The selected audio stream is no longer available in this original.");
       return () => { active = false; };
     }
-    void registerDesktopMedia(audioMedia).then((asset) => bridge.ensureAudioStream(asset.identity.assetId, audioOrdinal, activeAudio.source.channel)).then((url) => { if (active) setAudioUrl(url); }).catch((cause: unknown) => { if (active) { setAudioPreparing(false); setAudioPreparationError(friendlyError(cause)); } });
-    return () => { active = false; };
+    void registerDesktopMedia(audioMedia).then((asset) => bridge.ensureAudioStream(asset.identity.assetId, audioOrdinal, activeAudio.source.channel, { requestId, priority: "foreground" })).then((url) => { if (active) setAudioUrl(url); }).catch((cause: unknown) => { if (active) { setAudioPreparing(false); setAudioPreparationError(friendlyError(cause)); } });
+    return () => { active = false; void bridge.cancelMedia?.(requestId).catch(() => undefined); };
   }, [audioMedia, activeAudio, setup.analysis.assets, audioRetryToken]);
 
   useEffect(() => {

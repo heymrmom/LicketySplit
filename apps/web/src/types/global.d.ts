@@ -173,6 +173,7 @@ export type LicketySplitUpdaterStatus =
   | { state: "error"; message: string };
 
 declare global {
+  type NativeMediaRequestOptions = { requestId?: string; priority?: "foreground" | "background" };
   interface Window {
     licketysplit?: {
       platform: "desktop";
@@ -195,9 +196,9 @@ declare global {
         identifyOriginalFile(file:File):Promise<{identity:string;size:number;mtimeMs:number}|null>;
         findOriginalMediaId(file:File,mediaIds:string[]):Promise<string|undefined>;
         resolve(assetId:string,purpose:"original"|"proxy"):Promise<string>;
-        ensureAudioStream(assetId:string,trackIndex:number,sourceChannelIndex?:number):Promise<string>;
-        ensureProxy(assetId:string):Promise<ProxyReceipt>;
-        cancelMedia(assetId:string):Promise<void>;
+        ensureAudioStream(assetId:string,trackIndex:number,sourceChannelIndex?:number,options?:NativeMediaRequestOptions):Promise<string>;
+        ensureProxy(assetId:string,options?:NativeMediaRequestOptions):Promise<ProxyReceipt>;
+        cancelMedia(requestId:string):Promise<void>;
       };
       podcast?: PodcastBridge;
       publicOrigin: string;

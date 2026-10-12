@@ -16,6 +16,7 @@ vi.mock("../../services/lickety/podcast", () => ({
 }));
 
 vi.mock("../../services/lickety/desktop-media", () => ({
+  desktopMediaAvailable: vi.fn(() => false),
   resolveDesktopMedia: vi.fn(async () => "file:///preview.mp4"),
   registerDesktopMedia: vi.fn(async (item: MediaItem) => ({ identity: { assetId: item.id, mediaId: item.id, sha256: "digest", byteLength: 1 }, originalUri: `licketysplit-media://${item.id}/original`, durationMs: 1000 })),
 }));
@@ -100,6 +101,39 @@ describe("PodcastSetupDialog", () => {
     delete (window as unknown as { licketysplit?: unknown }).licketysplit;
     window.localStorage.clear();
     vi.clearAllMocks();
+  });
+
+  it("prepares only the explicitly assigned microphone stream and channel before review", async () => {
+    const setup = makeSetup();
+    setup.analysis.assets[0]!.streams = [
+      { index: 0, kind: "video" as const, durationSeconds: 10 },
+      { index: 1, kind: "audio" as const, channels: 2 },
+      { index: 3, kind: "audio" as const, channels: 2 },
+    ];
+    setup.groups[0]!.audioMode = "isolated";
+    setup.groups[0]!.audioBindings = [{ assetId: "asset-1", streamIndex: 1, channel: 0, participantId: "host" }];
+    const micAsset = { id: "asset-mic", mediaId: "media-mic", sourceId: "source-mic", name: "Host microphone", kind: "audio" as const, durationSeconds: 10, streams: [
+      { index: 1, kind: "audio" as const, channels: 2 },
+      { index: 3, kind: "audio" as const, channels: 2 },
+    ] };
+    setup.analysis.assets.push(micAsset);
+    setup.groups.push({ id: "mic", name: "Host microphone", kind: "audio", role: "dialogue", confidence: "high", assetIds: [micAsset.id], warnings: [], audioMode: "isolated", audioBindings: [{ assetId: micAsset.id, streamIndex: 3, channel: 1, participantId: "host" }] });
+    setup.participants = [{ id: "host", name: "Host" }];
+    bridge.get = vi.fn(async () => setup);
+    const mic: MediaItem = { id: "media-mic", name: "Host.wav", type: "audio", fileHandle: null, blob: new Blob(["audio"]), thumbnailUrl: null, waveformData: null, metadata: { duration: 10, width: 0, height: 0, frameRate: 0, codec: "pcm", sampleRate: 48000, channels: 2, fileSize: 5 } };
+    const ensureAudioStream = vi.fn(async () => "file:///host.wav");
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream, cancelMedia: vi.fn(async () => undefined) } } });
+    const current = useProjectStore.getState().project;
+    useProjectStore.setState({ project: { ...current, mediaLibrary: { items: [...media, mic] } } });
+    restoreSetupForStep(setup, "lineup");
+
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    const steps = await screen.findByRole("navigation", { name: "Podcast preparation steps" });
+    await vi.waitFor(() => expect(within(steps).getByRole("button", { name: /Line up/ }).getAttribute("aria-current")).toBe("step"));
+    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledTimes(2));
+    expect(ensureAudioStream).toHaveBeenCalledWith("media-1", 0, 0, { requestId: expect.any(String), priority: "background" });
+    expect(ensureAudioStream).toHaveBeenCalledWith("media-mic", 1, 1, { requestId: expect.any(String), priority: "background" });
+    expect(screen.getByRole("status").textContent).toContain("prepared for review");
   });
 
   it("inspects selected imported originals, then persists reorder as a non-approved project draft", async () => {
@@ -510,13 +544,13 @@ describe("PodcastSetupDialog", () => {
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
     const view = render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await screen.findByRole("heading", { name: "Check picture and sound" });
-    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledWith("media-audio", 0, 0));
+    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledWith("media-audio", 0, 0, { requestId: expect.any(String), priority: "foreground" }));
     expect(screen.getByRole("button", { name: "Review saved comparison" })).toBeTruthy();
     await vi.waitFor(() => expect(screen.getByLabelText("Soloed podcast comparison audio").getAttribute("src")).toBe("file:///host.wav"));
     fireEvent.canPlay(screen.getByLabelText("Soloed podcast comparison audio"));
     fireEvent.canPlay(screen.getByLabelText("Muted podcast source picture preview"));
     fireEvent.click(screen.getByRole("button", { name: "Review saved comparison" }));
-    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledWith("media-audio", 0, 1));
+    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledWith("media-audio", 0, 1, { requestId: expect.any(String), priority: "foreground" }));
     await vi.waitFor(() => expect(screen.getByLabelText("Soloed podcast comparison audio").getAttribute("src")).toBe("file:///host.wav"));
     fireEvent.canPlay(screen.getByLabelText("Soloed podcast comparison audio"));
     fireEvent.canPlay(screen.getByLabelText("Muted podcast source picture preview"));
@@ -727,7 +761,7 @@ describe("PodcastSetupDialog", () => {
 
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     await screen.findByRole("heading", { name: "Check picture and sound" });
-    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledWith("media-1", 0, 0));
+    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledWith("media-1", 0, 0, { requestId: expect.any(String), priority: "foreground" }));
     const audio = screen.getByLabelText("Soloed podcast comparison audio") as HTMLAudioElement;
     const video = screen.getByLabelText("Muted podcast source picture preview") as HTMLVideoElement;
     await vi.waitFor(() => expect(audio.getAttribute("src")).toBe("file:///camera-scratch.m4a"));
@@ -765,9 +799,10 @@ describe("PodcastSetupDialog", () => {
       { assetId: "asset-2", status: "measured", mapping: { version: 1, scale: 1, offsetSeconds: 0 }, locked: false, component: "connected", provenance: [] },
     ];
     bridge.get = vi.fn(async () => setup);
-    const pendingPreviews: Array<{ resolve: (value: string) => void; reject: (reason: Error) => void }> = [];
-    const ensureAudioStream = vi.fn(() => new Promise<string>((resolve, reject) => pendingPreviews.push({ resolve, reject })));
-    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream } } });
+    const pendingPreviews: Array<{ resolve: (value: string) => void; reject: (reason: Error) => void; priority?: string }> = [];
+    const ensureAudioStream = vi.fn((_assetId: string, _trackIndex: number, _channel?: number, options?: NativeMediaRequestOptions) => new Promise<string>((resolve, reject) => pendingPreviews.push({ resolve, reject, priority: options?.priority })));
+    const cancelMedia = vi.fn(async () => undefined);
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream, cancelMedia } } });
     restoreSetupForStep(setup, "check");
 
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
@@ -775,7 +810,10 @@ describe("PodcastSetupDialog", () => {
     const staleAudioElement = screen.getByLabelText("Soloed podcast comparison audio");
     fireEvent.change(screen.getByRole("combobox", { name: "Audio channel to preview" }), { target: { value: "asset-1:2:1" } });
 
-    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenLastCalledWith("media-1", 1, 1));
+    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenLastCalledWith("media-1", 1, 1, { requestId: expect.any(String), priority: "foreground" }));
+    const retiredForegroundRequest = ensureAudioStream.mock.calls.find((call) => call[3]?.priority === "foreground")?.[3]?.requestId;
+    expect(retiredForegroundRequest).toEqual(expect.any(String));
+    expect(cancelMedia).toHaveBeenCalledWith(retiredForegroundRequest);
     const preparation = screen.getByRole("status", { name: "Preparing selected sound" });
     expect(preparation.textContent).toContain("Preparing Donald Mic…");
     expect(preparation.textContent).toContain("Main camera · camera-a.mp4 · Donald Mic");
@@ -783,12 +821,12 @@ describe("PodcastSetupDialog", () => {
     expect((screen.getByRole("button", { name: "Play picture and selected sound" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.canPlay(staleAudioElement);
     expect(screen.getByRole("status", { name: "Preparing selected sound" })).toBeTruthy();
-    pendingPreviews.at(-1)?.reject(new Error("The selected sound could not be prepared."));
+    pendingPreviews.filter((request) => request.priority === "foreground").at(-1)?.reject(new Error("The selected sound could not be prepared."));
     const retry = await screen.findByRole("button", { name: "Retry sound preparation" });
     fireEvent.click(retry);
-    await vi.waitFor(() => expect(ensureAudioStream).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(ensureAudioStream.mock.calls.filter((call) => call[3]?.priority === "foreground")).toHaveLength(3));
     expect(screen.getByRole("status", { name: "Preparing selected sound" }).textContent).toContain("Preparing Donald Mic…");
-    pendingPreviews.at(-1)?.resolve("file:///camera-channel.m4a");
+    pendingPreviews.filter((request) => request.priority === "foreground").at(-1)?.resolve("file:///camera-channel.m4a");
     const currentAudioElement = screen.getByLabelText("Soloed podcast comparison audio");
     await vi.waitFor(() => expect(currentAudioElement.getAttribute("src")).toBe("file:///camera-channel.m4a"));
     expect(screen.getByRole("status", { name: "Preparing selected sound" })).toBeTruthy();
