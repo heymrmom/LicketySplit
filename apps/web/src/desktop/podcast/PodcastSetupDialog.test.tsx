@@ -136,6 +136,27 @@ describe("PodcastSetupDialog", () => {
     expect(screen.getByRole("status").textContent).toContain("prepared for review");
   });
 
+  it("does not report assigned program audio prepared when sources are missing or placeholders", async () => {
+    const setup = makeSetup();
+    const missing = { id: "asset-missing", mediaId: "media-missing", sourceId: "source-missing", name: "Missing mic", kind: "audio" as const, durationSeconds: 10, streams: [{ index: 0, kind: "audio" as const, channels: 1 }] };
+    const placeholderAsset = { id: "asset-placeholder", mediaId: "media-placeholder", sourceId: "source-placeholder", name: "Placeholder mic", kind: "audio" as const, durationSeconds: 10, streams: [{ index: 0, kind: "audio" as const, channels: 1 }] };
+    setup.analysis.assets.push(missing, placeholderAsset);
+    setup.groups.push(...[missing, placeholderAsset].map((asset) => ({ id: `group-${asset.id}`, name: asset.name, kind: "audio" as const, role: "dialogue" as const, confidence: "high" as const, assetIds: [asset.id], warnings: [], audioMode: "isolated" as const, audioBindings: [{ assetId: asset.id, streamIndex: 0, channel: 0, participantId: "host" }] })));
+    setup.participants = [{ id: "host", name: "Host" }];
+    bridge.get = vi.fn(async () => setup);
+    const placeholder: MediaItem = { id: "media-placeholder", name: "Placeholder.wav", type: "audio", isPlaceholder: true, fileHandle: null, blob: null, thumbnailUrl: null, waveformData: null, metadata: { duration: 10, width: 0, height: 0, frameRate: 0, codec: "pcm", sampleRate: 48000, channels: 1, fileSize: 0 } };
+    const ensureAudioStream = vi.fn(async () => "file:///host.wav");
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream, cancelMedia: vi.fn(async () => undefined) } } });
+    const current = useProjectStore.getState().project;
+    useProjectStore.setState({ project: { ...current, mediaLibrary: { items: [...media, placeholder] } } });
+    restoreSetupForStep(setup, "lineup");
+
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await vi.waitFor(() => expect(screen.getByRole("status").textContent).toContain("missing or placeholders"));
+    expect(ensureAudioStream).not.toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent).not.toContain("prepared for review");
+  });
+
   it("inspects selected imported originals, then persists reorder as a non-approved project draft", async () => {
     const view = render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "Choose recordings for this episode" })).toBeTruthy();
