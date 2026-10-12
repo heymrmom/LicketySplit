@@ -152,7 +152,8 @@ describe("PodcastSetupDialog", () => {
     restoreSetupForStep(setup, "lineup");
 
     render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
-    await vi.waitFor(() => expect(screen.getByRole("status").textContent).toContain("missing or placeholders"));
+    await vi.waitFor(() => expect(screen.getByRole("status").textContent).toContain("could not be prepared"));
+    expect(screen.getByRole("status").textContent).toContain("Relink missing recordings or retry from review");
     expect(ensureAudioStream).not.toHaveBeenCalled();
     expect(screen.getByRole("status").textContent).not.toContain("prepared for review");
   });
