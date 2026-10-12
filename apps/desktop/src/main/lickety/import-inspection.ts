@@ -1,7 +1,6 @@
 import {stat} from 'node:fs/promises';
 import type {MediaTrackInfo} from '../../../../../packages/core/src/media/types';
 import {probeInputHeader,parseAudioStreams} from '../sidecar/probe-streams';
-import {heavyQueue} from './media-jobs';
 export function parseOriginalMetadata(text:string,fileSize:number):MediaTrackInfo {
  const video=/Video:\s*([\w]+)[^\n]*?\b(\d{2,5})x(\d{2,5})\b[^\n]*/.exec(text);
  const duration=/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(text);
@@ -13,4 +12,20 @@ export function parseOriginalMetadata(text:string,fileSize:number):MediaTrackInf
  const canDecodeVideo=!!video&&['h264','hevc','vp8','vp9','av1'].includes(video[1]);
  return {duration:+duration[1]*3600+ +duration[2]*60+ +duration[3],width:video?+video[quarterTurn?3:2]:0,height:video?+video[quarterTurn?2:3]:0,frameRate,codec:video?.[1]??audio[0]?.codec??'',sampleRate:audio[0]?.sampleRate??0,channels:audio[0]?.channels??0,fileSize,mimeType:video?'video/quicktime':'audio/wav',hasVideo:!!video,hasAudio:audio.length>0,rotation,canDecode:video?canDecodeVideo:audio.length>0,canDecodeVideo,audioTrackCount:audio.length};
 }
-export async function inspectOriginal(srcPath:string):Promise<MediaTrackInfo>{return heavyQueue.run(async()=>{const file=await stat(srcPath);if(!file.isFile())throw new Error('Original is not a readable file');const output=await probeInputHeader(srcPath);return parseOriginalMetadata(output,file.size);},new AbortController().signal);}
+export class HeaderInspectionQueue {
+ private active=false;
+ private pending:Array<{work:()=>Promise<MediaTrackInfo>;resolve:(value:MediaTrackInfo)=>void;reject:(error:unknown)=>void}>=[];
+ constructor(private readonly maxPending=16){}
+ run(work:()=>Promise<MediaTrackInfo>):Promise<MediaTrackInfo>{
+  if(this.pending.length>=this.maxPending)return Promise.reject(new Error('Original inspection queue is full; retry after current imports finish'));
+  return new Promise((resolve,reject)=>{this.pending.push({work,resolve,reject});this.pump();});
+ }
+ private pump(){
+  if(this.active)return;
+  const task=this.pending.shift();if(!task)return;
+  this.active=true;
+  void task.work().then(task.resolve,task.reject).finally(()=>{this.active=false;this.pump();});
+ }
+}
+const headerQueue=new HeaderInspectionQueue();
+export async function inspectOriginal(srcPath:string,probe:(path:string)=>Promise<string>=probeInputHeader,queue:HeaderInspectionQueue=headerQueue):Promise<MediaTrackInfo>{return queue.run(async()=>{const file=await stat(srcPath);if(!file.isFile())throw new Error('Original is not a readable file');const output=await probe(srcPath);return parseOriginalMetadata(output,file.size);});}

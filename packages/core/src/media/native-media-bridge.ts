@@ -2,6 +2,8 @@
 // packages/core cannot see apps/web's ambient window.licketysplit type, so we declare the
 // minimal slice this module uses and access it via a typed cast on globalThis.
 
+import type { ProxyReceipt } from "../lickety/types";
+
 export interface NativeMediaBridge {
   platform?: string;
   fs: {
@@ -151,14 +153,16 @@ export interface ManagedRendererBridge {
  referenceFile?(mediaId:string,file:File):Promise<{originalUri:string}|null>;
  referencePath?(mediaId:string,path:string):Promise<{originalUri:string}>;
  originalUri?(mediaId:string):Promise<string|undefined>;
- ensureAudioStream?(assetId:string,trackIndex:number,sourceChannelIndex?:number):Promise<string>;
- cancelMedia?(assetId:string):Promise<void>;
+ ensureAudioStream?(assetId:string,trackIndex:number,sourceChannelIndex?:number,options?:MediaPreparationOptions):Promise<string>;
+ ensureProxy?(assetId:string,options?:MediaPreparationOptions):Promise<ProxyReceipt>;
+ cancelMedia?(requestId:string):Promise<void>;
  audioWindow?(args:{requestId?:string;assetId:string;trackIndex:number;startMs:number;durationMs:number;sampleRate:1000|16000|48000;channels:1|2;sourceChannelIndex?:number}):Promise<{channels:Float32Array[];sampleRate:number}>;
  registerFile(mediaId:string,file:Blob):Promise<import('../lickety/types').RegisteredAsset>;
  registerPath(mediaId:string,path:string):Promise<import('../lickety/types').RegisteredAsset>;
  findAsset(mediaId:string):Promise<import('../lickety/types').RegisteredAsset|undefined>;
  resolve(assetId:string,purpose:'original'|'proxy'):Promise<string>;
 }
+export interface MediaPreparationOptions {requestId?:string;priority?:'foreground'|'background';}
 export function getManagedBridge():ManagedRendererBridge|undefined {return (globalThis as unknown as {licketysplit?:{platform?:string;lickety?:ManagedRendererBridge}}).licketysplit?.lickety;}
 export async function prepareNativeOriginal(item:import('../types/project').MediaItem):Promise<import('../types/project').MediaItem>{
  const managed=getManagedBridge();if(!managed)return item;

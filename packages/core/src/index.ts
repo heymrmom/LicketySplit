@@ -87,6 +87,7 @@ export type { JobState, ResourceProfile, AssetIdentity, RegisteredAsset, ProxyRe
 export { cloneProjectForWorkflow } from "./lickety/clone-project";
 
 export {getManagedBridge,prepareNativeOriginal,bindNativeMediaSources,getNativeMediaSource,nativeVideoUrl} from "./media/native-media-bridge";
+export type {ManagedRendererBridge,MediaPreparationOptions} from "./media/native-media-bridge";
 
 export {createAnalysisSnapshot,fullEditRevision,revisionHash} from "./lickety/snapshot";
 export * from "./lickety/podcast-types";
