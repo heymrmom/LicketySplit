@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import type { Action } from "@openreel/core";
-import { executeTool } from "@openreel/agent";
-import type { EditorStateView } from "@openreel/agent";
+import type { Action } from "@licketysplit/core";
+import { executeTool } from "@licketysplit/agent";
+import type { EditorStateView } from "@licketysplit/agent";
 import { useProjectStore } from "../../stores/project-store";
 import { LiveEditorHost } from "./live-host";
 

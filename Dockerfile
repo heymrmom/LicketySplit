@@ -2,7 +2,7 @@ FROM node:22-alpine AS build
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 COPY . .
-RUN pnpm install --frozen-lockfile --filter @openreel/web...
+RUN pnpm install --frozen-lockfile --filter @licketysplit/web...
 RUN pnpm build
 
 FROM node:22-alpine AS runtime

@@ -10,7 +10,7 @@ const cases = {
   "portrait-60": { fixture: "portrait-av.mp4", width: 360, height: 640, fps: 60, duration: 2, codec: "h264", audio: true },
   "silent-webm": { fixture: "silent.webm", width: 640, height: 360, fps: 30, duration: 2, codec: "vp9", audio: false },
   "trimmed-mixed": { fixture: "landscape-av.mp4 + portrait-av.mp4", width: 640, height: 360, fps: 24, duration: 3, codec: "h264", audio: true },
-  "proxy-originals": { fixture: "/tmp/openreel-next-proxy-source.mp4", width: 1920, height: 1080, fps: 24, duration: 2, codec: "h264", audio: true },
+  "proxy-originals": { fixture: "/tmp/licketysplit-next-proxy-source.mp4", width: 1920, height: 1080, fps: 24, duration: 2, codec: "h264", audio: true },
 };
 const run = (command, args) => {
   const result = spawnSync(command, args, { encoding: "utf8", maxBuffer: 8 * 1024 * 1024 });

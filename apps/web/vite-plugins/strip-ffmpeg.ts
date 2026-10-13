@@ -8,7 +8,7 @@ export function isFfmpegCoreAsset(id: string): boolean {
 
 export function stripFfmpegPlugin(isDesktop: boolean): Plugin {
   return {
-    name: "openreel-strip-ffmpeg",
+    name: "licketysplit-strip-ffmpeg",
     enforce: "pre",
     load(id: string): string | undefined {
       if (!isDesktop) return undefined;

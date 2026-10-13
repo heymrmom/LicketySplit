@@ -1,7 +1,7 @@
 import { Profiler } from "react";
 import { act, cleanup, fireEvent, render, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Clip, TextClip, Track } from "@openreel/core";
+import type { Clip, TextClip, Track } from "@licketysplit/core";
 import { createEmptyProject } from "../../../stores/project/project-helpers";
 import { useProjectStore } from "../../../stores/project-store";
 import { useTimelineStore } from "../../../stores/timeline-store";

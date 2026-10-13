@@ -6,7 +6,7 @@ import type {
   EarningsEntry,
   CreatorBalance,
   Attribution,
-} from "@openreel/fxpkg";
+} from "@licketysplit/fxpkg";
 import type { AssetListFilter, Bindings, Store } from "./types";
 
 function sortAssets(items: Array<Asset & { latest?: AssetVersion }>, sort: AssetListFilter["sort"]): void {

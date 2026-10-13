@@ -88,6 +88,21 @@ afterEach(() => {
 });
 
 describe("keyboard editing commands", () => {
+  it("toggles full extent and restores the previous timeline detail from Cmd+0", () => {
+    const view = renderHook(useKeyboardShortcuts);
+    vi.mocked(store.getTimelineDuration).mockReturnValue(30);
+    act(() => useTimelineStore.setState({ pixelsPerSecond: 35, scrollX: 100, viewportWidth: 900 }));
+
+    press("0", { metaKey: true });
+    expect(useTimelineStore.getState().pixelsPerSecond).toBe(30);
+    expect(useTimelineStore.getState().scrollX).toBe(0);
+
+    press("0", { metaKey: true });
+    expect(useTimelineStore.getState().pixelsPerSecond).toBe(35);
+    expect(useTimelineStore.getState().scrollX).toBe(100);
+    view.unmount();
+  });
+
   it("reads current playback state without rerendering or reinstalling handlers each frame", () => {
     let renders = 0;
     const register = vi.spyOn(keyboardShortcuts, "registerHandler");

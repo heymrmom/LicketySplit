@@ -1,12 +1,12 @@
 import { cloneProjectForEdit } from "./clone-project-for-edit";
 import { v4 as uuidv4 } from "uuid";
 import type { StoreApi } from "zustand";
-import type { Action, ActionResult } from "@openreel/core";
+import type { Action, ActionResult } from "@licketysplit/core";
 import {
   resolveTimelineItem,
   resolveTimelinePlacement,
   withUniversalTracksCapability,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import type { ProjectState } from "../project-store";
 import type { ProjectStoreHelpers } from "./store-helpers";
 

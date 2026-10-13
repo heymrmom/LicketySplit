@@ -33,7 +33,7 @@ function generateToken(): string {
 
 function serverInfo(): ServerInfo {
   return {
-    name: "openreel",
+    name: "licketysplit",
     version: app.getVersion(),
   };
 }
@@ -76,7 +76,7 @@ export async function startMcpServer(): Promise<void> {
     getToken: () => tokenHolder.value,
     provider,
     serverInfo: serverInfo(),
-    port: Number(process.env.OPENREEL_MCP_PORT ?? 0),
+    port: Number(process.env.LICKETYSPLIT_MCP_PORT ?? 0),
   });
   state = { running, tokenHolder, provider };
   writeEndpointFile({

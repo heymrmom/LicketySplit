@@ -1,3 +1,6 @@
+HISTORICAL UPSTREAM MOBILE REFERENCE — NOT A LICKETYSPLIT SUBMISSION
+This inherited listing describes mobile apps whose source trees are absent from this checkout. Its bundle IDs, service/contact URLs, feature claims, and store versions are preserved as upstream reference; they are not current LicketySplit release metadata or verified mobile acceptance. Do not submit this copy for LicketySplit.
+
 APP STORE SUBMISSION — OpenReel Video
 ======================================
 

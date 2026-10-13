@@ -1,5 +1,8 @@
 import { createRng, type Vec3 } from "../schema/common";
 
+// Keep this seed stable: changing it reshapes existing no-seed particle scenes.
+export const LEGACY_PARTICLE_DEFAULT_SEED = "openreel-particles";
+
 export interface Particle {
   position: Vec3;
   velocity: Vec3;
@@ -23,7 +26,7 @@ export interface ParticleEmitterOptions {
 
 export function spawnParticles(options: ParticleEmitterOptions): Particle[] {
   const count = Math.max(0, Math.min(4096, Math.floor(options.count)));
-  const rng = createRng(options.seed ?? "openreel-particles");
+  const rng = createRng(options.seed ?? LEGACY_PARTICLE_DEFAULT_SEED);
   const origin = options.origin ?? { x: 0, y: 0, z: 0 };
   const speed = options.speed ?? 3;
   const speedJitter = Math.max(0, options.speedJitter ?? 0.3);

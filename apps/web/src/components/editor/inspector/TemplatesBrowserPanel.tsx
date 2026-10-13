@@ -17,9 +17,9 @@ import {
   ChevronLeft,
   Settings2,
 } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftSelectableCard as SelectableCard } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftSelectableCard as SelectableCard } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { useEngineStore } from "../../../stores/engine-store";
 import { useProjectStore } from "../../../stores/project-store";
 import {
@@ -28,7 +28,7 @@ import {
   type TemplateSummary,
   type Template,
   type TemplateReplacements,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { templateCloudService } from "../../../services/template-cloud-service";
 import { SaveTemplateDialog } from "../SaveTemplateDialog";
 import { TemplateVariablesPanel } from "./TemplateVariablesPanel";

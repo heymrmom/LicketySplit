@@ -14,9 +14,9 @@ export interface McpEndpoint {
  * app.getPath. Overridable for tests / non-standard setups.
  */
 export function endpointFilePath(): string {
-  const override = process.env.OPENREEL_MCP_ENDPOINT_FILE;
+  const override = process.env.LICKETYSPLIT_MCP_ENDPOINT_FILE;
   if (override && override.length > 0) return override;
-  return path.join(os.homedir(), ".openreel", "mcp-endpoint.json");
+  return path.join(os.homedir(), ".licketysplit", "mcp-endpoint.json");
 }
 
 export const MCP_PROTOCOL_PATH = "/mcp";

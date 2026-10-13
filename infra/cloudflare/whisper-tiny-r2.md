@@ -1,7 +1,9 @@
 # Browser caption models
 
-The web editor loads local caption models through Transformers.js from the
-`openreel` R2 bucket. Two quality tiers are mirrored:
+The inherited model-host configuration references the `openreel` R2 bucket for
+Transformers.js downloads. This is an exact upstream infrastructure reference pending
+owner disposition, not verification of current live ownership or deployment. The
+desktop takeover does not deploy or rename this bucket. The documented tiers are:
 
 - Fast: `models/onnx-community/whisper-tiny/resolve/main/` (~100 MB)
 - Accurate: `models/onnx-community/whisper-large-v3-turbo_timestamped/resolve/main/`

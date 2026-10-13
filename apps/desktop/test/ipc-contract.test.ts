@@ -19,39 +19,39 @@ import { resolveExportArgs } from "../src/main/ipc/export";
 
 describe("ipc-contract", () => {
   it("exposes the probeHardware channel name", () => {
-    expect(CHANNELS.probeHardware).toBe("openreel:probeHardware");
+    expect(CHANNELS.probeHardware).toBe("licketysplit:probeHardware");
   });
 
   it("exposes the rigging backend probe channel name", () => {
-    expect(CHANNELS.riggingProbeBackend).toBe("openreel:rigging:probeBackend");
+    expect(CHANNELS.riggingProbeBackend).toBe("licketysplit:rigging:probeBackend");
   });
 
   it("exposes the humanoid rigging job channel name", () => {
-    expect(CHANNELS.riggingRigHumanoidModel).toBe("openreel:rigging:rigHumanoidModel");
+    expect(CHANNELS.riggingRigHumanoidModel).toBe("licketysplit:rigging:rigHumanoidModel");
   });
 
   it("exposes the Aurora preview channel name", () => {
-    expect(CHANNELS.auroraRenderPreview).toBe("openreel:aurora:renderPreview");
+    expect(CHANNELS.auroraRenderPreview).toBe("licketysplit:aurora:renderPreview");
   });
 
   it("exposes the Aurora preview-session channel names", () => {
     expect(CHANNELS.auroraStartPreviewSession).toBe(
-      "openreel:aurora:startPreviewSession",
+      "licketysplit:aurora:startPreviewSession",
     );
     expect(CHANNELS.auroraCancelPreviewSession).toBe(
-      "openreel:aurora:cancelPreviewSession",
+      "licketysplit:aurora:cancelPreviewSession",
     );
-    expect(CHANNELS.auroraPreviewEvent).toBe("openreel:aurora:previewEvent");
+    expect(CHANNELS.auroraPreviewEvent).toBe("licketysplit:aurora:previewEvent");
   });
 
   it("exposes the Aurora sequence-session channel names", () => {
     expect(CHANNELS.auroraStartSequenceSession).toBe(
-      "openreel:aurora:startSequenceSession",
+      "licketysplit:aurora:startSequenceSession",
     );
     expect(CHANNELS.auroraCancelSequenceSession).toBe(
-      "openreel:aurora:cancelSequenceSession",
+      "licketysplit:aurora:cancelSequenceSession",
     );
-    expect(CHANNELS.auroraSequenceEvent).toBe("openreel:aurora:sequenceEvent");
+    expect(CHANNELS.auroraSequenceEvent).toBe("licketysplit:aurora:sequenceEvent");
   });
 
   it("validates a well-formed hardware info object", () => {

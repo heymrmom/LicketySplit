@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug or issue with OpenReel
+description: Report a bug or issue with LicketySplit
 title: "[Bug]: "
 labels: ["needs-claude-review", "type-bug"]
 body:

@@ -596,7 +596,7 @@ export const useUIStore = create<UIState>()(
         },
       }),
       {
-        name: "openreel-ui-preferences",
+        name: "licketysplit-ui-preferences",
         version: 3,
         migrate: (persisted: unknown, version: number) => {
           const state = persisted as Record<string, unknown>;

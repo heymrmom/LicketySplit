@@ -1,3 +1,5 @@
+import {nativeVideoUrl} from "../media/native-media-bridge";
+import { createBudgetedVideoElement, type BudgetedVideoElement } from "./video-decoder-budget";
 import type {
   Timeline,
   Track,
@@ -141,10 +143,10 @@ export class VideoEngine {
   private parallelDecoder: ParallelFrameDecoder | null = null;
   private compositeBuffer: CompositeFrameBuffer | null = null;
   private useParallelDecoding = true;
-  private videoElementCache: Map<
-    string,
-    { video: HTMLVideoElement; url: string }
-  > = new Map();
+  private videoElementCache = new Map<string, BudgetedVideoElement>();
+  private videoElementLoads = new Map<string, Promise<BudgetedVideoElement | null>>();
+  private videoElementGeneration = 0;
+  private videoElementMediaGenerations = new Map<string, number>();
   private compoundEngines = new Map<string, VideoEngine>();
   private renderingCompounds = new Set<string>();
 
@@ -325,16 +327,29 @@ export class VideoEngine {
       }
 
       if (mediaId) {
-        const exportDecoder = mediaEngine.getExportDecoder(mediaId);
+        const acquired = this.exportMode
+          ? await mediaEngine.acquireExportDecoder(mediaId, blob, width)
+          : null;
+        const exportDecoder = acquired?.decoder ?? mediaEngine.getExportDecoder(mediaId);
         if (exportDecoder) {
-          const canvas = await exportDecoder.getFrame(time);
-          if (canvas) {
-            return createImageBitmap(canvas);
+          const release = acquired?.release ?? mediaEngine.pinExportDecoder(mediaId);
+          try {
+            const canvas = await exportDecoder.getFrame(time);
+            if (canvas) {
+              return createImageBitmap(canvas);
+            }
+          } finally {
+            release();
           }
         }
       }
 
-      const result = await mediaEngine.getFrameAtTime(blob, time, width);
+      const result = await mediaEngine.getFrameAtTime(
+        blob,
+        time,
+        width,
+        this.exportMode ? "export" : "preview",
+      );
       if (result?.canvas) {
         return createImageBitmap(result.canvas);
       }
@@ -473,59 +488,103 @@ export class VideoEngine {
     height: number,
   ): Promise<ImageBitmap | null> {
     let cached = this.videoElementCache.get(mediaId);
+    let pending = this.videoElementLoads.get(mediaId);
+
+    // Entries are published before metadata resolves so invalidation can
+    // release their lease. Every caller must still join that first load.
+    if (pending) cached = (await pending) ?? undefined;
 
     if (!cached) {
-      const url = URL.createObjectURL(blob);
-      const video = document.createElement("video");
-      video.src = url;
-      video.muted = true;
-      video.playsInline = true;
-      video.preload = "auto";
-
-      await new Promise<void>((resolve, reject) => {
-        video.onloadedmetadata = () => resolve();
-        video.onerror = () => reject(new Error("Video load failed"));
-        setTimeout(() => reject(new Error("Video load timeout")), 10000);
-      });
-
-      cached = { video, url };
-      this.videoElementCache.set(mediaId, cached);
+      pending = this.videoElementLoads.get(mediaId);
+      if (!pending) {
+        const generation = `${this.videoElementGeneration}:${this.videoElementMediaGenerations.get(mediaId) ?? 0}`;
+        let created: BudgetedVideoElement | null = null;
+        pending = (async () => {
+          created = await createBudgetedVideoElement(
+            () => nativeVideoUrl(blob, this.exportMode ? "export" : "preview"),
+            {
+              preload: "auto",
+              isCurrent: () => generation === `${this.videoElementGeneration}:${this.videoElementMediaGenerations.get(mediaId) ?? 0}`,
+              onDispose: () => {
+                if (created && this.videoElementCache.get(mediaId) === created) {
+                  this.videoElementCache.delete(mediaId);
+                }
+              },
+            },
+          );
+          if (!created) return null;
+          this.videoElementCache.set(mediaId, created);
+          const { video } = created;
+          try {
+            await new Promise<void>((resolve, reject) => {
+              let settled = false;
+              const timeout = setTimeout(() => finish(new Error("Video load timeout")), 10000);
+              const finish = (error?: Error) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeout);
+                video.onloadedmetadata = null;
+                video.onerror = null;
+                if (error) reject(error);
+                else resolve();
+              };
+              video.onloadedmetadata = () => finish();
+              video.onerror = () => finish(new Error("Video load failed"));
+              video.src = created!.url;
+              video.load();
+            });
+            created.lease.unpin();
+            return created;
+          } catch (error) {
+            created.lease.release();
+            throw error;
+          }
+        })().finally(() => {
+          if (this.videoElementLoads.get(mediaId) === pending) {
+            this.videoElementLoads.delete(mediaId);
+          }
+        });
+        this.videoElementLoads.set(mediaId, pending);
+      }
+      cached = (await pending) ?? undefined;
+      if (!cached) return null;
     }
 
+    if (!cached.lease.active) return null;
+    cached.lease.pin();
+    cached.lease.touch();
     const { video } = cached;
+    try {
+      video.currentTime = time;
 
-    video.currentTime = time;
-
-    await new Promise<void>((resolve) => {
-      let resolved = false;
-      const onSeeked = () => {
-        if (resolved) return;
-        resolved = true;
-        video.removeEventListener("seeked", onSeeked);
-        resolve();
-      };
-      video.addEventListener("seeked", onSeeked);
-      if (video.readyState >= 2) {
-        onSeeked();
-      }
-      setTimeout(() => {
-        if (!resolved) {
+      await new Promise<void>((resolve) => {
+        let resolved = false;
+        const onSeeked = () => {
+          if (resolved) return;
           resolved = true;
           video.removeEventListener("seeked", onSeeked);
           resolve();
-        }
-      }, 3000);
-    });
+        };
+        video.addEventListener("seeked", onSeeked);
+        if (video.readyState >= 2) onSeeked();
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            video.removeEventListener("seeked", onSeeked);
+            resolve();
+          }
+        }, 3000);
+      });
 
-    if (
-      !this.decodeCanvas ||
-      this.decodeCanvas.width !== width ||
-      this.decodeCanvas.height !== height
-    ) {
-      this.decodeCanvas = new OffscreenCanvas(width, height);
-      this.decodeCtx = this.decodeCanvas.getContext("2d") as OffscreenCanvasRenderingContext2D;
-    }
-    const ctx = this.decodeCtx!;
+      if (
+        !this.decodeCanvas ||
+        this.decodeCanvas.width !== width ||
+        this.decodeCanvas.height !== height
+      ) {
+        this.decodeCanvas = new OffscreenCanvas(width, height);
+        this.decodeCtx = this.decodeCanvas.getContext("2d") as OffscreenCanvasRenderingContext2D;
+      }
+      const ctx = this.decodeCtx!;
 
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
@@ -546,23 +605,23 @@ export class VideoEngine {
       drawY = 0;
     }
 
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, width, height);
-    ctx.drawImage(video, drawX, drawY, drawWidth, drawHeight);
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(video, drawX, drawY, drawWidth, drawHeight);
 
-    return createImageBitmap(this.decodeCanvas);
+      return await createImageBitmap(this.decodeCanvas);
+    } finally {
+      cached.lease.unpin();
+    }
   }
 
   /**
    * Clear the video element cache, releasing resources.
    */
   clearVideoElementCache(): void {
-    for (const [, cached] of this.videoElementCache) {
-      cached.video.pause();
-      cached.video.removeAttribute("src");
-      cached.video.load();
-      URL.revokeObjectURL(cached.url);
-    }
+    this.videoElementGeneration += 1;
+    this.videoElementLoads.clear();
+    for (const cached of this.videoElementCache.values()) cached.lease.release();
     this.videoElementCache.clear();
   }
 
@@ -572,13 +631,14 @@ export class VideoEngine {
    * source video) is re-decoded instead of serving stale frames.
    */
   invalidateMedia(mediaId: string): void {
+    this.videoElementMediaGenerations.set(
+      mediaId,
+      (this.videoElementMediaGenerations.get(mediaId) ?? 0) + 1,
+    );
+    this.videoElementLoads.delete(mediaId);
     const cachedVideo = this.videoElementCache.get(mediaId);
     if (cachedVideo) {
-      cachedVideo.video.pause();
-      cachedVideo.video.removeAttribute("src");
-      cachedVideo.video.load();
-      URL.revokeObjectURL(cachedVideo.url);
-      this.videoElementCache.delete(mediaId);
+      cachedVideo.lease.release();
     }
 
     const cachedImage = this.staticImageCache.get(mediaId);

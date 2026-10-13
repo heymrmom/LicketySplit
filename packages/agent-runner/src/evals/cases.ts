@@ -1,5 +1,5 @@
-import { MockLLMClient } from "@openreel/agent";
-import type { LLMResponse } from "@openreel/agent";
+import { MockLLMClient } from "@licketysplit/agent";
+import type { LLMResponse } from "@licketysplit/agent";
 import { createEmptyProject } from "../project-io";
 import type { EvalCase } from "./harness";
 

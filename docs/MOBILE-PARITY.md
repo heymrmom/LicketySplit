@@ -1,3 +1,5 @@
+> **Upstream mobile reference.** The Swift/Kotlin source trees and `feat/ios-app` work described below are absent from this checkout. Preserve their exact symbols, paths and historical verification claims as reference; they do not establish LicketySplit mobile implementation or current acceptance. Desktop candidate evidence lives in `apps/desktop/ACCEPTANCE.md` and the October 9 research reports.
+
 # Mobile / Cross-Platform Parity Matrix
 
 Scope: the timeline-semantics that were unified across the recent iOS correctness

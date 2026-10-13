@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import type { MotionComposition } from "@openreel/core";
-import { groupMotionLayers, ungroupMotionLayers } from "@openreel/core";
+import type { MotionComposition } from "@licketysplit/core";
+import { groupMotionLayers, ungroupMotionLayers } from "@licketysplit/core";
 import { useProjectStore } from "../../stores/project-store";
 import { advanceMotionPlayhead } from "../playback";
 import {

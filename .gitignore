@@ -101,3 +101,24 @@ xcuserdata/
 /Openreel Video Android/
 /apps/ios/
 /apps/android/
+
+# Source receipt generated only after source is committed for a package.
+apps/desktop/resources/BUILD_SOURCE.json
+scripts/__pycache__/
+
+# Separate local native-import test artifacts; preserve the original candidate.
+apps/desktop/release-native-import/
+# Final local takeover output; not a distributable release artifact.
+apps/desktop/release-takeover-alpha2/
+
+# Separate local EOF recovery and recording-import candidate.
+apps/desktop/release-improvements-alpha3/
+
+# Guided review local candidate
+apps/desktop/release-guided-alpha4/
+
+/apps/desktop/release-playback-alpha5/
+
+/apps/desktop/release-playback-alpha6/
+
+/apps/desktop/release-playback-alpha7/

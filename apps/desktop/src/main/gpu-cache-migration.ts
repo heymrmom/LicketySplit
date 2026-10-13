@@ -20,15 +20,16 @@ const REGENERABLE_CACHE_DIRS = [
   "Code Cache",
 ];
 
-const VERSION_MARKER_FILE = ".openreel-build";
+const VERSION_MARKER_FILE = ".licketysplit-build";
+const LEGACY_VERSION_MARKER_FILE = ".openreel-build";
 
-function readMarker(markerPath: string): string {
+function readMarker(markerPath: string, removeCorrupt = true): string {
   try {
     if (statSync(markerPath).isFile()) {
       return readFileSync(markerPath, "utf8").trim();
     }
-    // Corrupt marker (e.g. a directory) — remove it so a good one can be written.
-    rmSync(markerPath, { recursive: true, force: true });
+    // Only repair our marker in place; legacy marker reads must leave the source untouched.
+    if (removeCorrupt) rmSync(markerPath, { recursive: true, force: true });
   } catch {
     // Missing or unreadable → treat as first run.
   }
@@ -56,8 +57,14 @@ export function migrateGpuCacheOnUpgrade(): void {
     }
     const markerPath = path.join(userData, VERSION_MARKER_FILE);
 
-    const previousVersion = readMarker(markerPath);
-    if (previousVersion === currentVersion) return;
+    const currentMarkerVersion = readMarker(markerPath);
+    const legacyMarkerVersion = readMarker(path.join(userData, LEGACY_VERSION_MARKER_FILE), false);
+    const previousVersion = currentMarkerVersion || legacyMarkerVersion;
+    if (previousVersion === currentVersion && currentMarkerVersion) return;
+    if (previousVersion === currentVersion && legacyMarkerVersion) {
+      writeMarker(markerPath, currentVersion);
+      return;
+    }
 
     let allCleared = true;
     if (previousVersion) {

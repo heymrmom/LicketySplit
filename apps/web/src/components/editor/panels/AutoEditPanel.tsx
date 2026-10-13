@@ -1,12 +1,12 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { Music, Zap, Loader2 } from "@/icons/lucide-compat";
-import { ToolcraftSegmentedControl } from "@openreel/ui";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftEmptyState as EmptyState } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftSliderControl } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftSegmentedControl } from "@licketysplit/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftEmptyState as EmptyState } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftSliderControl } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { useProjectStore } from "../../../stores/project-store";
 import {
   getBeatDetectionEngine,
@@ -17,7 +17,7 @@ import {
   type BeatAnalysisResult,
   type Clip,
   getMediaItemCapabilities,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 interface AutoEditPanelProps {
   onClose: () => void;

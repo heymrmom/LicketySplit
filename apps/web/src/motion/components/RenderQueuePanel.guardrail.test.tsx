@@ -6,7 +6,7 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import type { MotionComposition } from "@openreel/core";
+import type { MotionComposition } from "@licketysplit/core";
 import { createEmptyProject } from "../../stores/project/project-helpers";
 import { useProjectStore } from "../../stores/project-store";
 import { useMotionStore } from "../stores/motion-store";
@@ -34,11 +34,11 @@ function composition(): MotionComposition {
 
 function setDesktop(enabled: boolean): void {
   if (enabled) {
-    (window as { openreel?: { platform: "desktop" } }).openreel = {
+    (window as { licketysplit?: { platform: "desktop" } }).licketysplit = {
       platform: "desktop",
     };
   } else {
-    delete (window as { openreel?: unknown }).openreel;
+    delete (window as { licketysplit?: unknown }).licketysplit;
   }
 }
 

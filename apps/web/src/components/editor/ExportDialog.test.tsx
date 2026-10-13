@@ -2,10 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SourceExportMatch } from "../../services/export-source-match";
 import { ExportDialog } from "./ExportDialog";
-import { checkBrowserExportCapability } from "@openreel/core";
+import { checkBrowserExportCapability } from "@licketysplit/core";
 
-vi.mock("@openreel/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@openreel/core")>();
+vi.mock("@licketysplit/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@licketysplit/core")>();
   return {
     ...actual,
     checkBrowserExportCapability: vi.fn(() => new Promise<never>(() => undefined)),

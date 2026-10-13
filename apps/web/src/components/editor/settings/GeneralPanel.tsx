@@ -1,11 +1,11 @@
 import React, { useCallback } from "react";
-import { ToolcraftSwitchControl } from "@openreel/ui";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftNumberInputControl } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextInputControl as TextInput } from "@openreel/ui";
+import { ToolcraftSwitchControl } from "@licketysplit/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftNumberInputControl } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextInputControl as TextInput } from "@licketysplit/ui";
 import { useSettingsStore, SERVICE_REGISTRY, type TtsProvider, type LlmProvider, type AggregatorProvider } from "../../../stores/settings-store";
 import { useProjectStore } from "../../../stores/project-store";
 import { EDITING_FRAME_RATE_OPTIONS } from "../editing-frame-rate";
@@ -319,7 +319,7 @@ export const GeneralPanel: React.FC = () => {
           AI Connections
         </Text>
         <Text type="supporting" color="secondary" className="text-xs">
-          Connect a compatible endpoint you control. OpenReel does not choose a vendor or model for you.
+          Connect a compatible endpoint you control. LicketySplit does not choose a vendor or model for you.
         </Text>
 
         <div className="space-y-3">

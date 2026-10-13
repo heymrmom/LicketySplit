@@ -7,7 +7,7 @@ could not do: real ProRes (it silently downgraded ProRes → H.264) and encodes 
 
 ## Automatically proven (`apps/desktop/test/export-integration.test.ts`)
 
-Run with: `pnpm --filter @openreel/desktop test:run export-integration`
+Run with: `pnpm --filter @licketysplit/desktop test:run export-integration`
 
 All cases drive the **real bundled ffmpeg** (`resources/bin/<platform>-<arch>/ffmpeg`)
 via the real `ExportJob` / direct spawn, streaming RGBA frames over stdin with
@@ -79,9 +79,9 @@ Automated tests + builds are green; these need a real launch / packaged build to
 - [ ] Frameless window renders with mac traffic lights aligned to the custom title bar (trafficLightPosition x:16 y:14) and `under-window` vibrancy is visible.
 - [ ] Windows/Linux: custom min/max/close buttons work (minimize, toggle-maximize, close) and the title bar is draggable (no-drag on the controls + tab area).
 - [ ] Native application menu shows File/Edit/View/Window/Help; native roles (undo/redo/cut/copy/paste/minimize/close/toggle-fullscreen/about/quit) function; accelerators (Cmd/Ctrl+N/O/E/Z) fire.
-- [ ] The DaVinci-style charcoal/teal theme renders on the shell (title bar, workspace tabs, page bodies) — surfaces charcoal, accent teal, shadcn primitives (Select/DropdownMenu/focus rings) teal not emerald.
+- [ ] The LicketySplit charcoal/purple theme renders on the shell (title bar, workspace tabs, page bodies) — surfaces charcoal, purple accent, and matching shadcn primitives (Select/DropdownMenu/focus rings).
 - [ ] Edit/Color/Deliver page tabs switch and persist across reload (ui-store desktopPage).
-- [ ] Packaged build (`pnpm --filter @openreel/desktop run dist` with certs) — measure real installer size + cold-start per platform. Signed/notarized dist requires certs (mac hardened-runtime + notarize creds; Windows Authenticode) supplied via CI/env; per-platform native ffmpeg binaries must be present in resources/bin.
+- [ ] Packaged build (`pnpm --filter @licketysplit/desktop run dist` with certs) — measure real installer size + cold-start per platform. Signed/notarized dist requires certs (mac hardened-runtime + notarize creds; Windows Authenticode) supplied via CI/env; per-platform native ffmpeg binaries must be present in resources/bin.
 - [ ] Slimming confirmed in the packaged app: renderer ~5MB (ffmpeg.wasm stripped, fonts curated); native ffmpeg sidecar handles all decode/transcode/export.
 - [ ] (Known v1 limitation) Non-curated picker fonts (Display/Serif/etc.) don't render on desktop until a lazy-font-load follow-up; curated/Popular families + Geist render correctly.
 
@@ -91,6 +91,6 @@ Automated tests + builds are green; these need a real launch / packaged build to
 
 - [ ] Rotating-logo loader appears on project open (PP2 loading screen renders and animates while the project hydrates).
 - [ ] Editor layout (Media / Viewer / Inspector / Timeline) renders with resizable handles between panels and the Export button is present and functional.
-- [ ] OpenReel app icon shows in the macOS dock (packaged build) and in the Windows taskbar / window chrome (`BrowserWindow.icon` on win/linux).
+- [ ] LicketySplit app icon shows in the macOS dock (packaged build) and in the Windows taskbar / window chrome (`BrowserWindow.icon` on win/linux).
 - [ ] SF-Symbols-style icons render correctly across the chrome (title bar, workspace tabs, toolbar, inspector) via the shared Icon system.
 - [ ] Export produces a real file via the native FFmpeg sidecar (end-to-end from the Export button through the native export pipeline).

@@ -27,7 +27,7 @@ export function bundledBlenderPath(): string {
 }
 
 export function blenderCandidates(env: NodeJS.ProcessEnv = process.env): BlenderCandidate[] {
-  const configured = env.OPENREEL_BLENDER_PATH || env.BLENDER_PATH;
+  const configured = env.LICKETYSPLIT_BLENDER_PATH || env.BLENDER_PATH;
   const candidates: BlenderCandidate[] = [];
   if (configured) candidates.push({ path: configured, mode: "configured" });
   candidates.push({ path: bundledBlenderPath(), mode: "bundled" });

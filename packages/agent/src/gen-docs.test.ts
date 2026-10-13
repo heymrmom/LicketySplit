@@ -5,7 +5,7 @@ import { toolDefs } from "./registry";
 describe("generateCapabilityMarkdown", () => {
   it("renders a markdown doc covering the registry and manifest", () => {
     const md = generateCapabilityMarkdown();
-    expect(md).toContain("# OpenReel Agent — Capability Reference");
+    expect(md).toContain("# LicketySplit Agent — Capability Reference");
     expect(md).toContain(`**${toolDefs().length} tools**`);
     expect(md).toContain("list_clips");
     expect(md).toContain("execute_action");

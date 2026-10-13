@@ -95,55 +95,17 @@ export async function analyzeSileroVad(
   if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
     throw new Error("Silero VAD requires a positive audio sample rate");
   }
-  const loaded = options.runtime
-    ? { runtime: options.runtime, session: options.session }
-    : await loadDefaultSession(options.model ?? DEFAULT_SILERO_VAD_MODEL_URL);
-  const runtime = loaded.runtime;
-  const session = options.session ?? loaded.session;
-  if (!session) throw new Error("Silero VAD session is unavailable");
-  const audio = resampleMono(samples, sampleRate, SILERO_VAD_SAMPLE_RATE);
-  const frameCount = Math.ceil(audio.length / SILERO_VAD_CHUNK_SAMPLES);
-  const probabilities = new Float32Array(frameCount);
-  let context = new Float32Array(SILERO_VAD_CONTEXT_SAMPLES);
-  let state = new Float32Array(2 * 1 * 128);
-
-  for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
-    const chunk = new Float32Array(SILERO_VAD_CHUNK_SAMPLES);
-    chunk.set(
-      audio.subarray(
-        frameIndex * SILERO_VAD_CHUNK_SAMPLES,
-        (frameIndex + 1) * SILERO_VAD_CHUNK_SAMPLES,
-      ),
-    );
-    const input = new Float32Array(
-      SILERO_VAD_CONTEXT_SAMPLES + SILERO_VAD_CHUNK_SAMPLES,
-    );
-    input.set(context);
-    input.set(chunk, SILERO_VAD_CONTEXT_SAMPLES);
-    const result = await session.run({
-      input: new runtime.Tensor("float32", input, [1, input.length]),
-      state: new runtime.Tensor("float32", state, [2, 1, 128]),
-      sr: new runtime.Tensor(
-        "int64",
-        BigInt64Array.from([BigInt(SILERO_VAD_SAMPLE_RATE)]),
-        [1],
-      ),
-    });
-    const output = result.output ?? Object.values(result)[0];
-    const nextState = result.stateN ?? result.state;
-    probabilities[frameIndex] = Math.max(
-      0,
-      Math.min(1, Number(output?.data[0] ?? 0)),
-    );
-    if (nextState?.data) {
-      state = Float32Array.from(nextState.data, Number);
-    }
-    context = chunk.slice(-SILERO_VAD_CONTEXT_SAMPLES);
-    options.onProgress?.(frameIndex + 1, frameCount);
-  }
-
-  return {
-    windowMs: (SILERO_VAD_CHUNK_SAMPLES / SILERO_VAD_SAMPLE_RATE) * 1_000,
-    probabilities,
-  };
+  async function* chunks(){yield resampleMono(samples,sampleRate,SILERO_VAD_SAMPLE_RATE);}
+  return analyzeSileroVadStream(chunks(), {...options,totalSamples:Math.round(samples.length*SILERO_VAD_SAMPLE_RATE/sampleRate)});
+}
+export async function analyzeSileroVadStream(chunks:AsyncIterable<Float32Array>, options:SileroVadOptions&{totalSamples?:number;signal?:AbortSignal}={}):Promise<MulticamVadTrack>{
+  const loaded=options.runtime?{runtime:options.runtime,session:options.session}:await loadDefaultSession(options.model??DEFAULT_SILERO_VAD_MODEL_URL);
+  const runtime=loaded.runtime;const session=options.session??loaded.session;if(!session)throw new Error("Silero VAD session is unavailable");
+  const probabilities:number[]=[];let context=new Float32Array(SILERO_VAD_CONTEXT_SAMPLES);let state=new Float32Array(256);let pending=new Float32Array(0);
+  const process=async(chunk:Float32Array)=>{options.signal?.throwIfAborted();const input=new Float32Array(SILERO_VAD_CONTEXT_SAMPLES+SILERO_VAD_CHUNK_SAMPLES);input.set(context);input.set(chunk,SILERO_VAD_CONTEXT_SAMPLES);
+    const result=await session.run({input:new runtime.Tensor("float32",input,[1,input.length]),state:new runtime.Tensor("float32",state,[2,1,128]),sr:new runtime.Tensor("int64",BigInt64Array.from([16000n]),[1])});
+    const output=result.output??Object.values(result)[0];const nextState=result.stateN??result.state;probabilities.push(Math.max(0,Math.min(1,Number(output?.data[0]??0))));if(nextState?.data)state=Float32Array.from(nextState.data,Number);context=chunk.slice(-SILERO_VAD_CONTEXT_SAMPLES);options.onProgress?.(probabilities.length,Math.ceil((options.totalSamples??probabilities.length*512)/512));};
+  for await(const chunk of chunks){options.signal?.throwIfAborted();const combined=new Float32Array(pending.length+chunk.length);combined.set(pending);combined.set(chunk,pending.length);let offset=0;while(offset+512<=combined.length){await process(combined.subarray(offset,offset+512));offset+=512;}pending=combined.slice(offset);}
+  if(pending.length){const last=new Float32Array(512);last.set(pending);await process(last);}
+  return {windowMs:32,probabilities:Float32Array.from(probabilities)};
 }

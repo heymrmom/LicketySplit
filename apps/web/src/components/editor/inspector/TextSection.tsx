@@ -1,12 +1,12 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ToolcraftSegmentedControl } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftFileDropControl as FileInput } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftNumberInputControl } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextAreaControl } from "@openreel/ui";
+import { ToolcraftSegmentedControl } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftFileDropControl as FileInput } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftNumberInputControl } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextAreaControl } from "@licketysplit/ui";
 import {
   AlignLeft,
   AlignCenter,
@@ -25,13 +25,13 @@ import type {
   TextShaderStyle,
   TextStyle,
   FontWeight,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   getMotionShaderDef,
   getMotionShaderEffectDefs,
   getMotionShaderFillDefs,
   getMotionShaderTextDefs,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   FONT_CATEGORIES,
   FONT_FILE_ACCEPT,

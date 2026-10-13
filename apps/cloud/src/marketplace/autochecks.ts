@@ -10,7 +10,7 @@ import {
   type DetectionCapability,
   type TemplateSource,
   type Manifest,
-} from "@openreel/fxpkg";
+} from "@licketysplit/fxpkg";
 
 export interface AutoCheckResult {
   ok: boolean;

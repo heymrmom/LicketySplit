@@ -1,5 +1,5 @@
 {
-  "name": "@openreel/studio",
+  "name": "@licketysplit/studio",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,9 +15,9 @@
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",
-    "@openreel/core": "workspace:*",
-    "@openreel/fxpkg": "workspace:*",
-    "@openreel/ui": "workspace:*",
+    "@licketysplit/core": "workspace:*",
+    "@licketysplit/fxpkg": "workspace:*",
+    "@licketysplit/ui": "workspace:*",
     "clsx": "^2.1.1",
     "idb": "^8.0.3",
     "nanoid": "^5.1.11",

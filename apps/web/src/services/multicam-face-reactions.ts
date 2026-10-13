@@ -2,8 +2,8 @@ import type {
   MulticamFaceSignal,
   MulticamManifest,
   MulticamReactionCue,
-} from "@openreel/core";
-import { detectMulticamReactionCues } from "@openreel/core";
+} from "@licketysplit/core";
+import { detectMulticamReactionCues } from "@licketysplit/core";
 import type { ResolvedMulticamSource } from "../components/editor/inspector/multicam-workflow";
 
 const FACE_MODEL =

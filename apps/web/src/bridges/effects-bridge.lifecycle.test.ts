@@ -11,8 +11,8 @@ const engines = vi.hoisted(() => ({
   instances: [] as { dispose: ReturnType<typeof vi.fn> }[],
 }));
 
-vi.mock("@openreel/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@openreel/core")>();
+vi.mock("@licketysplit/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@licketysplit/core")>();
   return {
     ...actual,
     isWebGPUSupported: () => false,

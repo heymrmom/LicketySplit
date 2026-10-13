@@ -9,7 +9,7 @@ import {
   type Transform,
   DEFAULT_TEXT_STYLE,
   DEFAULT_TEXT_TRANSFORM,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 /**
  * Result of text operations

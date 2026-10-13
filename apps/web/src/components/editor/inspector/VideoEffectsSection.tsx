@@ -10,11 +10,11 @@ import {
   Copy,
   Search,
 } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftPopover as Popover } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftPopover as Popover } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { PropertySlider } from "./shell/PropertySlider";
 import { useProjectStore } from "../../../stores/project-store";
 import type {
@@ -25,7 +25,7 @@ import {
   getMotionShaderDef,
   getMotionShaderEffectDefs,
   defaultMotionShaderParams,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { ColorSelector } from "../../../motion/components/primitives";
 import { ShaderPreviewBrowser } from "../../shaders/ShaderPreviewBrowser";
 import {
@@ -489,14 +489,14 @@ const EffectItem: React.FC<{
     <div
       data-effect-id={effect.id}
       onDragOver={(event) => {
-        if (event.dataTransfer.types.includes("application/x-openreel-effect-order")) {
+        if (event.dataTransfer.types.includes("application/x-licketysplit-effect-order")) {
           event.preventDefault();
           event.dataTransfer.dropEffect = "move";
         }
       }}
       onDrop={(event) => {
         const sourceEffectId = event.dataTransfer.getData(
-          "application/x-openreel-effect-order",
+          "application/x-licketysplit-effect-order",
         );
         if (!sourceEffectId) return;
         event.preventDefault();
@@ -517,7 +517,7 @@ const EffectItem: React.FC<{
             onDragStart={(event) => {
               event.dataTransfer.effectAllowed = "move";
               event.dataTransfer.setData(
-                "application/x-openreel-effect-order",
+                "application/x-licketysplit-effect-order",
                 effect.id,
               );
             }}

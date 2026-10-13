@@ -16,9 +16,9 @@ vi.mock("../../../services/secure-storage", () => ({
   onSessionLock: vi.fn(),
 }));
 
-vi.mock("@openreel/ui", async () => {
-  const actual = await vi.importActual<typeof import("@openreel/ui")>(
-    "@openreel/ui",
+vi.mock("@licketysplit/ui", async () => {
+  const actual = await vi.importActual<typeof import("@licketysplit/ui")>(
+    "@licketysplit/ui",
   );
   return {
     ...actual,

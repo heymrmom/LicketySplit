@@ -1,15 +1,15 @@
 import React, { useCallback } from "react";
 import { Settings, Key, Plug } from "@/icons/lucide-compat";
-import { Tabs, TabsList, TabsTrigger } from "@openreel/ui";
-import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from "@openreel/ui";
-import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent } from "@openreel/ui";
+import { Tabs, TabsList, TabsTrigger } from "@licketysplit/ui";
+import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from "@licketysplit/ui";
+import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent } from "@licketysplit/ui";
 import { useSettingsStore, type SettingsTab } from "../../../stores/settings-store";
 import { GeneralPanel } from "./GeneralPanel";
 import { ApiKeysPanel } from "./ApiKeysPanel";
 import { McpPanel } from "./McpPanel";
 
 const isDesktop =
-  typeof window !== "undefined" && window.openreel?.platform === "desktop";
+  typeof window !== "undefined" && window.licketysplit?.platform === "desktop";
 
 const TABS: readonly { id: SettingsTab; label: string; icon: typeof Settings }[] = [
   { id: "general", label: "General", icon: Settings },

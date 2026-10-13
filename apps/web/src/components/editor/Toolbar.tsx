@@ -15,7 +15,7 @@ import {
   type AudioExportSettings,
   type DeviceProfile,
   type TimeEstimate,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { ExportDialog } from "./ExportDialog";
 import { CompressDialog } from "./CompressDialog";
 import { deriveSourceExportMatch } from "../../services/export-source-match";
@@ -33,7 +33,7 @@ import {
   ToolcraftIconButton,
   ToolcraftText as Text,
   ToolcraftTextInputControl,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 
 type ExportType =
   | "mp4"
@@ -106,6 +106,7 @@ export const Toolbar: React.FC = () => {
     failExport,
     cancel: handleCancelExport,
     resetError,
+    cancelPublishing,
   } = useExportRunner({ project, onExported: handleExported });
 
   const [deviceProfile, setDeviceProfile] = useState<DeviceProfile | null>(null);
@@ -164,7 +165,7 @@ export const Toolbar: React.FC = () => {
 
       try {
         if (type === "wav") {
-          const writable = await showSavePicker(exportFilename(project.name, "wav"), "wav", { delivery: window.openreel?.platform === "desktop" ? "file" : "download" });
+          const writable = await showSavePicker(exportFilename(project.name, "wav"), "wav", { delivery: window.licketysplit?.platform === "desktop" ? "file" : "download" });
 
           beginExport(writable);
 
@@ -202,7 +203,7 @@ export const Toolbar: React.FC = () => {
           };
 
           const preset = presets[type] ?? presets.mp4;
-          const writable = await showSavePicker(exportFilename(project.name, preset.ext), preset.ext, { delivery: window.openreel?.platform === "desktop" ? "file" : "download" });
+          const writable = await showSavePicker(exportFilename(project.name, preset.ext), preset.ext, { delivery: window.licketysplit?.platform === "desktop" ? "file" : "download" });
 
           beginExport(writable);
 
@@ -218,7 +219,7 @@ export const Toolbar: React.FC = () => {
   );
 
   const handleCustomExport = useCallback(
-    async (settings: VideoExportSettings, delivery: ExportDeliveryMode = window.openreel?.platform === "desktop" ? "file" : "download") => {
+    async (settings: VideoExportSettings, delivery: ExportDeliveryMode = window.licketysplit?.platform === "desktop" ? "file" : "download",options?:{generatePublishing:boolean}) => {
       closeModal();
       if (!hasTimelineContent) return;
 
@@ -240,7 +241,7 @@ export const Toolbar: React.FC = () => {
               : undefined,
         };
 
-        await runExport(exportSettings, ext, writable);
+        await runExport(exportSettings, ext, writable,{generatePublishing:options?.generatePublishing??false,exportPath:(window as {__licketysplitExportPath?:string}).__licketysplitExportPath});
 
         track(AnalyticsEvents.PROJECT_EXPORTED, {
           format: settings.format,
@@ -399,6 +400,7 @@ export const Toolbar: React.FC = () => {
         <ProjectSwitcher />
       </div>
 
+      {exportState.publishingState&&exportState.publishingState!=="not-requested"&&<div className="max-w-56 text-xs text-fg-2" role="status">{exportState.publishingState==="files-ready"?"Publishing files saved; rendering has its own status.":exportState.publishingState==="failed"?`Publishing: ${exportState.publishingError}`:"Generating publishing files…"}{exportState.publishingState==="generating"&&<button type="button" className="min-h-9 underline" onClick={cancelPublishing}>Cancel publishing only</button>}</div>}
       {/* ─── Right: export only ───────────────────────────────── */}
       <div className="flex items-center justify-end shrink-0">
         {/* Export */}
@@ -437,7 +439,7 @@ export const Toolbar: React.FC = () => {
               onClick={openExportDialog}
               disabled={!hasTimelineContent}
               title={hasTimelineContent ? "Choose export settings" : "Add media or text to the timeline to export"}
-              className="rounded-l-[8px] rounded-r-none bg-accent px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-l-[8px] rounded-r-none bg-accent-strong px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Export
             </button>

@@ -11,7 +11,7 @@ import {
   ContextMenuShortcut,
   ContextMenuCheckboxItem,
   Slider,
-} from '@openreel/ui';
+} from '@licketysplit/ui';
 
 type FilterType = 'all' | LayerType;
 

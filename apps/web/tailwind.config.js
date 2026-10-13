@@ -100,7 +100,7 @@ export default {
           muted: "var(--fg-3)",
         },
         status: {
-          success: "var(--accent)",
+          success: "var(--success, #22c55e)",
           warning: "#eab308",
           error: "#ef4444",
           info: "#3b82f6",

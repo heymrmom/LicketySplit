@@ -6,14 +6,14 @@ import {
   buildSystemPrompt,
   getTool,
   selectToolsForPrompt,
-} from "@openreel/agent";
+} from "@licketysplit/agent";
 import type {
   AgentEvent,
   ConfirmDecision,
   ToolCall,
   ToolResult,
   LoopMessage,
-} from "@openreel/agent";
+} from "@licketysplit/agent";
 import { isSessionUnlocked, getSecret } from "../services/secure-storage";
 import { getLiveEditorHost, runExclusive } from "../services/agent/host-singleton";
 import { makeBYOKClient } from "../services/agent/llm-transport";
@@ -87,7 +87,7 @@ const genId = (): string =>
     ?.randomUUID?.() ?? `m-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const isDesktop = (): boolean =>
-  typeof window !== "undefined" && window.openreel?.platform === "desktop";
+  typeof window !== "undefined" && window.licketysplit?.platform === "desktop";
 
 // Monotonic turn id: a completion whose seq is stale (reset/superseded) must not
 // write back into the store.

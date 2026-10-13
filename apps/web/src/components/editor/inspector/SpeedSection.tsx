@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
-import { ToolcraftTextInputControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
+import { ToolcraftTextInputControl } from "@licketysplit/ui";
 import { RotateCcw, Sparkles } from "@/icons/lucide-compat";
-import type { Clip } from "@openreel/core";
-import { getMediaItemCapabilities, getSpeedEngine } from "@openreel/core";
+import type { Clip } from "@licketysplit/core";
+import { getMediaItemCapabilities, getSpeedEngine } from "@licketysplit/core";
 import { useProjectStore } from "../../../stores/project-store";
 import { MockToggle } from "./shell/InspectorControls";
 

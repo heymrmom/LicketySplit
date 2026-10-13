@@ -57,7 +57,7 @@ export async function probeRiggingBackend(): Promise<RiggingBackendProbe> {
   return {
     available: false,
     provider: "blender",
-    error: `Blender not found. Checked ${attempted.length} candidate(s). Set OPENREEL_BLENDER_PATH or bundle Blender under resources/rigging/blender/<platform>-<arch>.`,
+    error: `Blender not found. Checked ${attempted.length} candidate(s). Set LICKETYSPLIT_BLENDER_PATH or bundle Blender under resources/rigging/blender/<platform>-<arch>.`,
   };
 }
 
@@ -66,7 +66,7 @@ async function availableBlender(): Promise<RiggingBackendProbe> {
 }
 
 async function tempRiggingDir(): Promise<string> {
-  return mkdtemp(path.join(os.tmpdir(), "openreel-rigging-"));
+  return mkdtemp(path.join(os.tmpdir(), "licketysplit-rigging-"));
 }
 
 function extensionFromUrl(url: string): string {
@@ -127,7 +127,7 @@ def parse_args():
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--report", required=True)
-    parser.add_argument("--name", default="OpenReelHumanoid")
+    parser.add_argument("--name", default="LicketySplitHumanoid")
     parser.add_argument("--height-meters", type=float, default=0.0)
     parser.add_argument("--overwrite-existing", action="store_true")
     return parser.parse_args(argv)
@@ -264,7 +264,7 @@ def bind_meshes_to_armature(meshes, armature_obj, warnings):
         except Exception as exc:
             warnings.append(warning("AUTO_WEIGHTS_FAILED", "warning", f"{obj.name}: {exc}"))
             if not any(mod.type == "ARMATURE" and mod.object == armature_obj for mod in obj.modifiers):
-                mod = obj.modifiers.new("OpenReel Armature", "ARMATURE")
+                mod = obj.modifiers.new("LicketySplit Armature", "ARMATURE")
                 mod.object = armature_obj
 
 
@@ -399,7 +399,7 @@ export async function rigHumanoidModel(
         "--report",
         reportPath,
         "--name",
-        args.name ?? "OpenReelHumanoid",
+        args.name ?? "LicketySplitHumanoid",
         ...(args.heightMeters ? ["--height-meters", String(args.heightMeters)] : []),
         ...(args.overwriteExisting ? ["--overwrite-existing"] : []),
       ],

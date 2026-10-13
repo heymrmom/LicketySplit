@@ -5,7 +5,7 @@
 //
 // Usage: node scripts/build-manifest.mjs <artifactsDir> <outFile>
 //   <artifactsDir> is searched recursively for the installers; filenames follow
-//   electron-builder's artifactName: OpenReel-<version>-<arch>.<ext>.
+//   electron-builder's artifactName: LicketySplit-<version>-<arch>.<ext>.
 
 import { readdirSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -36,7 +36,7 @@ function walk(dir) {
 }
 
 const files = walk(artifactsDir).filter((f) =>
-  path.basename(f).startsWith(`OpenReel-${version}-`),
+  path.basename(f).startsWith(`LicketySplit-${version}-`),
 );
 
 function find(predicate) {

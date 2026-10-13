@@ -1,3 +1,4 @@
+import {PublishingOptions} from "./lickety/PublishingOptions";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Download,
@@ -23,22 +24,22 @@ import {
 import {
   ToolcraftSegmentedControl,
   ToolcraftSwitchControl,
-} from "@openreel/ui";
-import { ToolcraftButton as Button } from "@openreel/ui";
+} from "@licketysplit/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
 import {
   ToolcraftDialog as Dialog,
   ToolcraftDialogHeader as DialogHeader,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import {
   ToolcraftLayout as Layout,
   ToolcraftLayoutContent as LayoutContent,
   ToolcraftLayoutFooter as LayoutFooter,
-} from "@openreel/ui";
-import { ToolcraftNumberInputControl } from "@openreel/ui";
-import { ToolcraftSelectableCard as SelectableCard } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftSliderControl } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+} from "@licketysplit/ui";
+import { ToolcraftNumberInputControl } from "@licketysplit/ui";
+import { ToolcraftSelectableCard as SelectableCard } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftSliderControl } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import {
   exportPresetsManager,
   type PlatformExportPreset,
@@ -50,7 +51,7 @@ import type {
   CompressionSource,
   CompressionTarget,
   CompressionPlan,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import type { SourceExportMatch } from "../../services/export-source-match";
 import {
   getDeviceProfile,
@@ -71,7 +72,7 @@ import {
   type BenchmarkProgress,
   type TimeEstimate,
   type CodecRecommendation,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import { EDITING_FRAME_RATE_OPTIONS } from "./editing-frame-rate";
 import type { ExportDeliveryMode } from "../../services/export-runner";
 
@@ -81,7 +82,7 @@ const WEB_EXPORT_GUARDRAIL_MESSAGE =
 interface ExportDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onExport: (settings: VideoExportSettings, delivery?: ExportDeliveryMode) => void;
+  onExport: (settings: VideoExportSettings, delivery?: ExportDeliveryMode, options?:{generatePublishing:boolean}) => void;
   duration?: number;
   projectWidth?: number;
   projectHeight?: number;
@@ -158,7 +159,9 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   hasAudio = true,
 }) => {
   const isDesktop =
-    typeof window !== "undefined" && window.openreel?.platform === "desktop";
+    typeof window !== "undefined" && window.licketysplit?.platform === "desktop";
+  const [generatePublishing,setGeneratePublishing]=useState(false);
+  useEffect(()=>{if(isOpen)setGeneratePublishing(false);},[isOpen]);
   const [delivery, setDelivery] = useState<ExportDeliveryMode>(isDesktop ? "file" : "download");
   const [capabilityError, setCapabilityError] = useState<string | null>(null);
   const [checkingCapability, setCheckingCapability] = useState(false);
@@ -455,7 +458,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     if (guardrailBlocking || validationError || capabilityError) return;
     if (activeTab === "reduce") {
       if (!reducePlan) return;
-      onExport(resolveBrowserSettings(compressionPlanToExportSettings(reducePlan)), delivery);
+      if(generatePublishing)onExport(resolveBrowserSettings(compressionPlanToExportSettings(reducePlan)),delivery,{generatePublishing:true});else onExport(resolveBrowserSettings(compressionPlanToExportSettings(reducePlan)), delivery);
       onClose();
       return;
     }
@@ -467,7 +470,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
       ...chosen,
       encodeMode: customSettings.encodeMode ?? "balanced",
     };
-    onExport(resolveBrowserSettings(settings), delivery);
+    if(generatePublishing)onExport(resolveBrowserSettings(settings),delivery,{generatePublishing:true});else onExport(resolveBrowserSettings(settings), delivery);
     onClose();
   }, [
     activeTab,
@@ -481,6 +484,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     capabilityError,
     resolveBrowserSettings,
     delivery,
+    generatePublishing,
   ]);
 
   const handleMatchSourceExport = useCallback(() => {
@@ -496,9 +500,9 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
       encodeMode: customSettings.encodeMode ?? "balanced",
     };
     if (getExportValidationError(settings, duration)) return;
-    onExport(settings, delivery);
+    if(generatePublishing)onExport(settings,delivery,{generatePublishing:true});else onExport(settings, delivery);
     onClose();
-  }, [sourceMatch, customSettings, duration, onExport, onClose, delivery]);
+  }, [generatePublishing,sourceMatch, customSettings, duration, onExport, onClose, delivery]);
 
   const formatFileSize = (bitrate: number, durationSec: number): string => {
     const bytes = (bitrate * 1000 * durationSec) / 8;
@@ -1288,7 +1292,8 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                   </section>
 
                   <section className="rounded-[10px] border border-border bg-bg-1 p-4">
-                    <div className="flex items-center justify-between gap-4">
+                    {isDesktop&&<PublishingOptions enabled={generatePublishing} onChange={setGeneratePublishing}/>}
+            <div className="flex items-center justify-between gap-4">
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent/10 text-accent">
                           <Zap size={14} aria-hidden />
@@ -1405,7 +1410,8 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
             {deviceProfile && (
               <div className="shrink-0 border-t border-border bg-bg-1 px-5 py-2.5">
-                <div className="flex items-center justify-between gap-4">
+                {isDesktop&&<PublishingOptions enabled={generatePublishing} onChange={setGeneratePublishing}/>}
+            <div className="flex items-center justify-between gap-4">
                   <Button
                     label="Show device export estimate details"
                     variant="ghost"
@@ -1597,6 +1603,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                 )}
               </div>
             )}
+            {isDesktop&&<PublishingOptions enabled={generatePublishing} onChange={setGeneratePublishing}/>}
             <div className="flex items-center justify-between gap-4">
               <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-fg-muted">
                 {duration > 0 && (

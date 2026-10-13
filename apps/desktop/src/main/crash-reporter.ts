@@ -1,9 +1,20 @@
 import { app } from "electron";
 import os from "node:os";
 
-const CRASH_ENDPOINT =
-  process.env.OPENREEL_CRASH_ENDPOINT ?? "https://api.openreel.video/crash";
 const REPORT_TIMEOUT_MS = 4000;
+
+function configuredCrashEndpoint(): string | null {
+  const configured = process.env.LICKETYSPLIT_CRASH_ENDPOINT?.trim();
+  if (!configured) return null;
+  try {
+    const endpoint = new URL(configured);
+    if (endpoint.protocol !== "http:" && endpoint.protocol !== "https:") return null;
+    if (!endpoint.hostname || endpoint.username || endpoint.password) return null;
+    return endpoint.toString();
+  } catch {
+    return null;
+  }
+}
 
 export interface CrashReportInput {
   type: string;
@@ -43,6 +54,8 @@ export function describeError(value: unknown): { message: string; stack?: string
 }
 
 async function send(report: CrashReportInput): Promise<void> {
+  const endpoint = configuredCrashEndpoint();
+  if (!endpoint) return;
   try {
     const payload = {
       ...report,
@@ -58,7 +71,7 @@ async function send(report: CrashReportInput): Promise<void> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REPORT_TIMEOUT_MS);
     try {
-      await fetch(CRASH_ENDPOINT, {
+      await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

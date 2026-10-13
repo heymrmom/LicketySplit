@@ -1,9 +1,9 @@
 #!/bin/bash
-# OpenReel Video - Local Development Start Script
+# LicketySplit - Local Development Start Script
 
 set -e
 
-echo "=== OpenReel Video - Dev Setup ==="
+echo "=== LicketySplit - Dev Setup ==="
 
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then

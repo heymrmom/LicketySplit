@@ -177,7 +177,7 @@ function parseNativeRenderResponse(buffer: Buffer): AuroraRenderedFrame {
 
 function nativeRendererCandidates(): readonly string[] {
   const candidates = new Set<string>();
-  const explicit = process.env.OPENREEL_AURORA_RENDERER_PATH?.trim();
+  const explicit = process.env.LICKETYSPLIT_AURORA_RENDERER_PATH?.trim();
   if (explicit) {
     candidates.add(path.resolve(explicit));
   }
@@ -215,7 +215,7 @@ function nativeRendererCandidates(): readonly string[] {
 }
 
 export function findNativeAuroraRendererPath(): string | null {
-  const explicit = process.env.OPENREEL_AURORA_RENDERER_PATH?.trim();
+  const explicit = process.env.LICKETYSPLIT_AURORA_RENDERER_PATH?.trim();
   if (explicit) {
     const resolved = path.resolve(explicit);
     return existsSync(resolved) ? resolved : null;
@@ -434,7 +434,7 @@ async function renderMeshWithNativeAuroraRendererViaFiles(
   mesh: Mesh,
   options: RayTraceOptions,
 ): Promise<AuroraRenderedFrame | null> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "openreel-aurora-native-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "licketysplit-aurora-native-"));
   const requestPath = path.join(tempDir, "request.bin");
   const responsePath = path.join(tempDir, "response.bin");
 

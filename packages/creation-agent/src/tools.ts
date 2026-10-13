@@ -4,7 +4,7 @@ import {
   validateCreationScene,
   type CreationScene,
   type ProductCinematicSpec,
-} from "@openreel/creation-schema";
+} from "@licketysplit/creation-schema";
 import type { CreationJsonSchema, CreationToolResult, RegisteredCreationTool } from "./types";
 
 const str: CreationJsonSchema = { type: "string" };
@@ -81,7 +81,7 @@ const validateScene: RegisteredCreationTool = {
   name: "validate_creation_scene",
   domain: "validation",
   title: "Validate creation scene",
-  description: "Validate an OpenReel creation scene for broken references, missing semantic parts, and animation issues.",
+  description: "Validate an LicketySplit creation scene for broken references, missing semantic parts, and animation issues.",
   inputSchema: obj({ scene: { type: "object" } }, ["scene"]),
   readOnly: true,
   handler: (args) => {

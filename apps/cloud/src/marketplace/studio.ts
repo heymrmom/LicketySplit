@@ -13,7 +13,7 @@ import {
   type SubmissionState,
   type Manifest,
   type TemplateSource,
-} from "@openreel/fxpkg";
+} from "@licketysplit/fxpkg";
 import type { Bindings } from "./types";
 import { getStore } from "./store";
 import { requireCreator, isResponse } from "./auth";

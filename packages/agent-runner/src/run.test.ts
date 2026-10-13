@@ -3,14 +3,14 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { MockLLMClient } from "@openreel/agent";
-import type { LLMResponse } from "@openreel/agent";
+import { MockLLMClient } from "@licketysplit/agent";
+import type { LLMResponse } from "@licketysplit/agent";
 import { runHeadlessEdit, runHeadlessEditFile } from "./run";
 import { createEmptyProject, loadProjectFile, saveProjectFile } from "./project-io";
 
 const tempFiles: string[] = [];
 function tmpFile(): string {
-  const file = path.join(tmpdir(), `openreel-run-${randomUUID()}.json`);
+  const file = path.join(tmpdir(), `licketysplit-run-${randomUUID()}.json`);
   tempFiles.push(file);
   return file;
 }

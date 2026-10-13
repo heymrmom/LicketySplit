@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
-import type { GSAPMotionPathPoint, MotionPathConfig } from "@openreel/core";
-import { generateBezierPath } from "@openreel/core";
+import type { GSAPMotionPathPoint, MotionPathConfig } from "@licketysplit/core";
+import { generateBezierPath } from "@licketysplit/core";
 import { MotionPathHandles } from "./MotionPathHandles";
 
 interface MotionPathOverlayProps {

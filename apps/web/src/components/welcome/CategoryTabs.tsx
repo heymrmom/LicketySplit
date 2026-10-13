@@ -17,8 +17,8 @@ import {
 import {
   SOCIAL_MEDIA_CATEGORY_INFO,
   type SocialMediaCategory,
-} from "@openreel/core";
-import { ToolcraftButton as Button } from "@openreel/ui";
+} from "@licketysplit/core";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
 
 interface CategoryTabsProps {
   selectedCategory: SocialMediaCategory | "all";

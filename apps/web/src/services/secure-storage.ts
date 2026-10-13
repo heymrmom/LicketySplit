@@ -10,7 +10,12 @@
  * - A verification hash is stored to validate the master password
  */
 
-const SECURE_DB_NAME = "openreel-secure";
+export const SECURE_DB_NAME = "licketysplit-secure";
+export const SECURE_VERIFICATION_VALUE = "licketysplit-verify-v1";
+export const LEGACY_SECURE_VERIFICATION_VALUE = "openreel-verify-v1";
+export function isSecureVerificationValue(value: string): boolean {
+  return value === SECURE_VERIFICATION_VALUE || value === LEGACY_SECURE_VERIFICATION_VALUE;
+}
 const SECURE_DB_VERSION = 1;
 const STORE_SECRETS = "secrets";
 const STORE_META = "meta";
@@ -41,7 +46,7 @@ interface DesktopKeychain {
 
 function desktopKeychain(): DesktopKeychain | undefined {
   if (typeof window === "undefined") return undefined;
-  const bridge = window.openreel;
+  const bridge = window.licketysplit;
   return bridge?.platform === "desktop" ? bridge.keychain : undefined;
 }
 
@@ -221,7 +226,7 @@ export async function setupMasterPassword(password: string): Promise<void> {
   const key = await deriveKey(password, salt);
 
   // Create a verification token: encrypt a known string
-  const verificationPlaintext = "openreel-verify-v1";
+  const verificationPlaintext = SECURE_VERIFICATION_VALUE;
   const { encrypted: verificationData, iv: verificationIv } = await encrypt(verificationPlaintext, key);
 
   const db = await getDatabase();
@@ -299,7 +304,7 @@ export async function unlockSession(password: string): Promise<boolean> {
       : new Uint8Array(verificationIvMeta.value as ArrayBuffer);
     const decrypted = await decrypt(verificationMeta.value as ArrayBuffer, iv, key);
 
-    if (decrypted !== "openreel-verify-v1") {
+    if (!isSecureVerificationValue(decrypted)) {
       failedAttempts++;
       lockedUntil = Date.now() + BASE_BACKOFF_MS * Math.pow(2, failedAttempts - 1);
       return false;
@@ -382,7 +387,7 @@ export async function changeMasterPassword(
   const newKey = await deriveKey(newPassword, newSalt);
 
   // Store new salt and verification
-  const verificationPlaintext = "openreel-verify-v1";
+  const verificationPlaintext = SECURE_VERIFICATION_VALUE;
   const { encrypted: verificationData, iv: verificationIv } = await encrypt(verificationPlaintext, newKey);
 
   await idbTransaction(db, STORE_META, "readwrite", (store) =>

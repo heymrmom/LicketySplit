@@ -76,7 +76,9 @@ export async function readFileBytes(args: { path: string }): Promise<ArrayBuffer
 }
 
 export async function writeTextFile(args: { path: string; data: string }): Promise<void> {
-  await fs.writeFile(args.path, args.data, "utf8");
+  await fs.mkdir(path.dirname(args.path),{recursive:true});
+  const temporary=args.path+"."+randomUUID()+".tmp";
+  try{await fs.writeFile(temporary,args.data,{encoding:"utf8",mode:0o600});await fs.rename(temporary,args.path);}finally{await fs.rm(temporary,{force:true}).catch(()=>{});}
 }
 
 export async function revealInFolder(args: { path: string }): Promise<void> {
@@ -85,5 +87,5 @@ export async function revealInFolder(args: { path: string }): Promise<void> {
 
 export async function tempFilePath(args: { ext: string }): Promise<string> {
   const safeExt = args.ext.replace(/[^a-zA-Z0-9]/g, "") || "bin";
-  return path.join(os.tmpdir(), `openreel-mat-${randomUUID()}.${safeExt}`);
+  return path.join(os.tmpdir(), `licketysplit-mat-${randomUUID()}.${safeExt}`);
 }

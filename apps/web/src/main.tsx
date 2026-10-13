@@ -8,7 +8,7 @@ import "./index.css";
 import { AstryxProvider } from "./components/astryx/AstryxProvider";
 import { registerServiceWorker } from "./services/service-worker";
 import { initCustomFonts } from "./components/editor/inspector/font-options";
-import { setEncoderBackendFactory } from "@openreel/core";
+import { setEncoderBackendFactory } from "@licketysplit/core";
 import { NativeFFmpegBackend } from "./services/native-ffmpeg-backend";
 
 const DesktopApp = React.lazy(() =>
@@ -18,14 +18,14 @@ const DesktopApp = React.lazy(() =>
 );
 
 const isDesktop =
-  typeof window !== "undefined" && window.openreel?.platform === "desktop";
+  typeof window !== "undefined" && window.licketysplit?.platform === "desktop";
 
 if (isDesktop) {
   setEncoderBackendFactory(
     () =>
       new NativeFFmpegBackend(
         () =>
-          (window as { __openreelExportPath?: string }).__openreelExportPath ??
+          (window as { __licketysplitExportPath?: string }).__licketysplitExportPath ??
           "",
       ),
   );

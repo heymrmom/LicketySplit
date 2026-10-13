@@ -3,8 +3,8 @@ import {
   makeClientFromSend,
   llmHttpError,
   parseRetryAfterMs,
-} from "@openreel/agent";
-import type { LLMClient } from "@openreel/agent";
+} from "@licketysplit/agent";
+import type { LLMClient } from "@licketysplit/agent";
 import { apiFetch } from "../api-proxy";
 import type { LlmProvider } from "../../stores/settings-store";
 
@@ -59,17 +59,19 @@ export interface BYOKClientOptions {
   readonly apiKey: string;
   readonly baseUrl?: string;
   readonly maxTokens?: number;
+  readonly retries?:number;
   readonly signal?: AbortSignal;
 }
 
 /**
- * Builds an @openreel/agent LLMClient whose transport routes through the
+ * Builds an @licketysplit/agent LLMClient whose transport routes through the
  * existing BYOK apiFetch (same-origin Pages proxy for built-ins, direct browser
  * requests for custom endpoints, and keychain-backed native requests on desktop).
  */
 export function makeBYOKClient(opts: BYOKClientOptions): LLMClient {
   const send = withRetry(makeSend(opts.provider, opts.apiKey, opts.baseUrl, opts.signal), {
     signal: opts.signal,
+    retries:opts.retries,
   });
   return makeClientFromSend({
     provider:

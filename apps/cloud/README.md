@@ -1,6 +1,8 @@
-# OpenReel Cloud API
+# LicketySplit Cloud API
 
-Cloudflare Worker API for OpenReel template storage and sharing.
+Cloudflare Worker API for LicketySplit template storage and sharing. The
+tracked configuration still names upstream Cloudflare resources; this checkout
+does not establish a separately deployed or redirected LicketySplit service.
 
 ## Features
 
@@ -11,7 +13,12 @@ Cloudflare Worker API for OpenReel template storage and sharing.
 
 ## Setup
 
-### 1. Create R2 Bucket
+### 1. Existing Upstream R2 Configuration
+
+The tracked Worker configuration refers to the upstream bucket
+`openreel-templates`. The command below is a historical configuration example;
+do not run it for a new LicketySplit account without an owner-approved resource
+mapping.
 
 ```bash
 cd apps/cloud
@@ -20,11 +27,18 @@ npx wrangler r2 bucket create openreel-templates
 
 ### 2. Deploy Worker
 
+This command targets the Worker and route named by the existing upstream
+configuration below. Treat it as an upstream maintenance instruction; a new
+LicketySplit deployment needs an approved resource mapping first.
+
 ```bash
 npm run deploy
 ```
 
-The worker will be deployed to: `https://openreel-cloud.<your-subdomain>.workers.dev`
+The tracked configuration names the Worker `openreel-cloud` and routes
+`https://api.openreel.video` to it. These are upstream deployment targets; this
+documentation makes no claim about their live state and establishes no new
+worker or redirect.
 
 ## API Endpoints
 
@@ -34,7 +48,7 @@ Get API information and available endpoints.
 **Response:**
 ```json
 {
-  "name": "OpenReel Cloud API",
+  "name": "LicketySplit Cloud API",
   "version": "1.0.0",
   "endpoints": {
     "templates": {
@@ -150,16 +164,16 @@ Health check endpoint.
 
 The worker uses Cloudflare R2 for storage with the following configuration:
 
-- **Bucket Name**: `openreel-templates`
+- **Existing upstream bucket**: `openreel-templates`
 - **Binding**: `TEMPLATES_BUCKET`
 - **Access**: Via Cloudflare Workers R2 API (no direct S3 access needed)
 
 ## CORS
 
-CORS is configured to allow requests from:
+The tracked CORS allowlist contains these existing upstream origins:
 - `http://localhost:5173` (local development)
-- `https://app.openreel.video` (production)
-- `https://*.openreel-3pq.pages.dev` (Cloudflare Pages previews)
+- `https://app.openreel.video`
+- `https://*.openreel-3pq.pages.dev`
 
 ## Local Development
 
@@ -179,4 +193,4 @@ Set in `wrangler.jsonc`:
 - Built-in templates (IDs starting with `builtin-`) cannot be deleted
 - Template IDs must be unique
 - All uploads are validated for required fields (id, name, timeline)
-- CORS is restricted to OpenReel domains only
+- CORS is restricted to the origins listed in the existing deployment allowlist

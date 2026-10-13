@@ -13,11 +13,20 @@ export class KeyStore {
   ) {}
 
   private async readAll(): Promise<Record<string, string>> {
+    let serialized: string;
     try {
-      return JSON.parse(await fs.readFile(this.file, "utf8")) as Record<string, string>;
-    } catch {
-      return {};
+      serialized = await fs.readFile(this.file, "utf8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+      throw error;
     }
+    let parsed: unknown;
+    try { parsed = JSON.parse(serialized) as unknown; }
+    catch (error) { throw new Error(`Protected key storage at ${this.file} is unreadable JSON; it was preserved.`, { cause: error }); }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || Object.values(parsed).some((value) => typeof value !== "string")) {
+      throw new Error(`Protected key storage at ${this.file} is not a valid encrypted-key object; it was preserved.`);
+    }
+    return parsed as Record<string, string>;
   }
 
   private async writeAll(map: Record<string, string>): Promise<void> {
@@ -59,7 +68,7 @@ export function getKeyStore(): KeyStore {
     const { app, safeStorage } = require("electron") as typeof import("electron");
     const nodePath = require("node:path") as typeof import("node:path");
     singleton = new KeyStore(
-      nodePath.join(app.getPath("userData"), "openreel-keys.json"),
+      nodePath.join(app.getPath("userData"), "licketysplit-keys.json"),
       safeStorage,
     );
   }

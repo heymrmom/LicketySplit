@@ -19,7 +19,8 @@ vi.mock("electron", () => ({
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { migrateGpuCacheOnUpgrade } from "../src/main/gpu-cache-migration";
 
-const MARKER = ".openreel-build";
+const MARKER = ".licketysplit-build";
+const LEGACY_MARKER = ".openreel-build";
 
 function seedDir(name: string): void {
   mkdirSync(path.join(userDataDir, name), { recursive: true });
@@ -73,6 +74,40 @@ describe("gpu cache migration", () => {
     expect(existsSync(path.join(userDataDir, MARKER))).toBe(true);
     expect(readFileSync(path.join(userDataDir, MARKER), "utf8")).toBe("1.0.0-alpha.3");
     expect(existsSync(path.join(userDataDir, "GPUCache"))).toBe(true);
+  });
+
+  it("reads the previous product marker and advances only the new marker", () => {
+    seedDir("GPUCache");
+    writeFileSync(path.join(userDataDir, LEGACY_MARKER), "1.0.0-alpha.2");
+    appVersion = "1.0.0-alpha.3";
+
+    migrateGpuCacheOnUpgrade();
+
+    expect(existsSync(path.join(userDataDir, "GPUCache"))).toBe(false);
+    expect(readFileSync(path.join(userDataDir, MARKER), "utf8")).toBe("1.0.0-alpha.3");
+    expect(readFileSync(path.join(userDataDir, LEGACY_MARKER), "utf8")).toBe("1.0.0-alpha.2");
+  });
+
+  it("copies a same-version legacy marker without changing the legacy marker", () => {
+    writeFileSync(path.join(userDataDir, LEGACY_MARKER), "1.0.0-alpha.3");
+    appVersion = "1.0.0-alpha.3";
+
+    migrateGpuCacheOnUpgrade();
+
+    expect(readFileSync(path.join(userDataDir, MARKER), "utf8")).toBe("1.0.0-alpha.3");
+    expect(readFileSync(path.join(userDataDir, LEGACY_MARKER), "utf8")).toBe("1.0.0-alpha.3");
+  });
+
+  it("does not delete a corrupt legacy marker while reading it", () => {
+    const legacyMarker = path.join(userDataDir, LEGACY_MARKER);
+    mkdirSync(path.join(legacyMarker, "preserve"), { recursive: true });
+    writeFileSync(path.join(legacyMarker, "preserve", "source.txt"), "legacy marker data");
+    appVersion = "1.0.0-alpha.3";
+
+    migrateGpuCacheOnUpgrade();
+
+    expect(readFileSync(path.join(legacyMarker, "preserve", "source.txt"), "utf8")).toBe("legacy marker data");
+    expect(readFileSync(path.join(userDataDir, MARKER), "utf8")).toBe("1.0.0-alpha.3");
   });
 
   it("repairs a corrupt marker (a directory) into a valid file", () => {

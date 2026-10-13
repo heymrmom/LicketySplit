@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
+  isSecureVerificationValue,
+  LEGACY_SECURE_VERIFICATION_VALUE,
+  SECURE_DB_NAME,
+  SECURE_VERIFICATION_VALUE,
   saveSecret,
   getSecret,
   hasSecret,
@@ -22,17 +26,25 @@ beforeEach(() => {
     set: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
   };
-  (window as unknown as { openreel: unknown }).openreel = {
+  (window as unknown as { licketysplit: unknown }).licketysplit = {
     platform: "desktop",
     keychain,
   };
 });
 
 afterEach(() => {
-  delete (window as unknown as { openreel?: unknown }).openreel;
+  delete (window as unknown as { licketysplit?: unknown }).licketysplit;
 });
 
 describe("secure-storage desktop branch", () => {
+  it("uses the new secure-store namespace and still recognizes migrated verifier values", () => {
+    expect(SECURE_DB_NAME).toBe("licketysplit-secure");
+    expect(SECURE_VERIFICATION_VALUE).toBe("licketysplit-verify-v1");
+    expect(isSecureVerificationValue(LEGACY_SECURE_VERIFICATION_VALUE)).toBe(true);
+    expect(isSecureVerificationValue(SECURE_VERIFICATION_VALUE)).toBe(true);
+    expect(isSecureVerificationValue("unrecognized-v1")).toBe(false);
+  });
+
   it("saveSecret routes to keychain.set with id+value", async () => {
     await saveSecret("openai", "OpenAI", "sk-secret");
     expect(keychain.set).toHaveBeenCalledWith("openai", "sk-secret");

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import app from "../index";
-import { sealEvent, getBlueprint } from "@openreel/fxpkg";
+import { sealEvent, getBlueprint } from "@licketysplit/fxpkg";
 
 // In-memory store is module-global; reset between suites by using fresh ids.
 const env = { ENVIRONMENT: "test", EVENT_HMAC_SECRET: "test-secret" } as unknown as Record<string, unknown>;

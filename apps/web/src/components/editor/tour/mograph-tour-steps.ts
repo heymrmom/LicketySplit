@@ -125,4 +125,4 @@ export const MOGRAPH_TOUR_STEPS: MoGraphTourStep[] = [
   },
 ];
 
-export const MOGRAPH_TOUR_KEY = "openreel-mograph-tour-complete";
+export const MOGRAPH_TOUR_KEY = "licketysplit-mograph-tour-complete";

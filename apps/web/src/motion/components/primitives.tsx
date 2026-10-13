@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import {
-  Button as OpenReelButton,
+  Button as LicketySplitButton,
   ColorPicker,
   cn,
   ToolcraftPanelSection,
@@ -23,7 +23,7 @@ import {
   ToolcraftSwitchControl,
   ToolcraftTextAreaControl,
   ToolcraftTextInputControl,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import type { LucideIcon } from "@/icons/lucide-compat";
 
 type IconButtonVariant =
@@ -99,7 +99,7 @@ export function Button({
   ...buttonProps
 }: MotionButtonProps): JSX.Element {
   return (
-    <OpenReelButton
+    <LicketySplitButton
       type={type}
       aria-label={label}
       title={tooltip ?? label}
@@ -113,7 +113,7 @@ export function Button({
       {renderIcon(Icon, 14)}
       {children ?? (hideLabel ? null : label)}
       {endContent}
-    </OpenReelButton>
+    </LicketySplitButton>
   );
 }
 
@@ -144,7 +144,7 @@ export function IconButton({
   ...buttonProps
 }: MotionIconButtonProps): JSX.Element {
   return (
-    <OpenReelButton
+    <LicketySplitButton
       type="button"
       aria-label={label}
       title={label}
@@ -160,7 +160,7 @@ export function IconButton({
       {...buttonProps}
     >
       {renderIcon(Icon, iconSize)}
-    </OpenReelButton>
+    </LicketySplitButton>
   );
 }
 

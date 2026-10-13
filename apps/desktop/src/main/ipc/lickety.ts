@@ -1,0 +1,45 @@
+import {AssemblyAIClient} from "../lickety/assemblyai-client";
+import {JobStore,TranscriptionJobs} from "../lickety/job-store";
+import {getKeyStore} from "./keychain";
+import {PreparedAudioStore} from "../lickety/prepared-audio";
+import {NativeAudioAnalysis} from "../lickety/audio-analysis";
+import {randomUUID} from "node:crypto";
+import {app,protocol} from 'electron';import {promises as fs} from 'node:fs';import path from 'node:path';import os from 'node:os';import {z} from 'zod';
+import {handle} from './index';import {CHANNELS} from '../../shared/channels';
+import {ManagedAssetRegistry} from '../lickety/asset-registry';import {createMediaResponse} from '../lickety/media-response';import {ManagedMediaJobs,MediaRequestControllers,heavyQueue} from '../lickety/media-jobs';import {getResourceProfile} from '../lickety/resource-policy';
+import {analysisSnapshotSchema,audioPreparationOptionsSchema,preparedAudioSchema} from '../../shared/ipc-contract';
+import {APP_ORIGIN} from '../protocol';
+let registry:ManagedAssetRegistry|undefined;let jobs:ManagedMediaJobs|undefined;const controllers=new MediaRequestControllers();
+async function withMediaController<T>(requestId:string|undefined,assetId:string|undefined,operation:(signal:AbortSignal)=>Promise<T>):Promise<T>{const controller=new AbortController();controllers.register(controller,requestId,assetId);try{return await operation(controller.signal);}finally{controllers.remove(controller,requestId,assetId);}}
+export function getAssetRegistry(){return registry??=new ManagedAssetRegistry(path.join(app.getPath('userData'),'managed-media'));}
+let preparedStore:PreparedAudioStore|undefined;
+let transcriptionJobs:TranscriptionJobs|undefined;
+export function getPreparedAudioStore(){if(!preparedStore)preparedStore=new PreparedAudioStore(path.join(getAssetRegistry().cacheDir,"prepared-audio"),new NativeAudioAnalysis(getAssetRegistry(),heavyQueue));return preparedStore;}
+export function installLicketyIpc(){const r=getAssetRegistry();jobs=new ManagedMediaJobs(r,heavyQueue);
+ const audio=new NativeAudioAnalysis(r,heavyQueue);
+ transcriptionJobs=new TranscriptionJobs(new JobStore(path.join(app.getPath("userData"),"transcription-jobs")),getPreparedAudioStore(),new AssemblyAIClient(),()=>getKeyStore().get("assemblyai"));
+ handle(CHANNELS.licketyReconcileTranscription,z.object({jobId:z.string(),providerJobId:z.string().min(1)}),args=>transcriptionJobs!.reconcileTranscription(args.jobId,args.providerJobId));
+ handle(CHANNELS.licketyKeyStatus,z.undefined(),async()=>Boolean(await getKeyStore().get("assemblyai")));
+ handle(CHANNELS.licketyStartTranscription,z.object({audio:preparedAudioSchema,snapshot:analysisSnapshotSchema,mode:z.enum(["mixed","isolated-stereo"]),participants:audioPreparationOptionsSchema.shape.participants,confirmationId:z.string().uuid()}),args=>transcriptionJobs!.startTranscription(args));
+ handle(CHANNELS.licketyGetTranscription,z.object({jobId:z.string()}),args=>transcriptionJobs!.getTranscription(args.jobId));
+ handle(CHANNELS.licketyCancelTranscription,z.object({jobId:z.string()}),args=>transcriptionJobs!.cancelTranscription(args.jobId));
+ handle(CHANNELS.licketyResumeTranscription,z.object({jobId:z.string()}),args=>transcriptionJobs!.resumeTranscription(args.jobId));
+ void transcriptionJobs.resumeKnownJobs().catch(()=>{});
+ handle(CHANNELS.licketyPrepareAudio,z.object({snapshot:analysisSnapshotSchema,options:audioPreparationOptionsSchema,requestId:z.string()}),args=>withMediaController(args.requestId,undefined,signal=>getPreparedAudioStore().prepare(args.snapshot,args.options,signal)));
+ handle(CHANNELS.licketyAudioWindow,z.object({assetId:z.string(),trackIndex:z.number().int().nonnegative(),startMs:z.number().nonnegative(),durationMs:z.number().positive().max(10000),sampleRate:z.union([z.literal(1000),z.literal(16000),z.literal(48000)]),channels:z.union([z.literal(1),z.literal(2)]),sourceChannelIndex:z.number().int().nonnegative().max(63).optional(),requestId:z.string().optional()}),args=>withMediaController(args.requestId??randomUUID(),args.assetId,signal=>audio.getNativeAudioWindow(args.assetId,args.trackIndex,args.startMs,args.durationMs,signal,args.sampleRate,args.channels,args.sourceChannelIndex)));
+ handle(CHANNELS.licketyResourceProfile,z.undefined(),()=>getResourceProfile(os.totalmem()));
+ handle(CHANNELS.licketyOriginalUri,z.object({mediaId:z.string().min(1)}),args=>r.originalUri(args.mediaId));
+ handle(CHANNELS.licketyOriginalPreviewUri,z.object({mediaId:z.string().min(1)}),args=>r.originalPreviewUri(args.mediaId));
+ handle(CHANNELS.licketyReferenceOriginal,z.object({mediaId:z.string().min(1),path:z.string().min(1),managed:z.boolean().optional()}),async args=>{let file=args.path;if(args.managed){const directory=path.join(r.cacheDir,'originals');await fs.mkdir(directory,{recursive:true});const destination=path.join(directory,randomUUID()+path.extname(file));await fs.copyFile(file,destination);file=destination;}return r.referenceOriginal(args.mediaId,file);});
+ handle(CHANNELS.licketyRegisterAsset,z.object({mediaId:z.string().min(1),path:z.string().min(1),managed:z.boolean().optional()}),async args=>{let file=args.path;if(args.managed){const destination=path.join(r.cacheDir,'originals');await fs.mkdir(destination,{recursive:true});const target=path.join(destination,randomUUID()+path.extname(file));await fs.copyFile(file,target);file=target;}return r.registerOriginal(args.mediaId,file);});
+ handle(CHANNELS.licketyFindAsset,z.object({mediaId:z.string()}),args=>r.findMedia(args.mediaId));
+ handle(CHANNELS.licketyIdentifyOriginal,z.object({path:z.string().min(1)}),args=>r.identifyOriginal(args.path));
+ handle(CHANNELS.licketyFindOriginalMediaId,z.object({path:z.string().min(1),mediaIds:z.array(z.string().min(1)).max(10000)}),args=>r.findOriginalMediaId(args.path,args.mediaIds));
+ handle(CHANNELS.licketyResolve,z.object({assetId:z.string(),purpose:z.enum(['original','proxy'])}),async args=>{await r.resolve(args.assetId,args.purpose);return `licketysplit-media://${args.assetId}/${args.purpose}`;});
+ const mediaOptions=z.object({requestId:z.string().min(1).optional(),priority:z.enum(['foreground','background']).optional()});
+ handle(CHANNELS.licketyEnsureAudioStream,z.object({assetId:z.string(),trackIndex:z.number().int().nonnegative(),sourceChannelIndex:z.number().int().min(0).max(63).optional(),options:mediaOptions.optional()}),args=>withMediaController(args.options?.requestId,args.assetId,signal=>jobs!.ensureAudioStream(args.assetId,args.trackIndex,signal,args.sourceChannelIndex,args.options?.priority??'foreground')));
+ handle(CHANNELS.licketyEnsureProxy,z.object({assetId:z.string(),options:mediaOptions.optional()}),args=>withMediaController(args.options?.requestId,args.assetId,signal=>jobs!.ensureProxy(args.assetId,getResourceProfile(os.totalmem()),signal,args.options?.priority??'foreground')));
+ handle(CHANNELS.licketyPeekProxy,z.object({assetId:z.string().min(1)}),args=>r.readyProxyReceipt(args.assetId));
+ handle(CHANNELS.licketyCancelMedia,z.object({id:z.string().min(1)}),args=>controllers.cancel(args.id));
+ protocol.handle('licketysplit-media',async request=>{try{const url=new URL(request.url);if(!/^[a-f0-9-]{36}$/.test(url.hostname)||!/^\/(original|proxy|audio-\d+(?:-channel-\d+)?)$/.test(url.pathname)||url.search)throw new Error('Invalid asset URI');const purpose=url.pathname.slice(1);const audio=/^audio-(\d+)(?:-channel-(\d+))?$/.exec(purpose);const resolved=audio?await r.audioPreview(url.hostname,Number(audio[1]),audio[2]===undefined?undefined:Number(audio[2])):await r.resolve(url.hostname,purpose as 'original'|'proxy');if(!resolved)throw new Error('Audio preview is not ready');return await createMediaResponse(resolved.path,resolved.mime,request.headers.get('Range'),request.signal,APP_ORIGIN);}catch(e){return new Response('Managed media unavailable; relink or retry preparation',{status:404});}});
+}

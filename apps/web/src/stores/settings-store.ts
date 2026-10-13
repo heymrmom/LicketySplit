@@ -15,6 +15,7 @@ export interface ServiceConfig {
  * Add new services here as the app integrates more third-party APIs.
  */
 export const SERVICE_REGISTRY: readonly ServiceConfig[] = [
+  {id:"assemblyai",label:"AssemblyAI",description:"Desktop word/channel transcription; key stays in macOS protected storage",docsUrl:"https://www.assemblyai.com/docs"},
   {
     id: "elevenlabs",
     label: "ElevenLabs",
@@ -230,7 +231,7 @@ export const useSettingsStore = create<SettingsState>()(
         closeSettings: () => set({ settingsOpen: false }),
       }),
       {
-        name: "openreel-settings",
+        name: "licketysplit-settings",
         version: 7,
         migrate: (persisted, version) => {
           const next = (persisted ?? {}) as Record<string, unknown>;

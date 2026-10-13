@@ -1,4 +1,4 @@
-export const EFFECTS_WORKLET_NAME = "openreel-effects-processor";
+export const EFFECTS_WORKLET_NAME = "licketysplit-effects-processor";
 
 export interface EffectWorkletParams {
   bypass: boolean;
@@ -29,7 +29,7 @@ export const DEFAULT_EFFECT_WORKLET_PARAMS: EffectWorkletParams = {
 };
 
 export const effectsWorkletCode = `
-class OpenreelEffectsProcessor extends AudioWorkletProcessor {
+class LicketySplitEffectsProcessor extends AudioWorkletProcessor {
  constructor(options) {
  super();
 
@@ -164,7 +164,7 @@ class OpenreelEffectsProcessor extends AudioWorkletProcessor {
  }
 }
 
-registerProcessor('${EFFECTS_WORKLET_NAME}', OpenreelEffectsProcessor);
+registerProcessor('${EFFECTS_WORKLET_NAME}', LicketySplitEffectsProcessor);
 `;
 
 export function createEffectsWorkletBlob(): Blob {

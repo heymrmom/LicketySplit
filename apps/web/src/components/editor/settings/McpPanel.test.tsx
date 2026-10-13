@@ -5,11 +5,11 @@ import { McpPanel } from "./McpPanel";
 describe("McpPanel", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    Reflect.deleteProperty(window, "openreel");
+    Reflect.deleteProperty(window, "licketysplit");
   });
 
   it("shows the live MCP catalog size and organized workflow groups", async () => {
-    Object.defineProperty(window, "openreel", {
+    Object.defineProperty(window, "licketysplit", {
       configurable: true,
       value: {
         platform: "desktop",
@@ -19,8 +19,8 @@ describe("McpPanel", () => {
             url: "http://127.0.0.1:4400/mcp",
             port: 4400,
             token: "token",
-            shimPath: "/Applications/OpenReel/openreel-mcp.js",
-            endpointFile: "/tmp/openreel-mcp.json",
+            shimPath: "/Applications/LicketySplit/licketysplit-mcp.js",
+            endpointFile: "/tmp/licketysplit/mcp-endpoint.json",
           }),
           testConnection: vi.fn().mockResolvedValue({ ok: true, toolCount: 214 }),
           rotateToken: vi.fn(),

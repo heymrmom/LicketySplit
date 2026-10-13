@@ -1,12 +1,12 @@
-import type { Action, ActionResult } from "@openreel/core/types/actions";
-import type { Project } from "@openreel/core/types/project";
-import type { CapabilityManifest } from "@openreel/core/capabilities/manifest";
+import type { Action, ActionResult } from "@licketysplit/core/types/actions";
+import type { Project } from "@licketysplit/core/types/project";
+import type { CapabilityManifest } from "@licketysplit/core/capabilities/manifest";
 import type {
   MulticamActivityMap,
   MulticamManifest,
   MulticamShotPolicy,
   MulticamTranscriptSegment,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 export type JobKind =
   | "exportVideo"

@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import { ActionExecutor, getBeatSyncEngine, type Clip, type BeatAnalysisResult } from "@openreel/core";
+import { ActionExecutor, getBeatSyncEngine, type Clip, type BeatAnalysisResult } from "@licketysplit/core";
 import { createElement } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as bridgeModule from "./audio-text-sync-bridge";

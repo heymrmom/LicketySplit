@@ -7,8 +7,8 @@
 
 const isDev = import.meta.env.DEV;
 
-/** OpenReel cloud services */
-export const OPENREEL_CLOUD_URL = isDev
+/** LicketySplit cloud services */
+export const LICKETYSPLIT_CLOUD_URL = isDev
   ? "http://localhost:8787"
   : "https://api.openreel.video";
 

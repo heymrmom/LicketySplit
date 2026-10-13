@@ -1,3 +1,4 @@
+import {getManagedBridge,prepareNativeOriginal} from "../media/native-media-bridge";
 import type { Project } from "../types/project";
 import type {
   VideoExportSettings,
@@ -28,12 +29,11 @@ import { WebCodecsBackend } from "./webcodecs-backend";
 import { resolveWebCodecsExportLimits } from "./webcodecs-limits";
 import { checkBrowserExportCapability, getVideoExportValidationError, getMissingExportMedia } from "./browser-capabilities";
 import {
-  getMediaItemCapabilities,
   trackHasAudioItems,
 } from "../timeline/timeline-items";
 
 export class ExportEngine {
-  private static readonly AUDIO_EXPORT_CHUNK_DURATION_SECONDS = 15;
+  private static readonly AUDIO_EXPORT_CHUNK_DURATION_SECONDS = 10;
   private mediabunny: typeof import("mediabunny") | null = null;
   private initialized = false;
   private videoEngine: VideoEngine | null = null;
@@ -160,6 +160,10 @@ export class ExportEngine {
       return { success: false, error: this.createError("UNSUPPORTED_CODEC", "ProRes export requires the desktop encoder. Choose H.264 / MP4 for browser export.", "preparing") };
     }
 
+    if(getManagedBridge()) {
+      try {const referenced=new Set(project.timeline.tracks.flatMap(track=>track.clips.map(clip=>clip.mediaId)));const items=[];for(const item of project.mediaLibrary.items)items.push(!referenced.has(item.id)||item.type==="image"?item:await prepareNativeOriginal(item));project={...project,mediaLibrary:{items}};}
+      catch(error){return {success:false,error:this.createError("INVALID_SETTINGS",error instanceof Error?error.message:"Relink original media","preparing")};}
+    }
     const { timeline } = project;
     const timelineDuration = this.calculateTimelineDuration(timeline);
     const missingMedia = getMissingExportMedia(project);
@@ -234,35 +238,15 @@ export class ExportEngine {
       }
 
       const mediaEngine = getMediaEngine();
-      const videoMediaIds: string[] = [];
-      for (const track of project.timeline.tracks) {
-        for (const clip of track.clips) {
-          const mediaItem = project.mediaLibrary.items.find(
-            (m) => m.id === clip.mediaId,
-          );
-          if (
-            mediaItem?.blob &&
-            getMediaItemCapabilities(mediaItem).visual &&
-            mediaItem.type === "video" &&
-            !videoMediaIds.includes(mediaItem.id)
-          ) {
-            videoMediaIds.push(mediaItem.id);
-            try {
-              await mediaEngine.createExportDecoder(
-                mediaItem.id,
-                mediaItem.blob,
-                fullSettings.width,
-              );
-            } catch {}
-          }
-        }
-      }
 
       let renderMsTotal = 0;
       for (let frame = 0; frame < totalFrames; frame++) {
         checkCancelled();
 
         const time = frame / fullSettings.frameRate;
+        // The common frame uses up to four sources; larger composites decode lazily in VideoEngine.
+        const frameSources=new Set<string>();for(const track of project.timeline.tracks)if(!track.hidden)for(const clip of track.clips)if(clip.startTime<=time&&clip.startTime+clip.duration>time){const item=project.mediaLibrary.items.find(m=>m.id===clip.mediaId);if(item?.blob&&item.type==="video")frameSources.add(item.id);}
+        if(frameSources.size<=4)for(const id of frameSources){const item=project.mediaLibrary.items.find(m=>m.id===id)!;await mediaEngine.createExportDecoder(id,item.blob!,fullSettings.width);}
         const renderStart = performance.now();
         const rendered = await this.videoEngine!.renderFrame(
           project,
@@ -942,6 +926,7 @@ export class ExportEngine {
       renderProject,
       startTime,
       renderDuration,
+      this.abortController?.signal,
     );
 
     return rendered.buffer;

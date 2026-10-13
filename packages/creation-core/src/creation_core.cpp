@@ -1,9 +1,9 @@
-// OpenReel Creation Core - native C++ implementation of the C ABI.
+// LicketySplit Creation Core - native C++ implementation of the C ABI.
 //
 // This is the Phase 0 native scaffold. It implements the C ABI declared in
 // include/creation_core.h with results that match the TypeScript CPU reference
-// in @openreel/core/creation. Build with CMake (see CMakeLists.txt); the
-// @openreel/creation-bindings package loads the resulting library and falls
+// in @licketysplit/core/creation. Build with CMake (see CMakeLists.txt); the
+// @licketysplit/creation-bindings package loads the resulting library and falls
 // back to the CPU reference when it is unavailable.
 
 #include "creation_core.h"

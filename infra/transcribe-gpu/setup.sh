@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== OpenReel GPU Transcription Setup ==="
+echo "=== LicketySplit GPU Transcription Setup ==="
 
 if ! command -v nvidia-smi &> /dev/null; then
     echo "ERROR: NVIDIA drivers not found. Use a Deep Learning AMI."

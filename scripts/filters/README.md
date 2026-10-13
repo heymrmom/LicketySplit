@@ -1,6 +1,6 @@
-# OpenReel filter recipes → LUT generator
+# LicketySplit filter recipes → LUT generator
 
-Build LUTs from YAML recipes for the filter-presets subsystem.
+Build LUTs from YAML recipes for LicketySplit's filter-presets subsystem.
 
 ## Setup
     python3 -m venv .venv && source .venv/bin/activate

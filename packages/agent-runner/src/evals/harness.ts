@@ -1,5 +1,5 @@
-import type { LLMClient, RunTurnResult, LoopMessage } from "@openreel/agent";
-import type { Project } from "@openreel/core/types/project";
+import type { LLMClient, RunTurnResult, LoopMessage } from "@licketysplit/agent";
+import type { Project } from "@licketysplit/core/types/project";
 import { runHeadlessEdit } from "../run";
 import type { LlmProvider } from "../node-llm";
 

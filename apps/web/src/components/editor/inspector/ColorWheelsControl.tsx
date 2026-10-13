@@ -1,9 +1,9 @@
 import React, { useCallback, useRef, useMemo } from "react";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { RotateCcw } from "@/icons/lucide-compat";
 import { PropertySlider } from "./shell/PropertySlider";
-import type { ColorWheelValues } from "@openreel/core";
+import type { ColorWheelValues } from "@licketysplit/core";
 
 export const DEFAULT_COLOR_WHEEL_VALUES: ColorWheelValues = {
   shadows: { r: 0, g: 0, b: 0 },

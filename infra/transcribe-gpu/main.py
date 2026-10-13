@@ -12,7 +12,7 @@ from faster_whisper import WhisperModel
 import uvicorn
 from deep_translator import GoogleTranslator
 
-app = FastAPI(title="OpenReel Transcription API (GPU)")
+app = FastAPI(title="LicketySplit Transcription API (GPU)")
 
 ALLOWED_ORIGINS = [
     "https://openreel.video",

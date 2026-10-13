@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-const CUSTOM_FONT_EVENT = "openreel:custom-fonts-updated";
+const CUSTOM_FONT_EVENT = "licketysplit:custom-fonts-updated";
 
-const DB_NAME = "openreel-custom-fonts";
+const DB_NAME = "licketysplit-custom-fonts";
 const DB_VERSION = 1;
 const STORE_FONTS = "fonts";
 

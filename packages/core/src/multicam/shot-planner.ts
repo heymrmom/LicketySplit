@@ -70,10 +70,13 @@ export interface MulticamShot {
 }
 
 export interface MulticamShotPlan {
-  spec: "openreel-multicam-edit/v1";
+  spec: typeof MULTICAM_EDIT_SPEC;
   durationMs: number;
   shots: MulticamShot[];
 }
+
+export const MULTICAM_EDIT_SPEC = "licketysplit-multicam-edit/v1" as const;
+export const LEGACY_MULTICAM_EDIT_SPEC = "openreel-multicam-edit/v1" as const;
 
 export interface MulticamShotPolicy {
   strategy: MulticamDecisionStrategy;
@@ -532,7 +535,7 @@ export function planMulticamShots(
     manifest.constraints.min_shot_ms,
   );
   return {
-    spec: "openreel-multicam-edit/v1",
+    spec: MULTICAM_EDIT_SPEC,
     durationMs: Math.round(activity.duration * 1_000),
     shots: addReactionShots(stable, manifest),
   };
@@ -589,7 +592,7 @@ export function applyMulticamDirectives(
       return result;
     });
   }
-  return { ...plan, shots: mergeShots(shots) };
+  return { ...plan, spec: MULTICAM_EDIT_SPEC, shots: mergeShots(shots) };
 }
 
 export const MULTICAM_POLICY_PRESETS = {

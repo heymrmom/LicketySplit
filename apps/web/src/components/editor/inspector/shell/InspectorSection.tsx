@@ -1,5 +1,5 @@
 import React from "react";
-import { ToolcraftPanelSection } from "@openreel/ui";
+import { ToolcraftPanelSection } from "@licketysplit/ui";
 import { useInspectorNavigationStore } from "../../../../stores/inspector-navigation-store";
 import { useUIStore } from "../../../../stores/ui-store";
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MasterTimelineClock } from "@openreel/core";
+import { MasterTimelineClock } from "@licketysplit/core";
 import { PlaybackBridge } from "./playback-bridge";
 import { useTimelineStore } from "../stores/timeline-store";
 

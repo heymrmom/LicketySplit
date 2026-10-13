@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     "main/index": "src/main/index.ts",
     "preload/index": "src/preload/index.ts",
+    "preload/migration-reader": "src/preload/migration-reader.ts",
     "aurora-host/index": "src/aurora-host/index.ts",
     // Standalone stdio->HTTP MCP shim spawned by external clients (Claude
     // Desktop / Cursor / Cline). Electron-free so it runs under plain node.

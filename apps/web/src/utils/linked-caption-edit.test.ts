@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Clip, Project, TextClip } from "@openreel/core";
+import type { Clip, Project, TextClip } from "@licketysplit/core";
 import {
   getLinkedCaptions,
   moveLinkedCaptions,

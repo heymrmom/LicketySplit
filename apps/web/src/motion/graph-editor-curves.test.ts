@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EASING_FUNCTIONS, cubicBezier } from "@openreel/core";
-import type { EasingType } from "@openreel/core";
+import { EASING_FUNCTIONS, cubicBezier } from "@licketysplit/core";
+import type { EasingType } from "@licketysplit/core";
 import {
   graphPointToNormalizedHandle,
   isFlatSegment,

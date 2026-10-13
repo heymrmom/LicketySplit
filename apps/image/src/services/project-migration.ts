@@ -1,1 +1,1 @@
-export * from '@openreel/image-core/migration';
+export * from '@licketysplit/image-core/migration';

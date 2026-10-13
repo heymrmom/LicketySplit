@@ -94,8 +94,8 @@ export async function apiFetch(
   const { baseUrl, ...requestOptions } = options;
   const extraHeaders = (options.headers ?? {}) as Record<string, string>;
 
-  if (typeof window !== "undefined" && window.openreel?.platform === "desktop") {
-    const result = await window.openreel.cloud.fetch(service, path, {
+  if (typeof window !== "undefined" && window.licketysplit?.platform === "desktop") {
+    const result = await window.licketysplit.cloud.fetch(service, path, {
       method: options.method,
       headers: options.headers as Record<string, string> | undefined,
       body: typeof options.body === "string" ? options.body : undefined,

@@ -13,7 +13,7 @@ describe("multicam reaction analysis", () => {
     ]);
     expect(cues).toHaveLength(1);
     const manifest = {
-      spec: "openreel-multicam/v1" as const,
+      spec: "licketysplit-multicam/v1" as const,
       fps: 25,
       sync: { method: "audio-crosscorr" as const, reference: "a" },
       participants: [
@@ -27,7 +27,7 @@ describe("multicam reaction analysis", () => {
       constraints: DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
     };
     const result = incorporateMulticamReactionCues({
-      spec: "openreel-multicam-edit/v1",
+      spec: "licketysplit-multicam-edit/v1",
       durationMs: 4_000,
       shots: [{
         startMs: 0,

@@ -1,8 +1,8 @@
 import type { JSX } from "react";
 import { useState } from "react";
 import { Sparkles } from "@/icons/lucide-compat";
-import type { MotionShaderCategory, MotionShaderDef } from "@openreel/core";
-import { ToolcraftText } from "@openreel/ui";
+import type { MotionShaderCategory, MotionShaderDef } from "@licketysplit/core";
+import { ToolcraftText } from "@licketysplit/ui";
 import { generateAiShader, type LlmMessage } from "../../services/ai-shader";
 import { makeBYOKClient } from "../../services/agent/llm-transport";
 import { getSecret, isSessionUnlocked } from "../../services/secure-storage";
@@ -23,7 +23,7 @@ type Phase =
 const CONFIGURE_PROVIDER = "Configure an AI provider in settings";
 
 function isDesktop(): boolean {
-  return typeof window !== "undefined" && window.openreel?.platform === "desktop";
+  return typeof window !== "undefined" && window.licketysplit?.platform === "desktop";
 }
 
 function resolveModel(): {

@@ -1,4 +1,11 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import {inspectOriginal} from "./lickety/import-inspection";
+import { installLicketyIpc } from "./ipc/lickety";
+import { installPodcastIpc } from "./ipc/podcast";
+import { installIdentityMigrationBridge } from "./identity-migration-bridge";
+import { getDesktopProfilePath } from "./lickety/resource-policy";
+import { app, BrowserWindow, ipcMain, MessageChannelMain, shell } from "electron";
+import { dialog } from "electron";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { registerAppSchemePrivileges, handleAppScheme, APP_INDEX } from "./protocol";
@@ -29,6 +36,7 @@ import { attachUnsavedGuard, markQuitting } from "./lifecycle";
 import { initAutoUpdater } from "./updater";
 import { initCrashReporter, reportError } from "./crash-reporter";
 import { migrateGpuCacheOnUpgrade } from "./gpu-cache-migration";
+import { copyProtectedKeyFile } from "./identity-migration";
 import {
   startMcpServer,
   stopMcpServer,
@@ -85,10 +93,12 @@ import type {
   AuroraSequenceSessionStartArgs,
 } from "../shared/ipc-contract";
 
+// Isolate before any credentials, caches, single-instance locks or projects are read.
+app.setName("LicketySplit");
+app.setPath("userData", getDesktopProfilePath(app.getPath("appData"), process.env.LICKETYSPLIT_DATA_DIR, !app.isPackaged || process.env.LICKETYSPLIT_TEST_MODE === "1"));
 registerAppSchemePrivileges();
 
-// Register crash/error reporting as early as possible so main-process faults and
-// process-gone events during startup are captured (POST to the cloud worker).
+// Register local crash logging as early as possible; remote sending is opt-in.
 initCrashReporter();
 
 // Drop regenerable GPU/shader/code caches when the app version changes — before
@@ -121,7 +131,7 @@ function createWindow(): void {
     titleBarStyle: isMac ? "hiddenInset" : "hidden",
     titleBarOverlay: false,
     trafficLightPosition: isMac ? { x: 16, y: 14 } : undefined,
-    icon: isMac ? undefined : path.join(__dirname, "../../build/icon.png"),
+    icon: isMac ? undefined : path.join(rendererRoot(), "icons", "licketysplit-mark.png"),
     vibrancy: isMac ? "under-window" : undefined,
     visualEffectState: isMac ? "active" : undefined,
     webPreferences: {
@@ -139,7 +149,40 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   if (!hasSingleInstanceLock) return;
-  handleAppScheme(rendererRoot());
+  void prepareProtectedKeyStore().then(() => {
+    handleAppScheme(rendererRoot());
+    installDesktopServices();
+  }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[identity-migration] startup blocked:", message);
+    dialog.showErrorBox(
+      "Saved credentials need attention",
+      `${message}\n\nThe original protected key file was left in place. Correct or restore the file, then reopen LicketySplit. No editor window was opened.`,
+    );
+    app.quit();
+  });
+});
+
+async function prepareProtectedKeyStore(): Promise<void> {
+  const userData = app.getPath("userData");
+  await mkdir(userData, { recursive: true });
+  const result = await copyProtectedKeyFile(
+    path.join(userData, "openreel-keys.json"),
+    path.join(userData, "licketysplit-keys.json"),
+  );
+  const legacySource = result.status === "destination-wins" ? `; legacy source ${result.sourceState}` : "";
+  console.info(`[identity-migration] protected key store: ${result.status}${legacySource}; ${result.bytesCopied} bytes copied`);
+}
+
+function installDesktopServices(): void {
+  installIdentityMigrationBridge({
+    ipcMain,
+    createReaderWindow: (options) => new BrowserWindow(options),
+    createMessageChannel: () => new MessageChannelMain(),
+    sourcePreloadPath: path.join(__dirname, "../preload/migration-reader.js"),
+  });
+  installLicketyIpc();
+  installPodcastIpc();
   handle(CHANNELS.probeHardware, z.undefined(), () => collectHardwareInfo());
   handle(CHANNELS.fsShowSaveDialog, saveDialogArgsSchema, showSaveDialog);
   handle(CHANNELS.fsShowOpenDialog, openDialogArgsSchema, showOpenDialog);
@@ -167,6 +210,7 @@ app.whenReady().then(() => {
   handle(CHANNELS.mediaGenerateProxy, proxyArgsSchema, generateProxy);
   handle(CHANNELS.mediaTranscode, transcodeArgsSchema, transcode);
   handle(CHANNELS.mediaExtractAudioWav, extractAudioArgsSchema, extractAudioWav);
+  handle(CHANNELS.mediaInspectOriginal,probeAudioArgsSchema,({srcPath})=>inspectOriginal(srcPath));
   handle(CHANNELS.mediaProbeAudioStreams, probeAudioArgsSchema, probeAudioStreams);
   handle(CHANNELS.mediaFetchUrl, fetchUrlArgsSchema, fetchUrl);
   handle(CHANNELS.auroraRenderPreview, auroraRenderPreviewArgsSchema, async (args) =>
@@ -208,7 +252,7 @@ app.whenReady().then(() => {
   handle(CHANNELS.riggingRigHumanoidModel, rigHumanoidModelArgsSchema, async (args) =>
     rigHumanoidModelResultSchema.parse(await rigHumanoidModel(args)),
   );
-  handle(CHANNELS.keychainGet, z.object({ id: z.string() }), ({ id }) => getKeyStore().get(id));
+  handle(CHANNELS.keychainGet, z.object({ id: z.string() }), ({ id }) => id === "assemblyai" ? null : getKeyStore().get(id));
   handle(CHANNELS.keychainSet, z.object({ id: z.string(), value: z.string() }), ({ id, value }) =>
     getKeyStore().set(id, value),
   );
@@ -280,7 +324,7 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
-});
+}
 
 // A second launch (blocked by the single-instance lock) surfaces the running
 // window rather than starting a duplicate process.

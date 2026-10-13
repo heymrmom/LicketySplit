@@ -497,10 +497,10 @@ bool runSelfTest(std::string* error) {
       std::chrono::steady_clock::now().time_since_epoch().count());
   const auto request_path =
       std::filesystem::temp_directory_path() /
-      ("openreel-aurora-request-" + suffix + ".bin");
+      ("licketysplit-aurora-request-" + suffix + ".bin");
   const auto response_path =
       std::filesystem::temp_directory_path() /
-      ("openreel-aurora-response-" + suffix + ".bin");
+      ("licketysplit-aurora-response-" + suffix + ".bin");
 
   const auto cleanup = [&]() {
     std::error_code ignored;

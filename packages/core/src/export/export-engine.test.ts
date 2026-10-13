@@ -503,11 +503,12 @@ describe("ExportEngine", () => {
         if (done) break;
       }
 
-      expect(mockRenderAudio).toHaveBeenCalledTimes(3);
-      expect(mockRenderAudio).toHaveBeenNthCalledWith(1, project, 0, 15);
-      expect(mockRenderAudio).toHaveBeenNthCalledWith(2, project, 15, 15);
-      expect(mockRenderAudio).toHaveBeenNthCalledWith(3, project, 30, 10);
-      expect(mockAudioSourceAdd).toHaveBeenCalledTimes(3);
+      expect(mockRenderAudio).toHaveBeenCalledTimes(4);
+      expect(mockRenderAudio).toHaveBeenNthCalledWith(1, project, 0, 10, expect.any(AbortSignal));
+      expect(mockRenderAudio).toHaveBeenNthCalledWith(2, project, 10, 10, expect.any(AbortSignal));
+      expect(mockRenderAudio).toHaveBeenNthCalledWith(3, project, 20, 10, expect.any(AbortSignal));
+      expect(mockRenderAudio).toHaveBeenNthCalledWith(4, project, 30, 10, expect.any(AbortSignal));
+      expect(mockAudioSourceAdd).toHaveBeenCalledTimes(4);
       expect(mockAudioEngine.clearCache).toHaveBeenCalled();
     });
 
@@ -551,7 +552,7 @@ describe("ExportEngine", () => {
 
     it("renders export audio at the selected sample rate and channel count", async () => {
       expect(await drainVideoExport({ ...DEFAULT_VIDEO_SETTINGS, frameRate: 1, width: 640, height: 360, audioSettings: { ...DEFAULT_VIDEO_SETTINGS.audioSettings, sampleRate: 96000, channels: 1 } })).toMatchObject({ success: true });
-      expect(mockRenderAudio).toHaveBeenCalledWith(expect.objectContaining({ settings: expect.objectContaining({ sampleRate: 96000, channels: 1 }) }), 0, 1);
+      expect(mockRenderAudio).toHaveBeenCalledWith(expect.objectContaining({ settings: expect.objectContaining({ sampleRate: 96000, channels: 1 }) }), 0, 1, expect.any(AbortSignal));
     });
 
     it("cleans up when a cancelled export generator is closed at a yield", async () => {
@@ -726,3 +727,4 @@ describe("Export Types and Defaults", () => {
     });
   });
 });
+it('native export resolves only used originals, ignoring unused missing library recordings',async()=>{const engine=new ExportEngine();await engine.initialize();const project=createMockProject({timeline:createMockTimeline({tracks:[createMockTrack({clips:[createMockClip({duration:1,outPoint:1})]})]})});const unused={...project.mediaLibrary.items[0],id:'unused',name:'Unused recording',blob:null};const findAsset=vi.fn(async(id:string)=>{if(id==='unused')throw new Error('Unused source is offline');return {identity:{assetId:id,mediaId:id,sha256:'sha',byteLength:1},originalUri:`licketysplit-media://${id}/original`,durationMs:1000};});Object.assign(globalThis,{licketysplit:{platform:'desktop',lickety:{findAsset,resolve:async(id:string)=>`licketysplit-media://${id}/original`}}});const generator=engine.exportVideo({...project,mediaLibrary:{items:[...project.mediaLibrary.items,unused]}},{...DEFAULT_VIDEO_SETTINGS,width:640,height:360,frameRate:1},{write:vi.fn(async()=>{}),close:vi.fn(async()=>{}),abort:vi.fn(async()=>{})} as never);let result=await generator.next();while(!result.done)result=await generator.next();expect(result.value).toMatchObject({success:true});expect(findAsset).toHaveBeenCalledWith('media-1');expect(findAsset).not.toHaveBeenCalledWith('unused');delete (globalThis as {licketysplit?:unknown}).licketysplit;});

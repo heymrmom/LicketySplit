@@ -1,7 +1,7 @@
 import type { JSX } from "react";
 import { useState, useCallback, type KeyboardEvent } from "react";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftTextAreaControl } from "@openreel/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftTextAreaControl } from "@licketysplit/ui";
 import { Send, Square } from "@/icons/lucide-compat";
 import { useChatStore } from "../../../stores/chat-store";
 

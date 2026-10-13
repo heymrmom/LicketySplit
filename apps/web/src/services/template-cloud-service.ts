@@ -2,11 +2,11 @@ import type {
   Template,
   TemplateSummary,
   ScriptableTemplate,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
-import { OPENREEL_CLOUD_URL } from "../config/api-endpoints";
+import { LICKETYSPLIT_CLOUD_URL } from "../config/api-endpoints";
 
-const CLOUD_API_URL = OPENREEL_CLOUD_URL;
+const CLOUD_API_URL = LICKETYSPLIT_CLOUD_URL;
 
 export interface CloudTemplate extends TemplateSummary {
   author?: string;

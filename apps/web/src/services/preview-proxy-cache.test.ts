@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { MediaItem, Project } from "@openreel/core";
+import type { MediaItem, Project } from "@licketysplit/core";
 import { PreviewProxyCache } from "./preview-proxy-cache";
 
 const deferred = <T,>() => {

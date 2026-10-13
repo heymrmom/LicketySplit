@@ -1,6 +1,6 @@
 # Motion Creator rigging pipeline
 
-OpenReel needs a real DCC-backed pipeline for high quality 3D character work.
+LicketySplit needs a real DCC-backed pipeline for high quality 3D character work.
 Static GLB placement is enough for props and environments, but a waving
 astronaut, walk cycle, hand pose, or camera-aware character performance needs
 armatures, animation clips, inverse kinematics, and retargeting.
@@ -10,7 +10,7 @@ armatures, animation clips, inverse kinematics, and retargeting.
 - Desktop main process probes Blender as the rigging backend.
 - Probe order is environment override, bundled resource, then common system
   installs.
-- Renderer exposes `window.openreel.rigging.probeBackend()`.
+- Renderer exposes `window.licketysplit.rigging.probeBackend()`.
 - Agents can call the read-only MCP tool `probe_rigging_backend`.
 - Agents can call the read-only MCP tool `inspect_3d_model` to report GLB/glTF
   meshes, materials, textures, animation clips, armature/bones, bounds,

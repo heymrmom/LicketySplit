@@ -14,6 +14,8 @@ export interface MediaTrackInfo {
   height: number;
   frameRate: number;
   codec: string;
+  /** Container format reported by source inspection (for example, `wav`). */
+  container?: string;
   sampleRate: number;
   channels: number;
   fileSize: number;

@@ -15,12 +15,12 @@ import {
   type MotionAnimationPreset,
   type MotionAnimationPresetCategory,
   type MotionComposition,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   ToolcraftClickableCard,
   ToolcraftSliderControl,
   ToolcraftText,
-} from "@openreel/ui";
+} from "@licketysplit/ui";
 import { useProjectStore } from "../../stores/project-store";
 import { useMotionStore } from "../stores/motion-store";
 import {

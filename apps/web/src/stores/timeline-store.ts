@@ -6,7 +6,7 @@ import {
   type PersistStorage,
 } from "zustand/middleware";
 
-export const TIMELINE_WORKSPACE_STORAGE_KEY = "openreel-timeline-workspace";
+export const TIMELINE_WORKSPACE_STORAGE_KEY = "licketysplit-timeline-workspace";
 
 interface TimelineWorkspace {
   trackHeight: number;
@@ -39,10 +39,26 @@ const createWorkspaceStorage = (): PersistStorage<TimelineWorkspace> | undefined
 };
 
 export const ZOOM_PRESETS = {
-  MIN: 10,
+  MIN: 0.001,
   DEFAULT: 50,
   MAX: 500,
 } as const;
+
+const ZOOM_SLIDER_STEPS = 1000;
+
+export function getZoomSliderPosition(pixelsPerSecond: number): number {
+  const zoom = Math.max(ZOOM_PRESETS.MIN, Math.min(ZOOM_PRESETS.MAX, pixelsPerSecond));
+  return (
+    (Math.log(zoom / ZOOM_PRESETS.MIN) /
+      Math.log(ZOOM_PRESETS.MAX / ZOOM_PRESETS.MIN)) *
+    ZOOM_SLIDER_STEPS
+  );
+}
+
+export function getZoomFromSliderPosition(position: number): number {
+  const normalized = Math.max(0, Math.min(ZOOM_SLIDER_STEPS, position)) / ZOOM_SLIDER_STEPS;
+  return ZOOM_PRESETS.MIN * (ZOOM_PRESETS.MAX / ZOOM_PRESETS.MIN) ** normalized;
+}
 
 export type PlaybackState = "stopped" | "playing" | "paused";
 
@@ -52,6 +68,8 @@ export interface TimelineState {
   playbackLockedReason: string | null;
   playbackRate: number;
   pixelsPerSecond: number;
+  fitRestore: { pixelsPerSecond: number; scrollX: number } | null;
+  fitDuration: number | null;
   scrollX: number;
   scrollY: number;
   viewportWidth: number;
@@ -85,6 +103,7 @@ export interface TimelineState {
   zoomOut: () => void;
   setZoom: (pixelsPerSecond: number) => void;
   zoomToFit: (duration: number) => void;
+  updateFitDuration: (duration: number) => void;
   resetZoom: () => void;
   setScrollX: (scrollX: number) => void;
   setScrollY: (scrollY: number) => void;
@@ -118,6 +137,8 @@ export const useTimelineStore = create<TimelineState>()(
     playbackRate: 1.0,
 
     pixelsPerSecond: ZOOM_PRESETS.DEFAULT,
+    fitRestore: null,
+    fitDuration: null,
     scrollX: 0,
     scrollY: 0,
 
@@ -231,14 +252,14 @@ export const useTimelineStore = create<TimelineState>()(
       const { pixelsPerSecond } = get();
       // Scale zoom by 1.5x but never exceed max to prevent performance issues at extreme zoom
       const newZoom = Math.min(pixelsPerSecond * 1.5, ZOOM_PRESETS.MAX);
-      set({ pixelsPerSecond: newZoom });
+      set({ pixelsPerSecond: newZoom, fitRestore: null, fitDuration: null });
     },
 
     zoomOut: () => {
       const { pixelsPerSecond } = get();
       // Scale zoom down by 1.5x but never go below min to prevent blur at extreme zoom out
       const newZoom = Math.max(pixelsPerSecond / 1.5, ZOOM_PRESETS.MIN);
-      set({ pixelsPerSecond: newZoom });
+      set({ pixelsPerSecond: newZoom, fitRestore: null, fitDuration: null });
     },
 
     setZoom: (pixelsPerSecond: number) => {
@@ -247,29 +268,61 @@ export const useTimelineStore = create<TimelineState>()(
         ZOOM_PRESETS.MIN,
         Math.min(ZOOM_PRESETS.MAX, pixelsPerSecond),
       );
-      set({ pixelsPerSecond: clampedZoom });
+      set({ pixelsPerSecond: clampedZoom, fitRestore: null, fitDuration: null });
     },
 
     zoomToFit: (duration: number) => {
-      const { viewportWidth } = get();
-      if (duration > 0) {
-        // Calculate zoom that fits entire timeline in viewport, leaving 100px margin for UI
-        // Formula: pixels_per_second = available_width / duration_seconds
-        const newZoom = Math.max(
-          ZOOM_PRESETS.MIN,
-          Math.min(ZOOM_PRESETS.MAX, (viewportWidth - 100) / duration),
+      const state = get();
+      if (state.fitRestore) {
+        const restoreZoom = state.fitRestore.pixelsPerSecond;
+        const contentDuration = Math.max(0, duration || state.fitDuration || 0);
+        const maxScroll = Math.max(
+          0,
+          contentDuration * restoreZoom - state.viewportWidth,
         );
         set({
-          pixelsPerSecond: newZoom,
-          scrollX: 0, // Reset scroll to show beginning of timeline
+          pixelsPerSecond: restoreZoom,
+          scrollX: Math.min(state.fitRestore.scrollX, maxScroll),
+          fitRestore: null,
+          fitDuration: null,
         });
+        return;
       }
+
+      if (duration <= 0 || state.viewportWidth <= 0) return;
+      const newZoom = Math.max(
+        ZOOM_PRESETS.MIN,
+        Math.min(ZOOM_PRESETS.MAX, state.viewportWidth / duration),
+      );
+      set({
+        pixelsPerSecond: newZoom,
+        scrollX: 0,
+        fitRestore: { pixelsPerSecond: state.pixelsPerSecond, scrollX: state.scrollX },
+        fitDuration: duration,
+      });
+    },
+
+    updateFitDuration: (duration: number) => {
+      const { fitRestore, viewportWidth } = get();
+      if (!fitRestore || duration <= 0 || viewportWidth <= 0) return;
+      const pixelsPerSecond = Math.max(
+        ZOOM_PRESETS.MIN,
+        Math.min(ZOOM_PRESETS.MAX, viewportWidth / duration),
+      );
+      const current = get();
+      if (
+        current.fitDuration === duration &&
+        Math.abs(current.pixelsPerSecond - pixelsPerSecond) < 0.000001
+      ) return;
+      set({ pixelsPerSecond, scrollX: 0, fitDuration: duration });
     },
 
     resetZoom: () => {
       set({
         pixelsPerSecond: ZOOM_PRESETS.DEFAULT,
         scrollX: 0,
+        fitRestore: null,
+        fitDuration: null,
       });
     },
 
@@ -300,9 +353,24 @@ export const useTimelineStore = create<TimelineState>()(
     },
 
     setViewportDimensions: (width: number, height: number) => {
+      const state = get();
+      const nextWidth = Math.max(0, width);
+      const nextHeight = Math.max(0, height);
+      if (
+        state.viewportWidth === nextWidth &&
+        state.viewportHeight === nextHeight
+      ) return;
+      const fitZoom = state.fitRestore && state.fitDuration && nextWidth > 0
+        ? Math.max(
+            ZOOM_PRESETS.MIN,
+            Math.min(ZOOM_PRESETS.MAX, nextWidth / state.fitDuration),
+          )
+        : state.pixelsPerSecond;
       set({
-        viewportWidth: width,
-        viewportHeight: height,
+        viewportWidth: nextWidth,
+        viewportHeight: nextHeight,
+        pixelsPerSecond: fitZoom,
+        ...(state.fitRestore ? { scrollX: 0 } : {}),
       });
     },
 

@@ -60,6 +60,45 @@ function clip(id: string): Clip {
 }
 
 describe("MultiCamEngine automatic edits", () => {
+  it("deep-copies grouped source mappings when loading and listing groups", () => {
+    const source = group({ angles: [{
+      id: "a", name: "Main", clipId: "clip-a", trackId: "source-a", offset: 0, color: "#f00", isActive: true,
+      sourceSegments: [{ mediaId: "media-a", clipId: "clip-a", trackId: "source-a", sourceStartSeconds: 0, sourceEndSeconds: 5, episodeMapping: { scale: 1, offsetSeconds: 0 } }],
+    }] });
+    const engine = new MultiCamEngine();
+    engine.loadGroups([source]);
+    source.angles[0]!.sourceSegments![0]!.episodeMapping.scale = 3;
+    expect(engine.getGroup(source.id)?.angles[0]?.sourceSegments?.[0]?.episodeMapping.scale).toBe(1);
+    const copy = engine.getAllGroups();
+    copy[0]!.angles[0]!.sourceSegments![0]!.episodeMapping.scale = 4;
+    expect(engine.getGroup(source.id)?.angles[0]?.sourceSegments?.[0]?.episodeMapping.scale).toBe(1);
+  });
+
+  it("normalizes saved legacy manifests and plans without mutating the saved group", () => {
+    const priorGroup = group({
+      manifest: {
+        spec: "openreel-multicam/v1" as never,
+        fps: 25,
+        sync: { method: "audio-crosscorr", reference: "a" },
+        participants: [{ id: "host", name: "Host", audio: "mic", seat: "left" }],
+        cameras: [
+          { id: "a", type: "wide", subject: "host", file: "camera.mov" },
+          { id: "b", type: "closeup", subject: "host", file: "camera-b.mov" },
+        ],
+        constraints: DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
+      },
+      shotPlan: { spec: "openreel-multicam-edit/v1" as never, durationMs: 0, shots: [] },
+    }) as unknown as MultiCamGroup;
+    const engine = new MultiCamEngine();
+
+    engine.loadGroups([priorGroup]);
+
+    expect(engine.getGroup("group-1")?.manifest?.spec).toBe("licketysplit-multicam/v1");
+    expect(engine.getGroup("group-1")?.shotPlan?.spec).toBe("licketysplit-multicam-edit/v1");
+    expect((priorGroup.manifest as unknown as { spec: string }).spec).toBe("openreel-multicam/v1");
+    expect((priorGroup.shotPlan as unknown as { spec: string }).spec).toBe("openreel-multicam-edit/v1");
+  });
+
   it("inserts manual cuts without changing the start or duplicating a boundary", () => {
     const engine = new MultiCamEngine();
     engine.loadGroups([group()]);
@@ -164,6 +203,95 @@ describe("MultiCamEngine automatic edits", () => {
     });
   });
 
+  it("splits one camera shot at original-file boundaries using current native clips", () => {
+    const engine = new MultiCamEngine();
+    const first = { ...clip("clip-a1"), startTime: 0, duration: 4, inPoint: 5, outPoint: 9, speed: 1 };
+    const second = { ...clip("clip-a2"), startTime: 4, duration: 4, inPoint: 100, outPoint: 105, speed: 1.25 };
+    engine.loadGroups([group({
+      angles: [{
+        id: "a", name: "Main", clipId: first.id, trackId: "source-a", offset: 900,
+        color: "#f00", isActive: true,
+        sourceSegments: [
+          { mediaId: "stale-media-a", clipId: first.id, trackId: first.trackId, sourceStartSeconds: 0, sourceEndSeconds: 20, episodeMapping: { scale: 0.5, offsetSeconds: 500 } },
+          { mediaId: "stale-media-a", clipId: second.id, trackId: second.trackId, sourceStartSeconds: 0, sourceEndSeconds: 20, episodeMapping: { scale: 0.5, offsetSeconds: 500 } },
+        ],
+      }],
+      activeAngleId: "a", switches: [], syncPoint: 10, duration: 8,
+    })]);
+
+    const output = engine.buildSequenceClips("group-1", "program", new Map([[first.id, first], [second.id, second]]));
+
+    expect(output.map(({ clip: item }) => ({
+      mediaId: item.mediaId, startTime: item.startTime, duration: item.duration,
+      inPoint: item.inPoint, outPoint: item.outPoint, speed: item.speed,
+    }))).toEqual([
+      { mediaId: "media-clip-a1", startTime: 10, duration: 4, inPoint: 5, outPoint: 9, speed: 1 },
+      { mediaId: "media-clip-a2", startTime: 14, duration: 4, inPoint: 100, outPoint: 105, speed: 1.25 },
+    ]);
+  });
+
+  it("resolves overlapping camera files in confirmed segment order without duplicate picture", () => {
+    const engine = new MultiCamEngine();
+    const first = { ...clip("clip-a1"), startTime: 0, duration: 5, inPoint: 0, outPoint: 5 };
+    const second = { ...clip("clip-a2"), startTime: 4, duration: 4, inPoint: 40, outPoint: 44 };
+    engine.loadGroups([group({
+      angles: [{
+        id: "a", name: "Main", clipId: first.id, trackId: "source-a", offset: 0,
+        color: "#f00", isActive: true,
+        sourceSegments: [
+          { mediaId: first.mediaId, clipId: first.id, trackId: first.trackId, sourceStartSeconds: 0, sourceEndSeconds: 5, episodeMapping: { scale: 1, offsetSeconds: 0 } },
+          { mediaId: second.mediaId, clipId: second.id, trackId: second.trackId, sourceStartSeconds: 0, sourceEndSeconds: 4, episodeMapping: { scale: 1, offsetSeconds: 4 } },
+        ],
+      }],
+      activeAngleId: "a", switches: [], syncPoint: 0, duration: 8,
+    })]);
+
+    const output = engine.buildSequenceClips("group-1", "program", new Map([[first.id, first], [second.id, second]]));
+
+    expect(output.map(({ clip: item }) => [item.mediaId, item.startTime, item.duration, item.inPoint, item.outPoint])).toEqual([
+      [first.mediaId, 0, 5, 0, 5],
+      [second.mediaId, 5, 3, 41, 44],
+    ]);
+  });
+
+  it("splits planned shots across every original source segment", () => {
+    const engine = new MultiCamEngine();
+    const first = { ...clip("clip-a1"), startTime: 0, duration: 4, inPoint: 0, outPoint: 4 };
+    const second = { ...clip("clip-a2"), startTime: 4, duration: 4, inPoint: 20, outPoint: 24 };
+    engine.loadGroups([group({
+      angles: [{
+        id: "a", name: "Main", clipId: first.id, trackId: "source-a", offset: 0,
+        color: "#f00", isActive: true,
+        sourceSegments: [
+          { mediaId: first.mediaId, clipId: first.id, trackId: first.trackId, sourceStartSeconds: 0, sourceEndSeconds: 4, episodeMapping: { scale: 1, offsetSeconds: 0 } },
+          { mediaId: second.mediaId, clipId: second.id, trackId: second.trackId, sourceStartSeconds: 0, sourceEndSeconds: 4, episodeMapping: { scale: 1, offsetSeconds: 4 } },
+        ],
+      }],
+      activeAngleId: "a", switches: [], syncPoint: 10, duration: 8,
+      manifest: {
+        spec: "openreel-multicam/v1" as never, fps: 25,
+        sync: { method: "audio-crosscorr", reference: "a" },
+        participants: [{ id: "host", name: "Host", audio: "mic", seat: "left" }],
+        cameras: [{ id: "a", type: "wide", subject: "host", file: "camera.mov", clipId: first.id }],
+        constraints: DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
+      },
+      shotPlan: {
+        spec: "openreel-multicam-edit/v1" as never, durationMs: 8_000,
+        shots: [{ startMs: 0, endMs: 8_000, reason: "speaker", confidence: 1,
+          transitionIn: { type: "cut", durationMs: 0 },
+          layout: { template: "solo", panels: [{ cameraId: "a", subject: "host", rect: { x: 0, y: 0, width: 1, height: 1 } }] },
+        }],
+      },
+    })]);
+
+    const tracks = engine.buildShotPlanTracks("group-1", "program", new Map([[first.id, first], [second.id, second]]), { width: 1920, height: 1080 });
+
+    expect(tracks[0]?.clips.map((item) => [item.mediaId, item.startTime, item.duration, item.inPoint, item.outPoint])).toEqual([
+      [first.mediaId, 10, 4, 0, 4],
+      [second.mediaId, 14, 4, 20, 24],
+    ]);
+  });
+
   it("applies a raw audio offset independently of clip playback speed", () => {
     const engine = new MultiCamEngine();
     engine.loadGroups([
@@ -204,7 +332,7 @@ describe("MultiCamEngine automatic edits", () => {
     const engine = new MultiCamEngine();
     engine.loadGroups([group({
       manifest: {
-        spec: "openreel-multicam/v1",
+        spec: "openreel-multicam/v1" as never,
         fps: 25,
         sync: { method: "audio-crosscorr", reference: "a" },
         participants: [
@@ -218,7 +346,7 @@ describe("MultiCamEngine automatic edits", () => {
         constraints: DEFAULT_MULTICAM_MANIFEST_CONSTRAINTS,
       },
       shotPlan: {
-        spec: "openreel-multicam-edit/v1",
+        spec: "openreel-multicam-edit/v1" as never,
         durationMs: 4_000,
         shots: [
           {

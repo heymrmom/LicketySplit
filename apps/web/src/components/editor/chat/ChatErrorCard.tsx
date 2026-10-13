@@ -1,6 +1,6 @@
 import type { JSX } from "react";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
 import { CircleAlert, X } from "@/icons/lucide-compat";
 
 export type ChatErrorAction = "general" | "api-keys" | "new-chat" | null;
@@ -78,7 +78,7 @@ export function formatChatError(rawError: string): ChatErrorPresentation {
     return {
       title: "Couldn’t reach the endpoint",
       message:
-        "Check the host URL and confirm the endpoint is online. In a browser, the host must also allow CORS requests from OpenReel.",
+        "Check the host URL and confirm the endpoint is online. In a browser, the host must also allow CORS requests from LicketySplit.",
       action: "general",
       actionLabel: "Check endpoint",
       details: raw,

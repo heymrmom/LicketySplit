@@ -8,13 +8,13 @@ import {
   Square,
   FolderOpen,
 } from "@/icons/lucide-compat";
-import { ToolcraftSwitchControl } from "@openreel/ui";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftSwitchControl } from "@licketysplit/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { useProjectStore } from "../../stores/project-store";
 import { useUIStore } from "../../stores/ui-store";
-import { SOCIAL_MEDIA_PRESETS, type SocialMediaCategory } from "@openreel/core";
+import { SOCIAL_MEDIA_PRESETS, type SocialMediaCategory } from "@licketysplit/core";
 import { useRouter } from "../../hooks/use-router";
 import { useEditorPreload } from "../../hooks/useEditorPreload";
 import { useAnalytics, AnalyticsEvents } from "../../hooks/useAnalytics";
@@ -68,73 +68,14 @@ const FORMAT_OPTIONS: FormatOption[] = [
   },
 ];
 
-const OpenReelLogo: React.FC<{ className?: string }> = ({ className = "" }) => (
-  <svg
-    viewBox="0 0 490 490"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
+const LicketySplitLogo: React.FC<{ className?: string }> = ({ className = "" }) => (
+  <img
+    src="/icons/licketysplit-mark.png"
+    alt=""
+    aria-hidden="true"
+    draggable={false}
     className={className}
-  >
-    <path
-      d="M245 24.5C123.223 24.5 24.5 123.223 24.5 245s98.723 220.5 220.5 220.5 220.5-98.723 220.5-220.5S366.777 24.5 245 24.5Z"
-      stroke="currentColor"
-      strokeWidth="30.625"
-    />
-    <g>
-      <path
-        d="M245 98v73.5"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M392 245h-73.5"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M245 392v-73.5"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M98 245h73.5"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="m348.941 141.059-51.965 51.965"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="m348.941 348.941-51.965-51.965"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="m141.059 348.941 51.965-51.965"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="m141.059 141.059 51.965 51.965"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-    </g>
-    <path
-      d="M294 245a49 49 0 0 1-49 49 49 49 0 0 1-49-49 49 49 0 0 1 98 0"
-      fill="currentColor"
-    />
-  </svg>
+  />
 );
 
 type ViewMode = "home" | "templates" | "recent";
@@ -255,18 +196,18 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ initialTab }) => {
 
   return (
     <div className="fixed inset-0 z-50 bg-background overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(34,197,94,0.05),transparent_60%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(34,197,94,0.03),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(141,99,247,0.05),transparent_60%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(141,99,247,0.03),transparent_50%)]" />
 
       <div className="relative h-full flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-3xl">
           <div className="flex flex-col items-center text-center mb-12">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 text-primary">
-                <OpenReelLogo className="w-full h-full" />
+                <LicketySplitLogo className="w-full h-full" />
               </div>
               <Text type="body" color="primary" weight="semibold" className="text-xl text-text-primary tracking-tight">
-                Open Reel Video
+                LicketySplit
               </Text>
             </div>
 

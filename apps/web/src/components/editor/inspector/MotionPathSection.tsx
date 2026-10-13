@@ -1,9 +1,9 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { MockToggle } from "./shell/InspectorControls";
 import { Route, Trash2, Plus, Eye, EyeOff } from "@/icons/lucide-compat";
 import { useProjectStore } from "../../../stores/project-store";
@@ -13,7 +13,7 @@ import {
   getGSAPEngine,
   generateDefaultControlPoints,
   type GSAPMotionPathPoint,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 interface MotionPathSectionProps {
   clipId: string;

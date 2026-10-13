@@ -4,7 +4,7 @@ import {
   getParticleEngine,
   type ParticleEffect,
   type ParticleConfig,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 export const ParticleEffectsSectionWrapper: React.FC<{
   clipId: string;

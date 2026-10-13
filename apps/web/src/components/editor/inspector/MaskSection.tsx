@@ -16,18 +16,18 @@ import {
   Minus,
   type LucideIcon,
 } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftIconButton as IconButton } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftNumberInputControl as NumberInput } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftNumberInputControl as NumberInput } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { PropertySlider } from "./shell/PropertySlider";
 import { useEngineStore } from "../../../stores/engine-store";
 import { useProjectStore } from "../../../stores/project-store";
-import type { BezierPath, Mask, MaskShape } from "@openreel/core";
-import { boundsPathFromTransform } from "@openreel/core";
+import type { BezierPath, Mask, MaskShape } from "@licketysplit/core";
+import { boundsPathFromTransform } from "@licketysplit/core";
 
 interface MaskSectionProps {
   clipId: string;
@@ -391,7 +391,7 @@ export const MaskSection: React.FC<MaskSectionProps> = ({ clipId }) => {
   const [expandedMasks, setExpandedMasks] = useState<Set<string>>(new Set());
   const [refreshKey, setRefreshKey] = useState(0);
   const [maskEngine, setMaskEngine] =
-    useState<import("@openreel/core").MaskEngine | null>(null);
+    useState<import("@licketysplit/core").MaskEngine | null>(null);
 
   // Gather all clips on the timeline as potential matte sources.
   // We collect from regular tracks (video/audio/image/graphics) and

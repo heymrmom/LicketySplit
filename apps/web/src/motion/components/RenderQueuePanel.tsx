@@ -13,7 +13,7 @@ import {
   Trash2,
   XCircle,
 } from "@/icons/lucide-compat";
-import type { MotionComposition } from "@openreel/core";
+import type { MotionComposition } from "@licketysplit/core";
 import { toast } from "../../stores/notification-store";
 import { useProjectStore } from "../../stores/project-store";
 import {
@@ -64,7 +64,7 @@ const WEB_NORMALIZED_RESULT_NOTE = "Encoded H.264 (ProRes unavailable on web)";
 
 function detectNativeExportAvailable(): boolean {
   if (typeof window === "undefined") return false;
-  return window.openreel?.platform === "desktop";
+  return window.licketysplit?.platform === "desktop";
 }
 
 function formatRequiresNativeExport(format: MotionRenderQueueFormat): boolean {

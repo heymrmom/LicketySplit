@@ -8,8 +8,8 @@ import {
   type ProductPart,
   type ProductPartRole,
   type SceneObject as GeneratedSceneObject,
-} from "@openreel/creation-schema";
-import { createMotionScene3DLayer } from "@openreel/core/motion/motion-scene3d";
+} from "@licketysplit/creation-schema";
+import { createMotionScene3DLayer } from "@licketysplit/core/motion/motion-scene3d";
 import {
   DEFAULT_MOTION_TRANSFORM,
   type MotionComposition,
@@ -19,8 +19,8 @@ import {
   type MotionScene3DLayer,
   type MotionSceneObject3D,
   type MotionTextLayer,
-} from "@openreel/core/motion/types";
-import type { Keyframe } from "@openreel/core/types/timeline";
+} from "@licketysplit/core/motion/types";
+import type { Keyframe } from "@licketysplit/core/types/timeline";
 import type {
   CreationAnimationClip,
   CreationAnimationKeyframe,
@@ -35,7 +35,7 @@ import type {
   CreationRecipeNode,
   CreationScene,
   CreationSceneObject,
-} from "@openreel/core/creation/schema/types";
+} from "@licketysplit/core/creation/schema/types";
 
 export interface CreateProductCinematicMotionOptions {
   readonly compositionId: string;

@@ -1,3 +1,4 @@
+import type {Clip} from "../types/timeline";
 export interface ClipFadePoint {
   readonly time: number;
   readonly value: number;
@@ -46,3 +47,5 @@ export function scheduleClipFadeEnvelope(
     gain.linearRampToValueAtTime(point.value, options.startTime + point.time);
   }
 }
+
+export function getOriginalFadePhase(clip:Clip):{offset:number;duration:number}{const phase=clip.metadata?.licketyAudioEnvelope as {offset?:unknown;duration?:unknown}|undefined;return {offset:typeof phase?.offset==="number"&&Number.isFinite(phase.offset)?phase.offset:0,duration:typeof phase?.duration==="number"&&Number.isFinite(phase.duration)?phase.duration:clip.duration};}

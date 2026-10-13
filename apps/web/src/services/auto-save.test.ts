@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Project } from "@openreel/core";
+import type { Project } from "@licketysplit/core";
 import {
   AutoSaveManager,
   serializeProjectForAutoSave,
@@ -86,6 +86,32 @@ describe("AutoSaveManager", () => {
     await manager.forceSave(latest);
     expect(manager.hasUnsavedChanges(latest)).toBe(false);
     consoleError.mockRestore();
+  });
+
+  it("normalizes legacy multicam specs when recovering an autosave", async () => {
+    const oldProject = {
+      ...project("Legacy autosave"),
+      multicamGroups: [{
+        id: "legacy-group", name: "Interview",
+        angles: [{ id: "main", name: "Main", clipId: "clip", trackId: "track", offset: 0.25, color: "#a855f7", isActive: true }],
+        activeAngleId: "main", syncPoint: 2, duration: 4, createdAt: 1,
+        manifest: { spec: "openreel-multicam/v1", fps: 25, sync: { method: "manual", reference: "main" }, participants: [], cameras: [], constraints: { min_shot_ms: 1, max_shot_ms: 2, cut_lead_ms: 0, reaction_shot_after_ms: 1, forbid_jump_cut_same_subject: false } },
+        shotPlan: { spec: "openreel-multicam-edit/v1", durationMs: 4_000, shots: [] },
+      }],
+    } as unknown as Project;
+    const manager = new AutoSaveManager();
+    const internal = manager as unknown as {
+      db: IDBDatabase | null;
+      getRecord(id: string): Promise<{ data: string; timestamp: number } | null>;
+    };
+    internal.db = {} as IDBDatabase;
+    internal.getRecord = async (id) => id === "legacy-record" ? { data: JSON.stringify(oldProject), timestamp: 1 } : null;
+
+    const recovered = await manager.recover("legacy-record");
+
+    expect(recovered?.multicamGroups?.[0]?.manifest?.spec).toBe("licketysplit-multicam/v1");
+    expect(recovered?.multicamGroups?.[0]?.shotPlan?.spec).toBe("licketysplit-multicam-edit/v1");
+    expect(oldProject.multicamGroups?.[0]?.manifest?.spec).toBe("openreel-multicam/v1");
   });
 
   it("honors disabled auto-save while allowing explicit saves", async () => {

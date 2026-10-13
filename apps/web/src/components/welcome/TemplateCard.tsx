@@ -9,10 +9,10 @@ import {
   Star,
   Crown,
 } from "@/icons/lucide-compat";
-import type { ScriptableTemplate, SocialMediaCategory } from "@openreel/core";
-import { SOCIAL_MEDIA_PRESETS } from "@openreel/core";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import type { ScriptableTemplate, SocialMediaCategory } from "@licketysplit/core";
+import { SOCIAL_MEDIA_PRESETS } from "@licketysplit/core";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 
 interface TemplateCardProps {
   template: ScriptableTemplate;

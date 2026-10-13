@@ -55,6 +55,12 @@ const getAutomationValueAtTime = (
   return previous ? previous.value : baseVolume;
 };
 
+/** Share the editor's absolute-gain semantics without repeatedly sorting per sample. */
+export function createVolumeAutomationEvaluator(points:readonly AutomationPoint[]|undefined,baseVolume:number):(time:number)=>number {
+  const sanitized=sanitizePoints(points);const base=clampVolume(baseVolume);
+  return time=>getAutomationValueAtTime(sanitized,time,base);
+}
+
 export const getVolumeAutomationPointsForRange = (
   points: readonly AutomationPoint[] | undefined,
   clipOffset: number,

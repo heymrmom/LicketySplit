@@ -34,7 +34,7 @@ export function useElevenLabsApi(options: UseElevenLabsApiOptions): UseElevenLab
     llmModel,
   } = options;
 
-  const isDesktop = typeof window !== "undefined" && window.openreel?.platform === "desktop";
+  const isDesktop = typeof window !== "undefined" && window.licketysplit?.platform === "desktop";
 
   const {
     cachedElevenLabsVoices,

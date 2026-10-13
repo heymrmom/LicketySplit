@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { Captions, Download, Scissors, Volume2, Proportions, Loader2 } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { getMediaItemCapabilities } from "@openreel/core";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { getMediaItemCapabilities } from "@licketysplit/core";
 import { useProjectStore } from "../../stores/project-store";
 import { useUIStore } from "../../stores/ui-store";
 import { useTimelineStore } from "../../stores/timeline-store";

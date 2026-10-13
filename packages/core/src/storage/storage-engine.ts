@@ -1,3 +1,4 @@
+import {getManagedBridge,getNativeMediaSource} from "../media/native-media-bridge";
 import type { Project } from "../types";
 import { serializeProject, deserializeProject } from "../utils/serialization";
 import {
@@ -275,6 +276,7 @@ export class StorageEngine implements IStorageEngine {
   }
 
   async saveMedia(media: MediaRecord): Promise<void> {
+    if(media.blob&&getManagedBridge()?.originalUri){const uri=await getNativeMediaSource(media.blob,'export');if(!uri)throw new Error('Persist a native original reference before saving desktop media');media={...media,blob:null,nativeOriginalUri:uri,nativeMediaType:media.blob.type.startsWith('image/')?'image':media.metadata.hasVideo||(media.metadata.width>0&&media.metadata.duration>0)?'video':'audio'};}
     await this.transaction(STORES.MEDIA, "readwrite", (stores) =>
       stores[STORES.MEDIA].put(media),
     );

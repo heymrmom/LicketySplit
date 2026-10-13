@@ -9,7 +9,7 @@ import {
 } from "./manifest";
 
 const manifest = (): MulticamManifest => ({
-  spec: "openreel-multicam/v1",
+  spec: "licketysplit-multicam/v1",
   fps: 25,
   sync: { method: "audio-crosscorr", reference: "wide" },
   participants: [
@@ -25,8 +25,23 @@ const manifest = (): MulticamManifest => ({
 });
 
 describe("validateMulticamManifest", () => {
-  it("accepts the openreel-multicam/v1 shoot specification", () => {
+  it("accepts the LicketySplit v1 shoot specification", () => {
     expect(validateMulticamManifest(manifest())).toEqual({ valid: true, errors: [] });
+  });
+
+  it("reads the prior v1 spec and normalizes it for current writes", () => {
+    const legacy = { ...manifest(), spec: "openreel-multicam/v1" };
+    const parsed = parseMulticamManifest(JSON.stringify(legacy));
+    expect(parsed.spec).toBe("licketysplit-multicam/v1");
+    expect(JSON.parse(serializeMulticamManifest(parsed)).spec).toBe("licketysplit-multicam/v1");
+  });
+
+  it("accepts explicitly unknown podcast framing without inventing a participant subject", () => {
+    const value = manifest();
+    value.cameras[0] = { id: "a", type: "unknown", subject: "unmapped", file: "A001.mp4" };
+    value.participants[0]!.audioWindows = [{ trackId: "track-1", clipId: "mic-1", mediaId: "media-1", startTime: 2, duration: 4, inPoint: 0, outPoint: 4, speed: 1, volume: 1, sourceChannelIndex: 0 }];
+
+    expect(validateMulticamManifest(value)).toEqual({ valid: true, errors: [] });
   });
 
   it("requires isolated mics, valid subjects, a wide shot, and a sync reference", () => {
@@ -43,7 +58,7 @@ describe("validateMulticamManifest", () => {
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual(
       expect.arrayContaining([
-        "participants must contain at least two isolated microphones",
+        "participants must contain at least one routed microphone",
         "cameras[0].subject references unknown participant missing",
         "camera id a is duplicated",
         "cameras must include at least one locked-off wide shot",

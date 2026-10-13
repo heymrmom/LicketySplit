@@ -1,3 +1,5 @@
+> **Preserved upstream port guide.** The August 2026 mobile source paths and app identities below refer to an external upstream checkout, not maintained mobile source in this repository. This directory is historical reference; its names, paths and prior progress are not current LicketySplit product metadata or acceptance. No mobile package identity has been migrated by the desktop work.
+
 # Openreel Video — Android Port Guide
 
 > **Offline architecture (2026-08-08):** OpenReel's cloud-GPU worker, auth

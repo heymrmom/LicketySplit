@@ -2,7 +2,7 @@ import type {
   MotionComposition,
   MotionLayer,
   MotionRenderQuality,
-} from "@openreel/core";
+} from "@licketysplit/core";
 import {
   getMotionCompositionLayerSource,
   hasActiveMotionCamera,
@@ -12,7 +12,7 @@ import {
   layerHasMotionShaderTextAnimator,
   layerMayUseAdvancedMotionMasks,
   motionLayerMayUse3D,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 export type MotionStagePreviewMode = "draft" | "final";
 export type MotionStagePreviewResolution = "full" | "half" | "quarter";

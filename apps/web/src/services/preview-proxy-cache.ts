@@ -1,5 +1,5 @@
 import { createStore } from "zustand/vanilla";
-import type { MediaItem, Project } from "@openreel/core";
+import type { MediaItem, Project } from "@licketysplit/core";
 
 export type PreviewProxyPreset = "low" | "medium" | "high";
 export interface PreviewProxyEntry {
@@ -12,6 +12,8 @@ export interface PreviewProxyEntry {
   width?: number;
   height?: number;
   error?: string;
+  /** A fingerprint-validated native original URI is available while optimization runs. */
+  originalAvailable?: boolean;
   createdAt: number;
 }
 export interface PreviewProxyState {

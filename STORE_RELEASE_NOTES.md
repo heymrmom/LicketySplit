@@ -1,3 +1,5 @@
+> **Historical upstream mobile release record.** This inherited June 2026 copy describes mobile apps whose source trees are absent here. Its versions, product names and submission instructions are preserved as upstream history, not current LicketySplit release metadata. Do not publish it for this desktop candidate.
+
 # OpenReel — Store Release Notes
 
 Release: **iOS 1.2 (build 2)** · **Android 1.0.8 (versionCode 9)** — June 2026

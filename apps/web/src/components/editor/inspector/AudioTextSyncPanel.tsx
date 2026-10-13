@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState, useMemo } from "react";
 import { Music, Loader2, AlertCircle, Check, Settings2, Image, Type, Video } from "@/icons/lucide-compat";
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftClickableCard as ClickableCard } from "@openreel/ui";
-import { ToolcraftProgressBar as ProgressBar } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftClickableCard as ClickableCard } from "@licketysplit/ui";
+import { ToolcraftProgressBar as ProgressBar } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { PropertySlider } from "./shell/PropertySlider";
 import {
   getBeatSyncBridge,
@@ -12,7 +12,7 @@ import {
   DEFAULT_BEAT_SYNC_CONFIG,
 } from "../../../bridges/audio-text-sync-bridge";
 import { useProjectStore } from "../../../stores/project-store";
-import type { SyncMode } from "@openreel/core";
+import type { SyncMode } from "@licketysplit/core";
 
 interface BeatSyncPanelProps {
   clipId: string;

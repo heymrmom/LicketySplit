@@ -4,9 +4,9 @@ import type {
 } from "../multicam/automatic-edit";
 import type { Clip, Track } from "../types/timeline";
 import type { ProjectSettings } from "../types/project";
-import type { MulticamManifest } from "../multicam/manifest";
+import { LEGACY_MULTICAM_MANIFEST_SPEC, MULTICAM_MANIFEST_SPEC, type MulticamManifest } from "../multicam/manifest";
 import { applyMulticamDirectives } from "../multicam/shot-planner";
-import type { MulticamShotPlan } from "../multicam/shot-planner";
+import { LEGACY_MULTICAM_EDIT_SPEC, MULTICAM_EDIT_SPEC, type MulticamShotPlan } from "../multicam/shot-planner";
 import type { MulticamShotPolicy } from "../multicam/shot-planner";
 
 export interface CameraAngle {
@@ -18,6 +18,19 @@ export interface CameraAngle {
   color: string;
   isActive: boolean;
   driftSecondsPerSecond?: number;
+  /** Ordered original clips for a physical camera. Native clips are timing authority. */
+  sourceSegments?: CameraSourceSegment[];
+}
+
+export interface CameraSourceSegment {
+  mediaId: string;
+  clipId: string;
+  trackId: string;
+  sourceStartSeconds: number;
+  sourceEndSeconds: number;
+  episodeMapping: { scale: number; offsetSeconds: number };
+  timelineStart?: number;
+  timelineEnd?: number;
 }
 
 export interface MultiCamGroup {
@@ -37,6 +50,8 @@ export interface MultiCamGroup {
   shotPlan?: MulticamShotPlan;
   editPolicy?: MulticamShotPolicy;
   annotations?: MulticamSegmentAnnotation[];
+  pictureGapPolicy?: "keep-picture-gaps" | "available-camera-fallback";
+  coverageGaps?: Array<{ angleId: string; startTime: number; endTime: number }>;
 }
 
 export interface MulticamSegmentAnnotation {
@@ -87,10 +102,85 @@ const ANGLE_COLORS = [
   "#ec4899",
 ];
 
+interface MaterializedSourcePiece {
+  angle: CameraAngle;
+  source: Clip;
+  startTime: number;
+  endTime: number;
+  inPoint: number;
+  outPoint: number;
+}
+
+function subtractRanges(startTime: number, endTime: number, claimed: Array<{ startTime: number; endTime: number }>): Array<{ startTime: number; endTime: number }> {
+  let ranges = [{ startTime, endTime }];
+  for (const occupied of claimed) {
+    ranges = ranges.flatMap((range) => {
+      if (occupied.endTime <= range.startTime || occupied.startTime >= range.endTime) return [range];
+      return [
+        ...(occupied.startTime > range.startTime ? [{ startTime: range.startTime, endTime: occupied.startTime }] : []),
+        ...(occupied.endTime < range.endTime ? [{ startTime: occupied.endTime, endTime: range.endTime }] : []),
+      ];
+    });
+  }
+  return ranges;
+}
+
+/** Split a selected camera interval against live native clips in confirmed segment order. */
+function materializeSourceSegments(
+  group: MultiCamGroup,
+  selectedAngle: CameraAngle,
+  sourceClips: ReadonlyMap<string, Clip>,
+  startTime: number,
+  endTime: number,
+): MaterializedSourcePiece[] {
+  const candidates = [
+    selectedAngle,
+    ...(group.pictureGapPolicy === "available-camera-fallback"
+      ? group.angles.filter((angle) => angle.id !== selectedAngle.id)
+      : []),
+  ];
+  const claimed: Array<{ startTime: number; endTime: number }> = [];
+  const output: MaterializedSourcePiece[] = [];
+  for (const angle of candidates) {
+    for (const segment of angle.sourceSegments ?? []) {
+      const source = sourceClips.get(segment.clipId);
+      if (!source) continue;
+      const speed = source.speed ?? 1;
+      if (source.reversed || !Number.isFinite(speed) || speed <= 0 || source.speedKeyframes?.length || source.freezeFrames?.length) {
+        throw new Error(`Camera source ${source.id} has an unsupported speed mapping.`);
+      }
+      const availableDuration = Math.max(0, Math.min(source.duration, (source.outPoint - source.inPoint) / speed));
+      const sourceStart = Math.max(startTime, source.startTime);
+      const sourceEnd = Math.min(endTime, source.startTime + availableDuration);
+      if (sourceEnd <= sourceStart) continue;
+      for (const range of subtractRanges(sourceStart, sourceEnd, claimed)) {
+        const inPoint = source.inPoint + (range.startTime - source.startTime) * speed;
+        const duration = range.endTime - range.startTime;
+        output.push({
+          angle,
+          source,
+          startTime: range.startTime,
+          endTime: range.endTime,
+          inPoint,
+          outPoint: Math.min(source.outPoint, inPoint + duration * speed),
+        });
+      }
+      claimed.push({ startTime: sourceStart, endTime: sourceEnd });
+    }
+  }
+  return output.sort((a, b) => a.startTime - b.startTime || a.endTime - b.endTime || a.angle.id.localeCompare(b.angle.id));
+}
+
 function cloneGroup(group: MultiCamGroup): MultiCamGroup {
   return {
     ...group,
-    angles: group.angles.map((angle) => ({ ...angle })),
+    angles: group.angles.map((angle) => ({
+      ...angle,
+      sourceSegments: angle.sourceSegments?.map((segment) => ({
+        ...segment,
+        episodeMapping: { ...segment.episodeMapping },
+      })),
+    })),
     switches: (group.switches ?? []).map((switchItem) => ({ ...switchItem })),
     automaticEdit: group.automaticEdit
       ? {
@@ -151,6 +241,12 @@ export class MultiCamEngine {
     this.groups.clear();
     for (const group of groups) {
       const normalized = cloneGroup(group);
+      if (normalized.manifest && (normalized.manifest as { spec: string }).spec === LEGACY_MULTICAM_MANIFEST_SPEC) {
+        normalized.manifest.spec = MULTICAM_MANIFEST_SPEC;
+      }
+      if (normalized.shotPlan && (normalized.shotPlan as { spec: string }).spec === LEGACY_MULTICAM_EDIT_SPEC) {
+        normalized.shotPlan.spec = MULTICAM_EDIT_SPEC;
+      }
       this.groups.set(group.id, normalized);
     }
   }
@@ -652,6 +748,27 @@ export class MultiCamEngine {
     );
     return this.exportGroupAsSequence(groupId).flatMap((segment) => {
       const angle = group.angles.find((item) => item.clipId === segment.clipId);
+      if (angle?.sourceSegments?.length) {
+        const switchItem = switchByTime.get(segment.startTime);
+        return materializeSourceSegments(group, angle, sourceClips, segment.startTime, segment.endTime).map((piece) => {
+          const timelineStart = piece.startTime;
+          const duration = piece.endTime - piece.startTime;
+          const clip: Clip = {
+            ...structuredClone(piece.source),
+            id: `${piece.source.id}-multicam-${Math.round(timelineStart * 1_000)}`,
+            trackId: outputTrackId,
+            startTime: group.syncPoint + timelineStart,
+            duration,
+            inPoint: piece.inPoint,
+            outPoint: piece.outPoint,
+            metadata: {
+              ...piece.source.metadata,
+              multicam: { groupId, angleId: piece.angle.id, reason: switchItem?.reason, confidence: switchItem?.confidence },
+            },
+          };
+          return { angleId: piece.angle.id, reason: switchItem?.reason, confidence: switchItem?.confidence, clip };
+        });
+      }
       const source = sourceClips.get(segment.clipId);
       if (!angle || !source) return [];
 
@@ -726,117 +843,83 @@ export class MultiCamEngine {
         const angle = group.angles.find(
           (entry) => entry.id === panel.cameraId || entry.clipId === camera?.clipId,
         );
-        const source = angle ? sourceClips.get(angle.clipId) : undefined;
-        if (!angle || !source) return [];
+        if (!angle) return [];
         const segmentStart = shot.startMs / 1_000;
         const segmentEnd = shot.endMs / 1_000;
-        const playbackRate = Math.max(0.01, source.speed ?? 1);
-        const requestedInPoint =
-          source.inPoint +
-          segmentStart * playbackRate +
-          angle.offset +
-          (angle.driftSecondsPerSecond ?? 0) * segmentStart;
-        const inPoint = Math.max(source.inPoint, requestedInPoint);
-        const skippedTimeline = (inPoint - requestedInPoint) / playbackRate;
-        const timelineStart = segmentStart + skippedTimeline;
-        const availableDuration = Math.max(
-          0,
-          (source.outPoint - inPoint) / playbackRate,
-        );
-        const duration = Math.min(segmentEnd - timelineStart, availableDuration);
-        if (duration <= 0) return [];
-        const targetPosition = {
-          x:
-            source.transform.position.x +
-            (panel.rect.x + panel.rect.width / 2 - 0.5) * settings.width,
-          y:
-            source.transform.position.y +
-            (panel.rect.y + panel.rect.height / 2 - 0.5) * settings.height,
-        };
-        const targetScale = {
-          x: source.transform.scale.x * panel.rect.width,
-          y: source.transform.scale.y * panel.rect.height,
-        };
+        let pieces: MaterializedSourcePiece[];
+        if (angle.sourceSegments?.length) {
+          pieces = materializeSourceSegments(group, angle, sourceClips, segmentStart, segmentEnd);
+        } else {
+          const source = sourceClips.get(angle.clipId);
+          if (!source) return [];
+          const playbackRate = Math.max(0.01, source.speed ?? 1);
+          const requestedInPoint =
+            source.inPoint +
+            segmentStart * playbackRate +
+            angle.offset +
+            (angle.driftSecondsPerSecond ?? 0) * segmentStart;
+          const inPoint = Math.max(source.inPoint, requestedInPoint);
+          const skippedTimeline = (inPoint - requestedInPoint) / playbackRate;
+          const timelineStart = segmentStart + skippedTimeline;
+          const availableDuration = Math.max(0, (source.outPoint - inPoint) / playbackRate);
+          const duration = Math.min(segmentEnd - timelineStart, availableDuration);
+          pieces = duration > 0 ? [{ angle, source, startTime: timelineStart, endTime: timelineStart + duration, inPoint, outPoint: inPoint + duration * playbackRate }] : [];
+        }
         const previousPanel = plan.shots[shotIndex - 1]?.layout.panels.find(
           (entry) => entry.cameraId === panel.cameraId,
         );
-        const morphDuration = Math.min(
-          duration,
-          shot.transitionIn.type === "layout-morph"
-            ? shot.transitionIn.durationMs / 1_000
-            : 0,
-        );
-        const morphKeyframes = previousPanel && morphDuration > 0
-          ? [
-              {
-                id: `${groupId}-${shot.startMs}-${panelIndex}-position-start`,
-                time: 0,
-                property: "transform.position",
-                value: {
-                  x: source.transform.position.x +
-                    (previousPanel.rect.x + previousPanel.rect.width / 2 - 0.5) * settings.width,
-                  y: source.transform.position.y +
-                    (previousPanel.rect.y + previousPanel.rect.height / 2 - 0.5) * settings.height,
-                },
-                easing: "ease-in-out" as const,
-              },
-              {
-                id: `${groupId}-${shot.startMs}-${panelIndex}-position-end`,
-                time: morphDuration,
-                property: "transform.position",
-                value: targetPosition,
-                easing: "ease-in-out" as const,
-              },
-              {
-                id: `${groupId}-${shot.startMs}-${panelIndex}-scale-start`,
-                time: 0,
-                property: "transform.scale",
-                value: {
+        return pieces.map((piece, pieceIndex) => {
+          const { source } = piece;
+          const duration = piece.endTime - piece.startTime;
+          const targetPosition = {
+            x: source.transform.position.x + (panel.rect.x + panel.rect.width / 2 - 0.5) * settings.width,
+            y: source.transform.position.y + (panel.rect.y + panel.rect.height / 2 - 0.5) * settings.height,
+          };
+          const targetScale = {
+            x: source.transform.scale.x * panel.rect.width,
+            y: source.transform.scale.y * panel.rect.height,
+          };
+          const morphDuration = Math.min(duration, shot.transitionIn.type === "layout-morph" ? shot.transitionIn.durationMs / 1_000 : 0);
+          const morphKeyframes = pieceIndex === 0 && previousPanel && morphDuration > 0
+            ? [
+                { id: `${groupId}-${shot.startMs}-${panelIndex}-position-start`, time: 0, property: "transform.position", value: {
+                  x: source.transform.position.x + (previousPanel.rect.x + previousPanel.rect.width / 2 - 0.5) * settings.width,
+                  y: source.transform.position.y + (previousPanel.rect.y + previousPanel.rect.height / 2 - 0.5) * settings.height,
+                }, easing: "ease-in-out" as const },
+                { id: `${groupId}-${shot.startMs}-${panelIndex}-position-end`, time: morphDuration, property: "transform.position", value: targetPosition, easing: "ease-in-out" as const },
+                { id: `${groupId}-${shot.startMs}-${panelIndex}-scale-start`, time: 0, property: "transform.scale", value: {
                   x: source.transform.scale.x * previousPanel.rect.width,
                   y: source.transform.scale.y * previousPanel.rect.height,
-                },
-                easing: "ease-in-out" as const,
+                }, easing: "ease-in-out" as const },
+                { id: `${groupId}-${shot.startMs}-${panelIndex}-scale-end`, time: morphDuration, property: "transform.scale", value: targetScale, easing: "ease-in-out" as const },
+              ]
+            : [];
+          const clip: Clip = {
+            ...structuredClone(source),
+            id: `${source.id}-multicam-${shot.startMs}-panel-${panelIndex + 1}-${Math.round(piece.startTime * 1_000)}`,
+            trackId,
+            startTime: group.syncPoint + piece.startTime,
+            duration,
+            inPoint: piece.inPoint,
+            outPoint: piece.outPoint,
+            volume: panelIndex === 0 ? source.volume : 0,
+            transform: { ...structuredClone(source.transform), position: targetPosition, scale: targetScale, fitMode: "cover", crop: panel.crop },
+            keyframes: [...structuredClone(source.keyframes), ...morphKeyframes],
+            metadata: {
+              ...source.metadata,
+              multicam: {
+                groupId,
+                angleId: piece.angle.id,
+                panelIndex,
+                layout: shot.layout.template,
+                rect: panel.rect,
+                reason: shot.reason,
+                confidence: shot.confidence,
               },
-              {
-                id: `${groupId}-${shot.startMs}-${panelIndex}-scale-end`,
-                time: morphDuration,
-                property: "transform.scale",
-                value: targetScale,
-                easing: "ease-in-out" as const,
-              },
-            ]
-          : [];
-        const clip: Clip = {
-          ...structuredClone(source),
-          id: `${source.id}-multicam-${shot.startMs}-panel-${panelIndex + 1}`,
-          trackId,
-          startTime: group.syncPoint + timelineStart,
-          duration,
-          inPoint,
-          outPoint: inPoint + duration * playbackRate,
-          volume: panelIndex === 0 ? source.volume : 0,
-          transform: {
-            ...structuredClone(source.transform),
-            position: targetPosition,
-            scale: targetScale,
-            fitMode: "cover",
-            crop: panel.crop,
-          },
-          keyframes: [...structuredClone(source.keyframes), ...morphKeyframes],
-          metadata: {
-            ...source.metadata,
-            multicam: {
-              groupId,
-              angleId: angle.id,
-              panelIndex,
-              layout: shot.layout.template,
-              rect: panel.rect,
-              reason: shot.reason,
-              confidence: shot.confidence,
             },
-          },
-        };
-        return [clip];
+          };
+          return clip;
+        });
       });
       return {
         id: trackId,

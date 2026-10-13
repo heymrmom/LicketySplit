@@ -57,11 +57,11 @@ function installBridge(): void {
       })),
     },
   };
-  (globalThis as any).openreel = bridge;
+  (globalThis as any).licketysplit = bridge;
 }
 
 function bridgeMock(): any {
-  return (globalThis as any).openreel;
+  return (globalThis as any).licketysplit;
 }
 
 beforeEach(() => {
@@ -70,13 +70,13 @@ beforeEach(() => {
   installBridge();
 });
 afterEach(() => {
-  delete (globalThis as any).openreel;
+  delete (globalThis as any).licketysplit;
 });
 
 describe("native-media-bridge", () => {
   it("nativeMediaAvailable is true only when a desktop bridge is present", () => {
     expect(nativeMediaAvailable()).toBe(true);
-    delete (globalThis as any).openreel;
+    delete (globalThis as any).licketysplit;
     expect(nativeMediaAvailable()).toBe(false);
   });
 
@@ -130,3 +130,4 @@ describe("native-media-bridge", () => {
     expect(await probeAudioStreamCountViaNative(new File([new Uint8Array([1])], "in.mp4"))).toBe(1);
   });
 });
+it('probes a real disk File directly without streaming a temp copy',async()=>{const file=new File(['x'],'camera.mov');const direct=vi.fn(async()=>({streams:[{index:0,codec:'aac',channels:2,sampleRate:48000}]}));bridgeMock().media.probeFile=direct;await expect(probeAudioStreamCountViaNative(file)).resolves.toBe(1);expect(direct).toHaveBeenCalledWith(file);expect(bridgeMock().fs.openWrite).not.toHaveBeenCalled();});

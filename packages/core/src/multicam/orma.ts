@@ -1,10 +1,11 @@
 import type { MulticamActivityMap } from "./automatic-edit";
-import type { MulticamBleedCalibration } from "./bleed-calibration";
+import { LEGACY_MULTICAM_BLEED_CALIBRATION_SPEC, MULTICAM_BLEED_CALIBRATION_SPEC, type MulticamBleedCalibration } from "./bleed-calibration";
 import type { MulticamDriftModel } from "./drift";
-import type { MulticamManifest } from "./manifest";
+import { LEGACY_MULTICAM_MANIFEST_SPEC, type MulticamManifest } from "./manifest";
 import type { MulticamReactionCue } from "./reaction-analysis";
 
-export const ORMA_SPEC = "openreel-activity/v1" as const;
+export const ORMA_SPEC = "licketysplit-activity/v1" as const;
+export const LEGACY_ORMA_SPEC = "openreel-activity/v1" as const;
 
 export interface MulticamTranscriptSegment {
   startMs: number;
@@ -92,13 +93,19 @@ export function createOrmaArtifact(input: {
 }
 
 export function serializeOrma(artifact: OrmaArtifact): string {
-  return JSON.stringify(artifact);
+  return JSON.stringify({
+    ...artifact,
+    spec: ORMA_SPEC,
+    calibration: artifact.calibration
+      ? { ...artifact.calibration, spec: MULTICAM_BLEED_CALIBRATION_SPEC }
+      : undefined,
+  });
 }
 
 export function deserializeOrma(serialized: string): OrmaArtifact {
-  const value = JSON.parse(serialized) as Partial<OrmaArtifact>;
+  const value = JSON.parse(serialized) as Partial<OrmaArtifact> & { calibration?: unknown };
   if (
-    value.spec !== ORMA_SPEC ||
+    (value.spec !== ORMA_SPEC && value.spec !== LEGACY_ORMA_SPEC) ||
     typeof value.manifestFingerprint !== "string" ||
     typeof value.mediaFingerprint !== "string" ||
     typeof value.createdAt !== "number" ||
@@ -108,9 +115,16 @@ export function deserializeOrma(serialized: string): OrmaArtifact {
     !value.drift ||
     typeof value.drift !== "object"
   ) {
-    throw new Error("Invalid OpenReel multicam activity artifact");
+    throw new Error("Invalid LicketySplit multicam activity artifact");
   }
-  return value as OrmaArtifact;
+  let calibration = value.calibration as MulticamBleedCalibration | undefined;
+  if (calibration) {
+    if (calibration.spec !== MULTICAM_BLEED_CALIBRATION_SPEC && calibration.spec !== LEGACY_MULTICAM_BLEED_CALIBRATION_SPEC) {
+      throw new Error("Invalid multicam bleed calibration in activity artifact");
+    }
+    calibration = { ...calibration, spec: MULTICAM_BLEED_CALIBRATION_SPEC };
+  }
+  return { ...value, spec: ORMA_SPEC, calibration } as OrmaArtifact;
 }
 
 export function isOrmaCompatible(
@@ -118,9 +132,9 @@ export function isOrmaCompatible(
   manifest: MulticamManifest,
   media: readonly OrmaMediaFingerprint[],
 ): boolean {
-  return (
-    artifact.spec === ORMA_SPEC &&
-    artifact.manifestFingerprint === fingerprintMulticamManifest(manifest) &&
-    artifact.mediaFingerprint === fingerprintMulticamMedia(media)
-  );
+  const legacyManifest = { ...manifest, spec: LEGACY_MULTICAM_MANIFEST_SPEC } as unknown as MulticamManifest;
+  return artifact.spec === ORMA_SPEC &&
+    (artifact.manifestFingerprint === fingerprintMulticamManifest(manifest) ||
+      artifact.manifestFingerprint === fingerprintMulticamManifest(legacyManifest)) &&
+    artifact.mediaFingerprint === fingerprintMulticamMedia(media);
 }

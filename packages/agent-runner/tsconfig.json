@@ -5,10 +5,10 @@
     "baseUrl": ".",
     "types": ["node"],
     "paths": {
-      "@openreel/core": ["../core/src/index.ts"],
-      "@openreel/core/*": ["../core/src/*"],
-      "@openreel/agent": ["../agent/src/index.ts"],
-      "@openreel/agent/*": ["../agent/src/*"]
+      "@licketysplit/core": ["../core/src/index.ts"],
+      "@licketysplit/core/*": ["../core/src/*"],
+      "@licketysplit/agent": ["../agent/src/index.ts"],
+      "@licketysplit/agent/*": ["../agent/src/*"]
     }
   },
   "include": ["src"]

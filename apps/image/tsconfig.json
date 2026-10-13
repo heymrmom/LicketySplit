@@ -9,10 +9,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@openreel/image-core": ["../../packages/image-core/src/index.ts"],
-      "@openreel/image-core/*": ["../../packages/image-core/src/*"],
-      "@openreel/ui": ["../../packages/ui/src/index.ts"],
-      "@openreel/ui/*": ["../../packages/ui/src/*"]
+      "@licketysplit/image-core": ["../../packages/image-core/src/index.ts"],
+      "@licketysplit/image-core/*": ["../../packages/image-core/src/*"],
+      "@licketysplit/ui": ["../../packages/ui/src/index.ts"],
+      "@licketysplit/ui/*": ["../../packages/ui/src/*"]
     }
   },
   "include": ["src"]

@@ -5,8 +5,8 @@ import type {
   MotionComposition,
   MotionRenderQuality,
   MotionScene3DLayer,
-} from "@openreel/core";
-import type { CreationProjectState } from "@openreel/core/creation/index";
+} from "@licketysplit/core";
+import type { CreationProjectState } from "@licketysplit/core/creation/index";
 import {
   clearWebMotionAssetBitmapCache,
   createWebMotionAssetResolver,
@@ -30,7 +30,7 @@ describe("web motion asset resolver", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    Object.defineProperty(window, "openreel", {
+    Object.defineProperty(window, "licketysplit", {
       configurable: true,
       value: undefined,
     });
@@ -102,7 +102,7 @@ describe("web motion asset resolver", () => {
       contentType: "application/octet-stream",
       body: new Uint8Array([1, 2, 3]).buffer,
     });
-    Object.defineProperty(window, "openreel", {
+    Object.defineProperty(window, "licketysplit", {
       configurable: true,
       value: { media: { fetchUrl } },
     });
@@ -147,7 +147,7 @@ describe("web motion asset resolver", () => {
   });
 
   it("keeps remote model URLs unchanged when no desktop bridge is available", async () => {
-    Object.defineProperty(window, "openreel", {
+    Object.defineProperty(window, "licketysplit", {
       configurable: true,
       value: undefined,
     });
@@ -262,7 +262,7 @@ describe("web motion asset resolver", () => {
 
     vi.stubGlobal("createImageBitmap", createImageBitmapMock);
     vi.stubGlobal("fetch", fetchMock);
-    Object.defineProperty(window, "openreel", {
+    Object.defineProperty(window, "licketysplit", {
       configurable: true,
       value: {
         platform: "desktop",

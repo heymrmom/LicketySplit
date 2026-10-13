@@ -1,6 +1,6 @@
-import { ToolcraftButton as Button } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftTextAreaControl } from "@openreel/ui";
+import { ToolcraftButton as Button } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftTextAreaControl } from "@licketysplit/ui";
 import type { NanoBanana2Input } from "../../../../services/kieai/image-generation";
 import { ASPECT_RATIO_OPTIONS_AUTO } from "./shared";
 

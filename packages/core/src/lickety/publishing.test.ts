@@ -1,0 +1,3 @@
+import {it,expect} from 'vitest';import {validatePublishingPackage} from './publishing';
+const copy={schemaVersion:1,snapshotHash:'final',titles:['A title'],youtubeDescription:'Retained episode',chapters:[{startMs:0,title:'Start'}],tags:['topic'],spotifyNotes:'Notes',thumbnailIdeas:['Idea'],pinnedComments:['Question']};
+it('validates final edit identity and ordered in-bounds chapters',()=>{expect(validatePublishingPackage(copy,'final',20000).titles).toEqual(['A title']);expect(()=>validatePublishingPackage({...copy,chapters:[{startMs:21000,title:'Too late'}]},'final',20000)).toThrow(/chapter/i);expect(()=>validatePublishingPackage(copy,'changed',20000)).toThrow(/revision|snapshot/i);});

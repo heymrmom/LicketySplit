@@ -1,7 +1,7 @@
 import React, { useCallback } from "react";
-import { ToolcraftCard as Card } from "@openreel/ui";
-import { ToolcraftSelectControl as Selector } from "@openreel/ui";
-import { ToolcraftText as Text } from "@openreel/ui";
+import { ToolcraftCard as Card } from "@licketysplit/ui";
+import { ToolcraftSelectControl as Selector } from "@licketysplit/ui";
+import { ToolcraftText as Text } from "@licketysplit/ui";
 import { Type, Clock, Play } from "@/icons/lucide-compat";
 import { PropertySlider } from "./shell/PropertySlider";
 import { useProjectStore } from "../../../stores/project-store";
@@ -9,7 +9,7 @@ import {
   TEXT_ANIMATION_PRESETS,
   type TextAnimationPreset,
   type TextAnimationParams,
-} from "@openreel/core";
+} from "@licketysplit/core";
 
 interface PresetInfo {
   value: TextAnimationPreset;
@@ -128,7 +128,7 @@ const TextAnimationPresetCard: React.FC<{
           className="text-[13px] font-black tracking-tight text-white"
           style={textAnimationPreviewStyle(preset.value, progress)}
         >
-          OpenReel
+          LicketySplit
         </span>
       </span>
       <span className="block truncate text-[9px] font-semibold text-fg">

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'openreel-image-v1';
+const CACHE_NAME = 'licketysplit-image-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -16,7 +16,10 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.filter((key) =>
+          key !== CACHE_NAME &&
+          (key.startsWith('licketysplit-image-') || key.startsWith('openreel-image-'))
+        ).map((key) => caches.delete(key))
       )
     )
   );

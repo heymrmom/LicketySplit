@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import type { Project, VideoExportSettings, ExportResult } from "@openreel/core";
+import type { Project, VideoExportSettings, ExportResult } from "@licketysplit/core";
 import {
   useExportRunner,
   mimeForExt,
@@ -26,7 +26,7 @@ const { mockEngine, getExportEngineMock } = vi.hoisted(() => {
   };
 });
 
-vi.mock("@openreel/core", () => ({
+vi.mock("@licketysplit/core", () => ({
   getExportEngine: getExportEngineMock,
 }));
 
@@ -461,8 +461,8 @@ describe("useExportRunner showSavePicker fallback", () => {
     } else {
       delete win.showSaveFilePicker;
     }
-    delete win.openreel;
-    delete win.__openreelExportPath;
+    delete win.licketysplit;
+    delete win.__licketysplitExportPath;
   });
 
   it("falls back to an in-memory download when OPFS is unavailable and the picker is blocked", async () => {
@@ -571,7 +571,7 @@ describe("useExportRunner showSavePicker fallback", () => {
     const picker = vi.fn();
     win.showSaveFilePicker = picker;
     const showSaveDialog = vi.fn();
-    win.openreel = { fs: { showSaveDialog } };
+    win.licketysplit = { fs: { showSaveDialog } };
     const writable = await createDownloadWritable("Clip.mp4", "video/mp4", { delivery: "download" });
     await writable.write(new Uint8Array([1, 2]));
     await writable.close();
@@ -627,7 +627,7 @@ describe("useExportRunner showSavePicker fallback", () => {
     const showSaveDialog = vi
       .fn()
       .mockResolvedValue("/Users/me/Movies/Rubik.mp4");
-    win.openreel = {
+    win.licketysplit = {
       platform: "desktop",
       fs: {
         showSaveDialog,
@@ -641,13 +641,13 @@ describe("useExportRunner showSavePicker fallback", () => {
     const writable = await createDownloadWritable("Rubik.mp4", "video/mp4");
 
     expect(showSaveDialog).toHaveBeenCalledTimes(1);
-    expect(win.__openreelExportPath).toBe("/Users/me/Movies/Rubik.mp4");
+    expect(win.__licketysplitExportPath).toBe("/Users/me/Movies/Rubik.mp4");
     expect(writable).toBeDefined();
   });
 
   it("desktop stream writable forwards Uint8Array chunks without an ArrayBuffer copy", async () => {
     const writeChunk = vi.fn().mockResolvedValue(undefined);
-    win.openreel = {
+    win.licketysplit = {
       platform: "desktop",
       fs: {
         showSaveDialog: vi.fn().mockResolvedValue("/Users/me/Movies/Rubik.mp4"),
@@ -672,7 +672,7 @@ describe("useExportRunner showSavePicker fallback", () => {
   });
 
   it("createDownloadWritable rethrows AbortError when the native save dialog is cancelled", async () => {
-    win.openreel = {
+    win.licketysplit = {
       platform: "desktop",
       fs: {
         showSaveDialog: vi.fn().mockResolvedValue(null),
@@ -683,6 +683,6 @@ describe("useExportRunner showSavePicker fallback", () => {
     await expect(
       createDownloadWritable("Rubik.mp4", "video/mp4"),
     ).rejects.toMatchObject({ name: "AbortError" });
-    expect(win.__openreelExportPath).toBeUndefined();
+    expect(win.__licketysplitExportPath).toBeUndefined();
   });
 });

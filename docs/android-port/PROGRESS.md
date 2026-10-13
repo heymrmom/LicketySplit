@@ -1,3 +1,5 @@
+> **Preserved upstream progress record.** These entries describe the absent upstream mobile checkout referenced in this directory’s README. They are historical evidence, not current LicketySplit implementation or verification claims.
+
 # Openreel Android — Progress Log
 
 > **Offline architecture (2026-08-08):** Cloud-GPU, authentication, and

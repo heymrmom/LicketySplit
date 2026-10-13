@@ -5,11 +5,13 @@ type TimelineWithTracks = Pick<Timeline, "tracks">;
 const LINK_TOLERANCE_SECONDS = 0.01;
 
 const getClipAudioTrackIndex = (clip: Clip): number => clip.audioTrackIndex ?? 0;
+const getClipSourceChannelIndex = (clip: Clip): number | undefined => clip.sourceChannelIndex;
 
 const isAlignedLinkedClip = (clip: Clip, candidate: Clip): boolean =>
   candidate.id !== clip.id &&
   candidate.mediaId === clip.mediaId &&
   getClipAudioTrackIndex(candidate) === getClipAudioTrackIndex(clip) &&
+  getClipSourceChannelIndex(candidate) === getClipSourceChannelIndex(clip) &&
   Math.abs(candidate.startTime - clip.startTime) < LINK_TOLERANCE_SECONDS &&
   Math.abs(candidate.inPoint - clip.inPoint) < LINK_TOLERANCE_SECONDS;
 

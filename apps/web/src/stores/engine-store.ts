@@ -25,8 +25,8 @@ import {
   getExportEngine,
   titleEngine as coreTitleEngine,
   graphicsEngine as coreGraphicsEngine,
-} from "@openreel/core";
-import type { RenderedFrame } from "@openreel/core";
+} from "@licketysplit/core";
+import type { RenderedFrame } from "@licketysplit/core";
 
 const lazyEngineCache = new Map<string, unknown>();
 

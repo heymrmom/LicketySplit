@@ -1,9 +1,9 @@
-import { ActionExecutor } from "@openreel/core/actions/action-executor";
-import { ActionHistory } from "@openreel/core/actions/action-history";
-import { CAPABILITY_MANIFEST } from "@openreel/core/capabilities/manifest";
-import type { CapabilityManifest } from "@openreel/core/capabilities/manifest";
-import type { Action, ActionResult } from "@openreel/core/types/actions";
-import type { Project } from "@openreel/core/types/project";
+import { ActionExecutor } from "@licketysplit/core/actions/action-executor";
+import { ActionHistory } from "@licketysplit/core/actions/action-history";
+import { CAPABILITY_MANIFEST } from "@licketysplit/core/capabilities/manifest";
+import type { CapabilityManifest } from "@licketysplit/core/capabilities/manifest";
+import type { Action, ActionResult } from "@licketysplit/core/types/actions";
+import type { Project } from "@licketysplit/core/types/project";
 import type { EditingHost, JobKind, JobResult, JobRunner, TxnHandle } from "./host";
 
 export interface HeadlessHostOptions {
