@@ -3,12 +3,13 @@ import type { Project, MediaItem, MediaRecord, MediaMetadata } from "@licketyspl
 
 const storage = new StorageEngine();
 const desktop=()=>typeof window!=='undefined'&&window.licketysplit?.platform==='desktop';
+const resolveNativePreviewUri=(mediaId:string)=>{const bridge=window.licketysplit!.lickety!;return bridge.originalPreviewUri?bridge.originalPreviewUri(mediaId):bridge.originalUri(mediaId);};
 function clearStaleMediaPreviews(item:MediaItem):MediaItem{
   return {...item,thumbnailUrl:item.thumbnailUrl?.startsWith('blob:')?null:item.thumbnailUrl,waveformData:null,filmstripThumbnails:undefined};
 }
 async function restoreNativeRecord(record:MediaRecord|null):Promise<MediaRecord|null>{
   if(!record?.nativeOriginalUri||!desktop())return record;
-  const uri=await window.licketysplit!.lickety!.originalUri(record.id);
+  const uri=await resolveNativePreviewUri(record.id);
   if(!uri)throw new Error('Original unavailable; relink the original recording');
   let blob=new Blob([]);if(record.nativeMediaType==='image')blob=await fetch(uri).then(response=>{if(!response.ok)throw new Error('Original image unavailable; relink it');return response.blob();});bindNativeMediaSources(blob,Promise.resolve(uri),Promise.resolve(uri));return {...record,blob};
 }
@@ -16,9 +17,9 @@ async function restoreNativeRecord(record:MediaRecord|null):Promise<MediaRecord|
 
 /** Same-machine reopen restores pointers, without reading video/audio source bytes. */
 export async function restoreNativeMediaReferences(project:Project):Promise<Project>{
-  if(!desktop()||!window.licketysplit?.lickety?.originalUri)return project;
+  if(!desktop()||!window.licketysplit?.lickety?.originalPreviewUri&&!window.licketysplit?.lickety?.originalUri)return project;
   const items=await Promise.all(project.mediaLibrary.items.map(async item=>{
-    try{const uri=await window.licketysplit!.lickety!.originalUri(item.id);if(!uri)return {...clearStaleMediaPreviews(item),blob:null,isPlaceholder:true};let blob:Blob=new Blob([]);if(item.type==='image')blob=await fetch(uri).then(response=>{if(!response.ok)throw new Error('Original unavailable');return response.blob();});bindNativeMediaSources(blob,Promise.resolve(uri),Promise.resolve(uri));return {...clearStaleMediaPreviews(item),blob,isPlaceholder:false};}
+    try{const uri=await resolveNativePreviewUri(item.id);if(!uri)return {...clearStaleMediaPreviews(item),blob:null,isPlaceholder:true};let blob:Blob=new Blob([]);if(item.type==='image')blob=await fetch(uri).then(response=>{if(!response.ok)throw new Error('Original unavailable');return response.blob();});bindNativeMediaSources(blob,Promise.resolve(uri),Promise.resolve(uri));return {...clearStaleMediaPreviews(item),blob,isPlaceholder:false};}
     catch{return {...clearStaleMediaPreviews(item),blob:null,isPlaceholder:true};}
   }));return {...project,mediaLibrary:{...project.mediaLibrary,items}};
 }

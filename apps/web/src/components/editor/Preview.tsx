@@ -8,6 +8,7 @@ import {
 } from "@licketysplit/core";
 import {getOriginalFadePhase} from "@licketysplit/core";
 import {getNativeMediaSource,nativeVideoUrl} from "@licketysplit/core";
+import { isEligibleOriginalMonoWav, prepareTimelineNativeAudioPreview } from "../../services/lickety/desktop-audio-preview";
 import React, {
   useRef,
   useEffect,
@@ -37,7 +38,7 @@ import { ToolcraftIconButton as IconButton } from "@licketysplit/ui";
 import { ToolcraftText as Text } from "@licketysplit/ui";
 import { ToolcraftTooltip as Tooltip } from "@licketysplit/ui";
 import { useProjectStore } from "../../stores/project-store";
-import { previewProxyCache, retryNativePreviewPreparation, usePreviewProxyStore } from "../../stores/preview-proxy-store";
+import { handleNativeOriginalPreviewFailure, previewProxyCache, publishNativePreviewAtBoundary, retryNativePreviewPreparation, usePreviewProxyStore } from "../../stores/preview-proxy-store";
 import { useTimelineStore } from "../../stores/timeline-store";
 import { useUIStore } from "../../stores/ui-store";
 import { useThemeStore } from "../../stores/theme-store";
@@ -906,13 +907,16 @@ export const Preview: React.FC = () => {
   const getAudioBufferCacheKey = (mediaId: string, audioTrackIndex?: number, sourceChannelIndex?: number): string =>
     `${mediaId}:${audioTrackIndex ?? 0}${sourceChannelIndex === undefined ? "" : `:channel-${sourceChannelIndex}`}`;
 
-  const prepareNativeAudio = useCallback(async (item:MediaItem,index:number,sourceChannelIndex?:number):Promise<string|undefined> => {
+  const prepareNativeAudio = useCallback(async (item:MediaItem,index:number,sourceChannelIndex?:number,isStillActive:()=>boolean=()=>true):Promise<string|undefined> => {
+    if(isEligibleOriginalMonoWav(item,index,sourceChannelIndex)){
+      return prepareTimelineNativeAudioPreview(item,index,sourceChannelIndex,isStillActive,(uri)=>nativeAudioUriRef.current.set(getAudioBufferCacheKey(item.id,index,sourceChannelIndex),uri));
+    }
     const bridge=getManagedBridge();if(!bridge?.ensureAudioStream)return;
     const original=await prepareNativeOriginal(item);const key=getAudioBufferCacheKey(item.id,index,sourceChannelIndex);
     const pendingKey=`${original.nativeSource!.identity.sha256}:${index}:${sourceChannelIndex===undefined?"mix":`channel-${sourceChannelIndex}`}`;
     let pending=nativeAudioPendingRef.current.get(pendingKey);
     if(!pending){pending=bridge.ensureAudioStream(original.nativeSource!.identity.assetId,index,sourceChannelIndex);nativeAudioPendingRef.current.set(pendingKey,pending);pending.catch(()=>nativeAudioPendingRef.current.delete(pendingKey));}
-    const uri=await pending;nativeAudioUriRef.current.set(key,uri);return uri;
+    const uri=await pending;if(!isStillActive())return;nativeAudioUriRef.current.set(key,uri);return uri;
   },[]);
   const nativeSchedule = (clip:Track['clips'][number],track:Track,uri:string):AudioClipSchedule => {
     const fades=getTrackTransitionAudioFades(track,clip.id);
@@ -1497,6 +1501,15 @@ export const Preview: React.FC = () => {
 
   const isPlaying = playbackState === "playing";
 
+  useEffect(() => {
+    if (isPlaying) return;
+    const activeVideoIds = new Set(project.timeline.tracks.flatMap((track) => track.hidden ? [] : track.clips.filter((clip) => clip.startTime <= playheadPosition && clip.startTime + clip.duration > playheadPosition && mediaClipHasVisual(clip)).map((clip) => clip.mediaId)));
+    for (const id of activeVideoIds) {
+      const item = getOriginalMediaItem(id);
+      if (item?.type === "video") publishNativePreviewAtBoundary(project.id, item);
+    }
+  }, [getOriginalMediaItem, isPlaying, mediaClipHasVisual, playheadPosition, project.id, project.timeline.tracks]);
+
   const activePreviewMediaId = useMemo(
     () => getActivePreviewMediaId(timelineTracks, playheadPosition, getOriginalMediaItem, mediaClipHasVisual),
     [getOriginalMediaItem, mediaClipHasVisual, playheadPosition, timelineTracks],
@@ -2075,7 +2088,7 @@ export const Preview: React.FC = () => {
    * @param timelinePosition - The current position in the timeline
    */
   const setupAudioFromAudioTrack = useCallback(
-    async (timelinePosition: number): Promise<void> => {
+    async (timelinePosition: number, isStillActive: () => boolean = () => true): Promise<void> => {
       const tracks = timelineTracksRef.current;
       const audioTracks = tracks.filter(
         (track) => !track.hidden && trackHasAudioItems(project, track.id),
@@ -2115,8 +2128,9 @@ export const Preview: React.FC = () => {
             timelinePosition < clipEnd
           ) {
             const mediaItem = getOriginalMediaItem(audioClip.mediaId);
-            if (mediaItem && getManagedBridge()?.ensureAudioStream) {
-              const uri=await prepareNativeAudio(mediaItem,audioClip.audioTrackIndex??0,audioClip.sourceChannelIndex);
+            if (mediaItem && (getManagedBridge()?.ensureAudioStream || isEligibleOriginalMonoWav(mediaItem,audioClip.audioTrackIndex??0,audioClip.sourceChannelIndex))) {
+              const uri=await prepareNativeAudio(mediaItem,audioClip.audioTrackIndex??0,audioClip.sourceChannelIndex,isStillActive);
+              if(!isStillActive())return;
               if(uri)scheduledClips.push(nativeSchedule(audioClip,audioTrack,uri));
               continue;
             }
@@ -2209,7 +2223,7 @@ export const Preview: React.FC = () => {
         }
       }
 
-      if (scheduledClips.length > 0) {
+      if (scheduledClips.length > 0 && isStillActive()) {
         await audioGraph.resume();
         audioGraph.scheduleClips(scheduledClips);
       }
@@ -2242,7 +2256,7 @@ export const Preview: React.FC = () => {
           continue;
         }
         const cacheKey = getAudioBufferCacheKey(clip.mediaId, clip.audioTrackIndex, clip.sourceChannelIndex);
-        if(getManagedBridge()?.ensureAudioStream){const item=getOriginalMediaItem(clip.mediaId);if(item)await prepareNativeAudio(item,clip.audioTrackIndex??0,clip.sourceChannelIndex);continue;}
+        if(getManagedBridge()?.ensureAudioStream){const item=getOriginalMediaItem(clip.mediaId);if(item){const projectId=project.id;const trackId=track.id;const clipId=clip.id;await prepareNativeAudio(item,clip.audioTrackIndex??0,clip.sourceChannelIndex,()=>useProjectStore.getState().project.id===projectId&&getOriginalMediaItem(clip.mediaId)===item&&timelineTracksRef.current.some((currentTrack)=>currentTrack.id===trackId&&currentTrack.clips.some((currentClip)=>currentClip.id===clipId&&currentClip.mediaId===clip.mediaId&&currentClip.audioTrackIndex===clip.audioTrackIndex&&currentClip.sourceChannelIndex===clip.sourceChannelIndex)));}continue;}
         let audioBuffer: AudioBuffer | null | undefined =
           audioBufferCacheRef.current.get(cacheKey);
 
@@ -4767,7 +4781,14 @@ export const Preview: React.FC = () => {
 
           const canDecode = await videoTrack.canDecode();
           if (!canDecode || !isActive || !reservedLease?.active) {
-            if (isActive && !canDecode) failProxyPlayback(clip.mediaId, mediaBlob);
+            if (isActive && !canDecode) {
+              const originalItem = getOriginalMediaItem(clip.mediaId);
+              const fallback = originalItem && nativeSource ? handleNativeOriginalPreviewFailure(project.id, originalItem, nativeSource) : "stale";
+              if (fallback === "fallback-started") {
+                setVideoDecoderNotice("Original camera could not decode; preparing a proxy for the next pause or seek.");
+                pause();
+              } else if (mediaItem.blob !== originalItem?.blob) failProxyPlayback(clip.mediaId, mediaBlob);
+            }
             return null;
           }
 
@@ -4849,7 +4870,7 @@ export const Preview: React.FC = () => {
             mediaDuration || Infinity,
           );
 
-          await setupAudioFromAudioTrack(timelinePosition);
+          await setupAudioFromAudioTrack(timelinePosition, () => isActive);
           if (!isActive) {
             releaseDecoder();
             return;
@@ -5178,7 +5199,14 @@ export const Preview: React.FC = () => {
 
           const canDecode = await videoTrack.canDecode();
           if (!canDecode || !isActive || !reservedLease?.active) {
-            if (isActive && !canDecode) failProxyPlayback(clip.mediaId, mediaBlob);
+            if (isActive && !canDecode) {
+              const originalItem = getOriginalMediaItem(clip.mediaId);
+              const fallback = originalItem && nativeSource ? handleNativeOriginalPreviewFailure(project.id, originalItem, nativeSource) : "stale";
+              if (fallback === "fallback-started") {
+                setVideoDecoderNotice("Original camera could not decode; preparing a proxy for the next pause or seek.");
+                pause();
+              } else if (mediaItem.blob !== originalItem?.blob) failProxyPlayback(clip.mediaId, mediaBlob);
+            }
             return null;
           }
 

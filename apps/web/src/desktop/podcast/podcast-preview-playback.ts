@@ -36,3 +36,17 @@ export function episodeSecondsForSource(rawSourceSeconds: number, scale: number,
 export function sourceSecondsForEpisode(episodeSeconds: number, scale: number, offsetSeconds: number): number {
   return (episodeSeconds - offsetSeconds) / scale;
 }
+
+export async function takeOverPreviewSourceAtBoundary(args: {
+  isPlaying: () => boolean;
+  isCurrent: () => boolean;
+  currentUrl: string | null;
+  resolve: () => Promise<string>;
+  publish: (url: string) => void;
+}): Promise<boolean> {
+  if (args.isPlaying()) return false;
+  const url = await args.resolve();
+  if (!args.isCurrent() || args.isPlaying() || !url || url === args.currentUrl) return false;
+  args.publish(url);
+  return true;
+}

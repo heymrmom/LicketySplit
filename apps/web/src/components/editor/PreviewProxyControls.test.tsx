@@ -45,6 +45,10 @@ describe("visible proxy workflow", () => {
     expect(screen.getByText("Preparing preview")).toBeInTheDocument();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
 
+    act(() => previewProxyCache.store.setState({ entries: { [item.id]: { ...entry, status: "encoding", originalAvailable: true } } }));
+    expect(screen.getByRole("status")).toHaveTextContent("Original available · optimizing");
+    expect(screen.getAllByText("Original available · optimizing")).toHaveLength(2);
+
     act(() => previewProxyCache.store.setState({ entries: { [item.id]: { ...entry, status: "ready", blob: new Blob(["proxy"]), width: 960, height: 540 } } }));
     expect(screen.getByText("Preview prepared")).toBeInTheDocument();
     expect(screen.getByText(/Disk preview prepared · playback verifies the source when opened/)).toBeInTheDocument();

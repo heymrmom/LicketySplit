@@ -7,14 +7,15 @@ import { ToolcraftDialog as Dialog, ToolcraftDialogHeader as DialogHeader } from
 import { ToolcraftLayout as Layout, ToolcraftLayoutContent as LayoutContent, ToolcraftLayoutFooter as LayoutFooter } from "@licketysplit/ui";
 import { AlertTriangle, ArrowLeft, ArrowRight, Clock3, Pause, Play, Plus, Trash2 } from "@/icons/lucide-compat";
 import { useProjectStore } from "../../stores/project-store";
-import { cancelNativeMediaBackground, runNativeMediaBackground } from "../../stores/preview-proxy-store";
+import { cancelNativeMediaBackground, handleNativeOriginalPreviewFailure, runNativeMediaBackground } from "../../stores/preview-proxy-store";
 import { applyPodcastSetup } from "../../services/lickety/podcast";
-import { resolveDesktopMedia, registerDesktopMedia } from "../../services/lickety/desktop-media";
+import { resolveDesktopMedia } from "../../services/lickety/desktop-media";
+import { resolveDesktopAudioPreview } from "../../services/lickety/desktop-audio-preview";
 import { readPodcastWizardCheckpoint, resolvePodcastPictureGapPolicy, selectablePodcastMedia, buildPodcastReviewPoints, podcastWorkFraction, type PodcastPictureGapPolicy, type PodcastWorkItem, type PodcastWorkLedger } from "./podcast-ui-model";
 import { loadPodcastCheckpoint, savePodcastCheckpoint } from "./podcast-project-draft";
 import { moveGroupAsset, splitPodcastGroup, mergePodcastGroups, excludePodcastAsset, simultaneousPodcastSuggestions, podcastRecorderTimingLinked, setPodcastRecorderTimingLinked } from "./podcast-group-edits";
 import { clipReview, formatReviewTime, PACKET_TIMING_WARNING, podcastHasCurrentHumanReview, podcastReviewState, podcastTimelineModel, podcastTimingRelations, podcastUnknownCoverage, reviewComparison, reviewEvidenceCategories, reviewLabel, timelinePercent, timelineWaveformPath, unwaivedTimingBlockers } from "./podcast-review-model";
-import { advancePreviewClock, episodeSecondsForSource, PREVIEW_HARD_DRIFT_SECONDS, PREVIEW_UI_INTERVAL_MS, previewCorrection, sourceSecondsForEpisode } from "./podcast-preview-playback";
+import { advancePreviewClock, episodeSecondsForSource, PREVIEW_HARD_DRIFT_SECONDS, PREVIEW_UI_INTERVAL_MS, previewCorrection, sourceSecondsForEpisode, takeOverPreviewSourceAtBoundary } from "./podcast-preview-playback";
 
 type PodcastUpdatePatch = Omit<Parameters<PodcastBridge["update"]>[0], "setupId">;
 
@@ -591,7 +592,7 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
       cancelNativeMediaBackground("podcast-assigned-program-audio");
       programAudioRequests.current = null;
     }
-    if (!isOpen || !setup || setup.projectId !== project.id || !assignedAudio.length || !window.licketysplit?.lickety?.ensureAudioStream) {
+    if (!isOpen || !setup || setup.projectId !== project.id || !assignedAudio.length) {
       setProgramAudioPreparation("idle");
       return;
     }
@@ -605,12 +606,13 @@ export function PodcastSetupDialog({ isOpen, onClose }: { isOpen: boolean; onClo
           if (active.cancelled || programAudioRequests.current !== active || useProjectStore.getState().project.id !== project.id) return;
           const podcastAsset = setup.analysis.assets.find((candidate) => candidate.id === source.assetId);
           const item = podcastAsset && useProjectStore.getState().getMediaItem(podcastAsset.mediaId);
+          const podcastAudioStreams = (podcastAsset?.streams ?? []).filter((stream) => stream.kind === "audio");
+          const sourceIsSoleAudioStream = podcastAudioStreams.length === 1 && podcastAudioStreams[0]?.index === source.streamIndex && source.streamIndex === 0 && source.trackIndex === 0;
           const placement = setup.placements.find((candidate) => candidate.assetId === source.assetId);
           if (placement?.status === "excluded" || setup.decodeFailure?.resolution === "unresolved-excluded" && setup.decodeFailure.assetId === source.assetId) continue;
           if (!podcastAsset || !item || item.isPlaceholder) { unavailableSource = true; continue; }
-          const registered = await registerDesktopMedia(item);
+          await resolveDesktopAudioPreview(item, source.trackIndex, source.channel, { requestId: active.requestIds[index], priority: "background" }, () => !active.cancelled && programAudioRequests.current === active && useProjectStore.getState().project.id === project.id, sourceIsSoleAudioStream);
           if (active.cancelled || programAudioRequests.current !== active || useProjectStore.getState().project.id !== project.id) return;
-          await window.licketysplit!.lickety!.ensureAudioStream(registered.identity.assetId, source.trackIndex, source.channel, { requestId: active.requestIds[index], priority: "background" });
         }
         if (!active.cancelled && programAudioRequests.current === active) setProgramAudioPreparation(unavailableSource ? "error" : "prepared");
       } catch {
@@ -795,6 +797,11 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoLeaseRef = useRef<VideoDecoderLease | null>(null);
   const videoLeasePinnedRef = useRef(false);
+  const videoLoadGenerationRef = useRef(0);
+  const videoBoundaryGenerationRef = useRef(0);
+  const previewPlayingRef = useRef(false);
+  const refreshVideoAtBoundaryRef = useRef<() => void>(() => undefined);
+  const videoFallbackRef = useRef<{ mediaId: string; attempted: boolean; requestId?: string } | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const advancedTimingRef = useRef<HTMLDetailsElement | null>(null);
   const previewClockRef = useRef({ timelineSeconds: 0, wallMs: 0 });
@@ -843,9 +850,13 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     previewRequirementsRef.current = { video: false, audio: false };
     videoRef.current?.pause();
     audioRef.current?.pause();
+    previewClockRef.current.timelineSeconds = Math.max(0, previewClockRef.current.timelineSeconds);
+    setPlayheadSeconds(previewClockRef.current.timelineSeconds);
+    previewPlayingRef.current = false;
     setVideoPreviewPinned(false);
     setPreviewPlaying(false);
     setPreviewStatus("idle");
+    refreshVideoAtBoundaryRef.current();
   };
 
   const handlePreviewReady = (source: "video" | "audio"): void => {
@@ -865,6 +876,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     }
     previewReadyRef.current = true;
     setPreviewStatus("ready");
+    previewPlayingRef.current = true;
     setPreviewPlaying(true);
   };
 
@@ -881,6 +893,33 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     if (attempt !== null) handlePreviewFailure(attempt, "The selected source media could not be read. Check the original recording and try again.");
   };
 
+  const handleVideoPreviewError = (): void => {
+    const item = videoMedia;
+    const fallback = videoFallbackRef.current;
+    if (!item || !fallback || fallback.mediaId !== item.id || fallback.attempted) { handlePreviewMediaError(); return; }
+    const failedUri = videoRef.current?.currentSrc || videoUrl || "";
+    if (!failedUri.startsWith("licketysplit-media://") || !failedUri.endsWith("/original")) { handlePreviewMediaError(); return; }
+    // The store can mark a prepared runtime as failed, but review may have
+    // resolved this original before the store prepared that source.
+    handleNativeOriginalPreviewFailure(setup.projectId, item, failedUri);
+    fallback.attempted = true;
+    const generation = videoLoadGenerationRef.current;
+    const requestId = crypto.randomUUID();
+    fallback.requestId = requestId;
+    void resolveDesktopMedia(item, "preview", true, { requestId, priority: "foreground" }).then((proxyUrl) => {
+      const lease = videoLeaseRef.current;
+      if (generation !== videoLoadGenerationRef.current || !lease?.active || fallback.mediaId !== videoMedia?.id) {
+        if (proxyUrl.startsWith("blob:")) URL.revokeObjectURL(proxyUrl);
+        return;
+      }
+      videoRef.current?.pause();
+      setVideoUrl(proxyUrl);
+      lease.unpin();
+    }).catch(() => {
+      if (generation === videoLoadGenerationRef.current) handlePreviewMediaError();
+    });
+  };
+
   const handlePreviewFailure = (attempt: number, message = "The selected source could not start playback."): void => {
     if (previewAttemptRef.current !== attempt) return;
     activePreviewAttemptRef.current = null;
@@ -888,6 +927,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     audioRef.current?.pause();
     setVideoPreviewPinned(false);
     setPreviewPlaying(false);
+    previewPlayingRef.current = false;
     setPreviewStatus("error");
     setPreviewError(message);
   };
@@ -897,6 +937,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     activePreviewAttemptRef.current = null;
     setPreviewStatus("idle");
     setPreviewPlaying(false);
+    previewPlayingRef.current = false;
     videoUsableRef.current = Boolean(videoRef.current && videoRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA);
     audioUsableRef.current = Boolean(audioUrl && audioRef.current && audioRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA);
     videoRef.current?.pause();
@@ -912,6 +953,8 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     setVideoUrl(null);
     if (!videoMedia) return;
     let active = true;
+    const generation = ++videoLoadGenerationRef.current;
+    videoFallbackRef.current = { mediaId: videoMedia.id, attempted: false };
     const requestId = crypto.randomUUID();
     let url: string | null = null;
     let lease: VideoDecoderLease | null = null;
@@ -950,7 +993,9 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     });
     return () => {
       active = false;
+      if (videoLoadGenerationRef.current === generation) videoLoadGenerationRef.current += 1;
       void window.licketysplit?.lickety?.cancelMedia?.(requestId).catch(() => undefined);
+      if (videoFallbackRef.current?.requestId) void window.licketysplit?.lickety?.cancelMedia?.(videoFallbackRef.current.requestId).catch(() => undefined);
       if (videoLeaseRef.current === lease) {
         videoLeaseRef.current = null;
         videoLeasePinnedRef.current = false;
@@ -976,15 +1021,17 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     const requestId = crypto.randomUUID();
     setAudioPreparing(true);
     const bridge = window.licketysplit?.lickety;
-    if (!bridge?.ensureAudioStream) { setAudioUrl(null); setAudioPreparing(false); setAudioPreparationError("The selected original audio is not registered for preview yet."); return; }
+    if (!bridge) { setAudioUrl(null); setAudioPreparing(false); setAudioPreparationError("Desktop audio preview is unavailable."); return; }
     const selectedAsset = setup.analysis.assets.find((asset) => asset.id === activeAudio.source.assetId);
-    const audioOrdinal = selectedAsset?.streams?.filter((stream) => stream.kind === "audio").findIndex((stream) => stream.index === activeAudio.source.streamIndex) ?? -1;
+    const selectedAudioStreams = selectedAsset?.streams?.filter((stream) => stream.kind === "audio") ?? [];
+    const audioOrdinal = selectedAudioStreams.findIndex((stream) => stream.index === activeAudio.source.streamIndex);
     if (audioOrdinal < 0) {
       setAudioPreparing(false);
       setAudioPreparationError("The selected audio stream is no longer available in this original.");
       return () => { active = false; };
     }
-    void registerDesktopMedia(audioMedia).then((asset) => bridge.ensureAudioStream(asset.identity.assetId, audioOrdinal, activeAudio.source.channel, { requestId, priority: "foreground" })).then((url) => { if (active) setAudioUrl(url); }).catch((cause: unknown) => { if (active) { setAudioPreparing(false); setAudioPreparationError(friendlyError(cause)); } });
+    const selectedSoleAudioStream = selectedAudioStreams.length === 1 && selectedAudioStreams[0]?.index === activeAudio.source.streamIndex && activeAudio.source.streamIndex === 0 && audioOrdinal === 0;
+    void resolveDesktopAudioPreview(audioMedia, audioOrdinal, activeAudio.source.channel, { requestId, priority: "foreground" }, () => active && useProjectStore.getState().project.id === setup.projectId, selectedSoleAudioStream).then((url) => { if (active && url) setAudioUrl(url); }).catch((cause: unknown) => { if (active) { setAudioPreparing(false); setAudioPreparationError(friendlyError(cause)); } });
     return () => { active = false; void bridge.cancelMedia?.(requestId).catch(() => undefined); };
   }, [audioMedia, activeAudio, setup.analysis.assets, audioRetryToken]);
 
@@ -1029,6 +1076,20 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     return episodeSecondsForSource(rawSource, mapping.scale, mapping.offsetSeconds);
   };
 
+  refreshVideoAtBoundaryRef.current = () => {
+    const item = videoMedia;
+    if (!item || previewPlayingRef.current) return;
+    const generation = ++videoBoundaryGenerationRef.current;
+    const requestId = crypto.randomUUID();
+    void takeOverPreviewSourceAtBoundary({
+      isPlaying: () => previewPlayingRef.current,
+      isCurrent: () => generation === videoBoundaryGenerationRef.current && videoMedia?.id === item.id && useProjectStore.getState().project.id === setup.projectId,
+      currentUrl: videoUrl,
+      resolve: () => resolveDesktopMedia(item, "preview", false, { requestId, priority: "foreground" }),
+      publish: (url) => setVideoUrl(url),
+    }).catch(() => undefined);
+  };
+
   const seek = (seconds: number) => {
     const next = Math.max(0, seconds);
     setPlayheadSeconds(next);
@@ -1040,6 +1101,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     else videoRef.current?.pause();
     if (audioRef.current && audioTime?.inBounds) { audioRef.current.currentTime = audioTime.fileRelative; audioRef.current.playbackRate = audioTime.rate; }
     else audioRef.current?.pause();
+    if (!previewPlayingRef.current) refreshVideoAtBoundaryRef.current();
     setPreviewError(null);
   };
 
@@ -1056,6 +1118,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     previewReadyRef.current = (!previewRequirementsRef.current.video || videoUsableRef.current) && (!previewRequirementsRef.current.audio || audioUsableRef.current);
     setPreviewError(null);
     setPreviewStatus("starting");
+    previewPlayingRef.current = false;
     setPreviewPlaying(false);
     seek(playheadSeconds);
     const playPromises = [videoSource?.inBounds ? video?.play() : undefined, audioSource?.inBounds ? audio?.play() : undefined].filter((promise): promise is Promise<void> => Boolean(promise));
@@ -1064,7 +1127,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     if (previewAttemptRef.current !== attempt) return;
     if (results.some((result) => result.status === "rejected")) { handlePreviewFailure(attempt); return; }
     if (!previewReadyRef.current) setPreviewStatus("buffering");
-    else { setPreviewStatus("ready"); setPreviewPlaying(true); }
+    else { setPreviewStatus("ready"); previewPlayingRef.current = true; setPreviewPlaying(true); }
     setVideoPreviewPinned(Boolean(videoSource?.inBounds && video && !video.paused));
   };
 
@@ -1210,7 +1273,7 @@ function PodcastTimingReview({ setup, groups, mediaItems, audioChoices, busy, st
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
       <section className="space-y-3 rounded border border-border bg-bg-1 p-3" aria-label="Synchronized source preview">
         <div className="grid gap-2 sm:grid-cols-2"><label className="space-y-1 text-xs"><span>Camera picture</span><select aria-label="Camera source to preview" className="block w-full rounded border border-border bg-bg px-2 py-2 text-sm" value={videoAssetId} onChange={(event) => setVideoAssetId(event.target.value)} disabled={busy}>{videoAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label><label className="space-y-1 text-xs"><span>Sound to compare</span><select aria-label="Audio channel to preview" className="block w-full rounded border border-border bg-bg px-2 py-2 text-sm" value={audioChoiceId} onChange={(event) => setAudioChoiceId(event.target.value)} disabled={busy}>{audioChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}</select></label></div>
-        <div className="relative flex aspect-video max-h-[28vh] min-h-[160px] items-center justify-center overflow-hidden rounded bg-black"><video key={videoAssetId} ref={videoRef} src={videoUrl ?? undefined} muted preload="metadata" playsInline onCanPlay={() => handlePreviewReady("video")} onPlaying={() => handlePreviewReady("video")} onWaiting={() => handlePreviewBuffering("video")} onStalled={() => handlePreviewBuffering("video")} onSeeking={() => handlePreviewBuffering("video")} onSeeked={() => handlePreviewReady("video")} onError={handlePreviewMediaError} aria-label="Muted podcast source picture preview" className="max-h-full max-w-full object-contain" />{activeVideo && !videoAtPlayhead?.inBounds ? <div role="status" className="absolute inset-0 z-10 flex items-center justify-center bg-black px-4 text-center text-sm text-white">No picture from this source at this time.</div> : !videoUrl && <span className="text-xs text-white/70">{activeVideo ? "Loading camera preview…" : "Choose a camera source"}</span>}{audioPreparing && <div role="status" aria-label="Preparing selected sound" aria-live="polite" aria-atomic="true" className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/85 px-4 text-center text-white"><span aria-hidden="true" className="h-6 w-6 animate-spin rounded-full border-2 border-white/40 border-t-white motion-reduce:animate-none" /><strong className="text-sm">Preparing {preparationName}…</strong><span className="text-xs text-white">{activeAudio?.label ?? "Selected sound"}</span></div>}{(audioPreparationError || previewStatus === "error") && <div role="alert" className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/90 px-4 text-center text-white"><strong className="text-sm">{audioPreparationError ? "Sound preparation failed" : "Playback could not start"}</strong><span className="text-xs">{audioPreparationError ?? previewError}</span><span className="text-xs">{activeAudio?.label ?? "Selected sound"}</span><button type="button" onClick={() => audioPreparationError ? setAudioRetryToken((token) => token + 1) : void togglePlayback()} className="min-h-9 rounded border border-white/60 px-3 text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">{audioPreparationError ? "Retry sound preparation" : "Retry playback"}</button></div>}{!audioPreparing && !audioPreparationError && showPreviewWait && <div role="status" aria-live="polite" aria-atomic="true" className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/80 px-4 text-center text-white"><span aria-hidden="true" className="h-6 w-6 animate-spin rounded-full border-2 border-white/40 border-t-white motion-reduce:animate-none" /><strong className="text-sm">{previewStatus === "starting" ? "Starting playback…" : "Buffering source media…"}</strong><span className="text-xs">{activeAudio?.label ?? activeVideo?.name ?? "Selected source"}</span></div>}</div>
+        <div className="relative flex aspect-video max-h-[28vh] min-h-[160px] items-center justify-center overflow-hidden rounded bg-black"><video key={videoAssetId} ref={videoRef} src={videoUrl ?? undefined} muted preload="metadata" playsInline onCanPlay={() => handlePreviewReady("video")} onPlaying={() => handlePreviewReady("video")} onWaiting={() => handlePreviewBuffering("video")} onStalled={() => handlePreviewBuffering("video")} onSeeking={() => handlePreviewBuffering("video")} onSeeked={() => handlePreviewReady("video")} onError={handleVideoPreviewError} aria-label="Muted podcast source picture preview" className="max-h-full max-w-full object-contain" />{activeVideo && !videoAtPlayhead?.inBounds ? <div role="status" className="absolute inset-0 z-10 flex items-center justify-center bg-black px-4 text-center text-sm text-white">No picture from this source at this time.</div> : !videoUrl && <span className="text-xs text-white/70">{activeVideo ? "Loading camera preview…" : "Choose a camera source"}</span>}{audioPreparing && <div role="status" aria-label="Preparing selected sound" aria-live="polite" aria-atomic="true" className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/85 px-4 text-center text-white"><span aria-hidden="true" className="h-6 w-6 animate-spin rounded-full border-2 border-white/40 border-t-white motion-reduce:animate-none" /><strong className="text-sm">Preparing {preparationName}…</strong><span className="text-xs text-white">{activeAudio?.label ?? "Selected sound"}</span></div>}{(audioPreparationError || previewStatus === "error") && <div role="alert" className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/90 px-4 text-center text-white"><strong className="text-sm">{audioPreparationError ? "Sound preparation failed" : "Playback could not start"}</strong><span className="text-xs">{audioPreparationError ?? previewError}</span><span className="text-xs">{activeAudio?.label ?? "Selected sound"}</span><button type="button" onClick={() => audioPreparationError ? setAudioRetryToken((token) => token + 1) : void togglePlayback()} className="min-h-9 rounded border border-white/60 px-3 text-sm underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">{audioPreparationError ? "Retry sound preparation" : "Retry playback"}</button></div>}{!audioPreparing && !audioPreparationError && showPreviewWait && <div role="status" aria-live="polite" aria-atomic="true" className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/80 px-4 text-center text-white"><span aria-hidden="true" className="h-6 w-6 animate-spin rounded-full border-2 border-white/40 border-t-white motion-reduce:animate-none" /><strong className="text-sm">{previewStatus === "starting" ? "Starting playback…" : "Buffering source media…"}</strong><span className="text-xs">{activeAudio?.label ?? activeVideo?.name ?? "Selected source"}</span></div>}</div>
         <audio key={`${audioChoiceId}:${audioRetryToken}`} ref={audioRef} src={audioUrl ?? undefined} preload="auto" onCanPlay={() => handlePreviewReady("audio")} onPlaying={() => handlePreviewReady("audio")} onWaiting={() => handlePreviewBuffering("audio")} onStalled={() => handlePreviewBuffering("audio")} onSeeking={() => handlePreviewBuffering("audio")} onSeeked={() => handlePreviewReady("audio")} onError={() => { const message = "The selected source media could not be read. Check the original recording and try again."; setAudioPreparing(false); setAudioPreparationError(message); handlePreviewMediaError(); }} aria-label="Soloed podcast comparison audio" />
         {waveform && activeChannel && <svg viewBox="0 0 480 34" role="img" aria-label="Prepared audio waveform summary" className="h-8 w-full text-accent"><path d={timelineWaveformPath(waveform, activeChannel, waveform.sourceStartSeconds, waveform.sourceStartSeconds + waveform.durationSeconds, 480, 34)} fill="none" stroke="currentColor" strokeWidth="1" /></svg>}
         {comparison && <div className="flex flex-wrap items-center gap-2 text-xs text-fg-2"><span>{comparison.evidence ? "Connected timing evidence is saved for this recording." : "Comparison channel is for listening only; no timing evidence is implied."}</span>{comparison.evidence && comparisonChoice && <button type="button" disabled={busy} onClick={() => { setAudioChoiceId(comparisonChoice.id); seek(comparison.start); }} className="min-h-8 rounded border border-border px-2 underline">Review saved comparison</button>}</div>}

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { heavyQueue } from "./media-jobs";
-import { HeaderInspectionQueue, inspectOriginal } from "./import-inspection";
+import { HeaderInspectionQueue, inspectOriginal, parseOriginalMetadata } from "./import-inspection";
 
 const ffmpegHeader = "Duration: 00:00:01.00, start: 0.000000\n Stream #0:0: Video: h264, yuv420p, 1920x1080, 30 fps";
 
@@ -55,5 +55,15 @@ describe("original metadata inspection scheduling", () => {
     await Promise.all([first, second]);
     expect(calls).toBe(2);
     expect(maxActive).toBe(1);
+  });
+
+  it("preserves the inspected WAV container for a supported mono PCM source", () => {
+    const metadata = parseOriginalMetadata("Input #0, wav, from 'mic.wav':\nDuration: 00:00:10.00, start: 0.000000, bitrate: 706 kb/s\nStream #0:0: Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s", 1000);
+    expect(metadata).toMatchObject({ mimeType: "audio/wav", container: "wav", codec: "pcm_s16le", channels: 1, audioTrackCount: 1 });
+  });
+
+  it("does not label an AIFF file as WAV based on its PCM codec", () => {
+    const metadata = parseOriginalMetadata("Input #0, aiff, from 'mic.aiff':\nDuration: 00:00:10.00, start: 0.000000, bitrate: 706 kb/s\nStream #0:0: Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s", 1000);
+    expect(metadata).toMatchObject({ mimeType: "audio/aiff", container: "aiff", codec: "pcm_s16le", channels: 1, audioTrackCount: 1 });
   });
 });

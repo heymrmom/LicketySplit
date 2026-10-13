@@ -190,6 +190,7 @@ declare global {
         referenceFile(mediaId:string,file:File):Promise<{originalUri:string}|null>;
         referencePath(mediaId:string,path:string):Promise<{originalUri:string}>;
         originalUri(mediaId:string):Promise<string|undefined>;
+        originalPreviewUri?(mediaId:string):Promise<string|undefined>;
         registerFile(mediaId:string,file:Blob):Promise<RegisteredAsset>;
         registerPath(mediaId:string,path:string):Promise<RegisteredAsset>;
         findAsset(mediaId:string):Promise<RegisteredAsset|undefined>;
@@ -198,6 +199,7 @@ declare global {
         resolve(assetId:string,purpose:"original"|"proxy"):Promise<string>;
         ensureAudioStream(assetId:string,trackIndex:number,sourceChannelIndex?:number,options?:NativeMediaRequestOptions):Promise<string>;
         ensureProxy(assetId:string,options?:NativeMediaRequestOptions):Promise<ProxyReceipt>;
+        peekProxy?(assetId:string):Promise<ProxyReceipt|undefined>;
         cancelMedia(requestId:string):Promise<void>;
       };
       podcast?: PodcastBridge;

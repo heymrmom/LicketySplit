@@ -12,6 +12,8 @@ export interface PreviewProxyEntry {
   width?: number;
   height?: number;
   error?: string;
+  /** A fingerprint-validated native original URI is available while optimization runs. */
+  originalAvailable?: boolean;
   createdAt: number;
 }
 export interface PreviewProxyState {

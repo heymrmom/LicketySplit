@@ -9,7 +9,7 @@ export const PreviewProxyBadge: React.FC<{ mediaId: string }> = ({ mediaId }) =>
   const entry = usePreviewProxyStore((state) => state.entries[mediaId]);
   if (!entry) return null;
   const desktop = desktopMediaAvailable();
-  const label = entry.status === "ready" ? (desktop ? "Preview prepared" : entry.enabled ? "Proxy preview" : "Original preview") : entry.status === "encoding" ? desktop ? "Preparing preview" : entry.progress > 0 ? `Proxy ${Math.round(entry.progress * 100)}%` : "Preparing proxy" : entry.status === "queued" ? desktop ? "Preview queued" : "Proxy queued" : desktop ? "Preview preparation failed" : "Original preview";
+  const label = entry.status === "ready" ? (desktop ? "Preview prepared" : entry.enabled ? "Proxy preview" : "Original preview") : entry.status === "encoding" ? desktop ? entry.originalAvailable ? "Original available · optimizing" : "Preparing preview" : entry.progress > 0 ? `Proxy ${Math.round(entry.progress * 100)}%` : "Preparing proxy" : entry.status === "queued" ? desktop ? entry.originalAvailable ? "Original available · optimizing queued" : "Preview queued" : "Proxy queued" : desktop ? "Preview preparation failed" : "Original preview";
   return <span className="absolute z-10 left-1 top-1 max-w-[calc(100%-8px)] truncate rounded bg-black/75 px-1.5 py-0.5 text-[9px] text-white pointer-events-none">{label}</span>;
 };
 
@@ -32,7 +32,7 @@ export const PreviewProxyControls: React.FC<{ item: MediaItem }> = ({ item }) =>
       {entry?.status === "ready" && desktop && entry.enabled && <p className="text-[11px] text-fg-muted">Disk preview prepared · playback verifies the source when opened.</p>}
       {entry?.status === "ready" && !desktop && entry.width && entry.height && <p className="text-[11px] text-fg-muted">Proxy ready · {entry.width} × {entry.height} · {((entry.blob?.size ?? 0) / 1024 / 1024).toFixed(1)} MB</p>}
       {busy ? <>
-        <div role="status" className="text-[11px] text-fg-muted">{entry.status === "queued" ? "Queued — one video at a time" : desktop ? "Preparing preview…" : entry.progress > 0 ? `Creating proxy · ${Math.round(entry.progress * 100)}%` : "Preparing proxy…"}</div>
+        <div role="status" className="text-[11px] text-fg-muted">{entry.status === "queued" ? entry.originalAvailable ? "Original available · optimization queued" : "Queued — one video at a time" : desktop ? entry.originalAvailable ? "Original available · optimizing" : "Preparing preview…" : entry.progress > 0 ? `Creating proxy · ${Math.round(entry.progress * 100)}%` : "Preparing proxy…"}</div>
         {!desktop && entry.progress > 0 && <progress aria-label={`Proxy progress for ${item.name}`} value={entry.progress} max={1} className="w-full h-1.5 accent-[var(--accent)]" />}
         <button type="button" className="min-h-[40px] w-full rounded border border-border text-xs text-fg-2" onClick={() => previewProxyCache.remove(item.id)}>Cancel proxy</button>
       </> : <>

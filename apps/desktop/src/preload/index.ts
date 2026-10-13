@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld("licketysplit", {
     referenceFile: (mediaId:string,file:File) => {const path=webUtils.getPathForFile(file);return path?ipcRenderer.invoke(CHANNELS.licketyReferenceOriginal,{mediaId,path}):Promise.resolve(null);},
     referencePath: (mediaId:string,path:string) => ipcRenderer.invoke(CHANNELS.licketyReferenceOriginal,{mediaId,path,managed:true}),
     originalUri: (mediaId:string) => ipcRenderer.invoke(CHANNELS.licketyOriginalUri,{mediaId}),
+    originalPreviewUri: (mediaId:string) => ipcRenderer.invoke(CHANNELS.licketyOriginalPreviewUri,{mediaId}),
     registerFile: (mediaId: string, file: File) => ipcRenderer.invoke(CHANNELS.licketyRegisterAsset, {mediaId, path:webUtils.getPathForFile(file)}),
     registerPath: (mediaId: string, path: string) => ipcRenderer.invoke(CHANNELS.licketyRegisterAsset, {mediaId,path,managed:true}),
     findAsset: (mediaId: string) => ipcRenderer.invoke(CHANNELS.licketyFindAsset, {mediaId}),
@@ -74,6 +75,7 @@ contextBridge.exposeInMainWorld("licketysplit", {
     resolve: (assetId: string, purpose: string) => ipcRenderer.invoke(CHANNELS.licketyResolve, {assetId,purpose}),
     ensureAudioStream: (assetId:string,trackIndex:number,sourceChannelIndex?:number,options?:{requestId?:string;priority?:"foreground"|"background"}) => ipcRenderer.invoke(CHANNELS.licketyEnsureAudioStream,{assetId,trackIndex,sourceChannelIndex,options}),
     ensureProxy: (assetId: string,options?:{requestId?:string;priority?:"foreground"|"background"}) => ipcRenderer.invoke(CHANNELS.licketyEnsureProxy, {assetId,options}),
+    peekProxy: (assetId: string) => ipcRenderer.invoke(CHANNELS.licketyPeekProxy, {assetId}),
     cancelMedia: (requestId: string) => ipcRenderer.invoke(CHANNELS.licketyCancelMedia, {id:requestId}),
   },
   podcast: {

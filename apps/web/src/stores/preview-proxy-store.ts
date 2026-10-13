@@ -2,7 +2,7 @@ import {useTimelineStore} from "./timeline-store";
 import {useUIStore} from "./ui-store";
 import {getMediaBridge} from "../bridges/media-bridge";
 import {bindNativeMediaSources} from "@licketysplit/core";
-import {desktopMediaAvailable,registerDesktopMedia,resolveDesktopMedia} from "../services/lickety/desktop-media";
+import {desktopMediaAvailable,registerDesktopMedia,resolveDesktopMedia,resolveDesktopOriginalPreview} from "../services/lickety/desktop-media";
 import { useStore } from "zustand";
 import { FFmpegFallback, MediaImportService, getMediaEngine } from "@licketysplit/core";
 import { PreviewProxyCache, type PreviewProxyState } from "../services/preview-proxy-cache";
@@ -36,8 +36,9 @@ export const previewProxyCache = new PreviewProxyCache({
 });
 
 const forcedNativeProxy=new WeakSet<object>();
-type NativePreparation={item:import("@licketysplit/core").MediaItem;ready:boolean;cancelled?:boolean;requestId:string};
+type NativePreparation={item:import("@licketysplit/core").MediaItem;ready:boolean;published?:boolean;originalUri?:string;previewUri?:string;boundPreviewUri?:string;originalAvailable?:boolean;cancelled?:boolean;requestId:string};
 const nativePrepared=new WeakMap<object, NativePreparation>();
+const nativeOriginalFailureAttempted=new WeakSet<object>();
 let activeNativePreparation:{projectId:string;source:import("@licketysplit/core").MediaItem;runtime:NativePreparation}|null=null;
 const activeNativeForeground=new Map<string,{projectId:string;source:import("@licketysplit/core").MediaItem;runtime:NativePreparation}>();
 let nativePlannerRunning=false;
@@ -49,7 +50,7 @@ export function cancelNativeMediaBackground(key:string):void{for(let index=nativ
 export function runNativeMediaBackground<T>(request:()=>Promise<T>,key?:string):Promise<T>{return new Promise<T>((resolve,reject)=>{if(key){for(let index=nativeBackgroundQueue.length-1;index>=0;index-=1)if(nativeBackgroundQueue[index]?.key===key)nativeBackgroundQueue.splice(index,1)[0]?.resolve(undefined);}nativeBackgroundQueue.push({key,request,resolve:resolve as (value:unknown)=>void,reject});void pumpNativeBackgroundQueue();});}
 async function pumpNativeBackgroundQueue():Promise<void>{if(nativeBackgroundRunning)return;nativeBackgroundRunning=true;try{while(nativeBackgroundQueue.length){const task=nativeBackgroundQueue.shift()!;try{task.resolve(await task.request());}catch(error){task.reject(error);}}}finally{nativeBackgroundRunning=false;if(nativeBackgroundQueue.length)void pumpNativeBackgroundQueue();}}
 const nativeResolve=previewProxyCache.resolve.bind(previewProxyCache);
-previewProxyCache.resolve=(projectId,item,purpose="preview")=>{if(purpose==="export"||!desktopMediaAvailable()||item.type!=="video")return nativeResolve(projectId,item,purpose);const prepared=nativePrepared.get(item);return prepared?.ready?prepared.item:{...item,blob:null};};
+previewProxyCache.resolve=(projectId,item,purpose="preview")=>{if(purpose==="export"||!desktopMediaAvailable()||item.type!=="video")return nativeResolve(projectId,item,purpose);const prepared=nativePrepared.get(item);return (prepared?.originalAvailable||prepared?.ready&&prepared.published)&&!prepared.cancelled&&isCurrentNativePreparation(projectId,item,prepared!)?prepared!.item:{...item,blob:null};};
 const sameNativeSource=(a:import("@licketysplit/core").MediaItem,b:import("@licketysplit/core").MediaItem)=>a.nativeSource?.identity.assetId&&b.nativeSource?.identity.assetId?a.nativeSource.identity.assetId===b.nativeSource.identity.assetId:a.blob===b.blob&&a.fileHandle===b.fileHandle&&a.originalUrl===b.originalUrl&&!b.isPlaceholder;
 const isCurrentNativePreparation=(projectId:string,item:import("@licketysplit/core").MediaItem,runtime:NativePreparation)=>{
   const current=useProjectStore.getState();
@@ -89,22 +90,29 @@ const retireNativePreparation=(runtime:NativePreparation)=>{
 };
 const prepareNativeVideo=async(projectId:string,item:import("@licketysplit/core").MediaItem,runtime:NativePreparation,needsProxy:boolean,priority:'foreground'|'background'='background')=>{
   const bridge=window.licketysplit?.lickety;if(!bridge||!isCurrentNativePreparation(projectId,item,runtime))return;
-  const originalFromRegistry=await bridge.originalUri?.(item.id);
+  const originalFromRegistry=await resolveDesktopOriginalPreview(item);
+  if(!isCurrentNativePreparation(projectId,item,runtime))return;
   let original=originalFromRegistry;let preview=original;
   const blob=item.blob??new Blob([]);
-  if(needsProxy||!original){
+  const canOfferOriginal=(item.metadata.canDecodeVideo??item.metadata.canDecode)===true&&!nativeOriginalFailureAttempted.has(item);
+  runtime.item={...item,blob,isPlaceholder:false};runtime.originalUri=original;runtime.previewUri=original;
+  if(canOfferOriginal){const newlyAvailable=!runtime.originalAvailable;runtime.boundPreviewUri=original;runtime.originalAvailable=true;bindNativeMediaSources(blob,Promise.resolve(original),Promise.resolve(original));previewProxyCache.store.setState(state=>({revision:state.revision+Number(newlyAvailable),entries:{...state.entries,[item.id]:{...state.entries[item.id],originalAvailable:true}}}));}
+  if(needsProxy){
     const asset=await registerDesktopMedia(item);
     if(!isCurrentNativePreparation(projectId,item,runtime))return;
     runtime.item={...item,blob,nativeSource:asset,isPlaceholder:false};
-    original=await resolveDesktopMedia(runtime.item,'export');
-    if(!isCurrentNativePreparation(projectId,item,runtime))return;
     preview=needsProxy?await resolveDesktopMedia(runtime.item,'preview',true,{requestId:runtime.requestId,priority}):original;
-  }else runtime.item={...item,blob,isPlaceholder:false};
+  }
   if(!isCurrentNativePreparation(projectId,item,runtime))return;
-  bindNativeMediaSources(blob,Promise.resolve(original!),Promise.resolve(preview!));runtime.ready=true;
+  runtime.originalUri=original;runtime.previewUri=preview;runtime.ready=true;
+  if(useTimelineStore.getState().playbackState!=="playing"){bindNativeMediaSources(blob,Promise.resolve(original!),Promise.resolve(preview!));runtime.boundPreviewUri=preview;}
   const cached=nativePrepared.get(item);if(!cached||cached.cancelled||cached===runtime)nativePrepared.set(item,runtime);
-  previewProxyCache.store.setState(state=>({revision:state.revision+1,entries:{...state.entries,[item.id]:{...state.entries[item.id],status:'ready',progress:0,enabled:needsProxy}}}));
+  const publish=useTimelineStore.getState().playbackState!=="playing";runtime.published=publish;
+  previewProxyCache.store.setState(state=>({revision:state.revision+Number(publish),entries:{...state.entries,[item.id]:{...state.entries[item.id],status:'ready',progress:0,enabled:needsProxy,originalAvailable:runtime.originalAvailable}}}));
 };
+export function publishNativePreviewAtBoundary(projectId:string,item:import("@licketysplit/core").MediaItem):boolean{if(useTimelineStore.getState().playbackState==="playing")return false;const current=useProjectStore.getState();const runtime=nativePrepared.get(item);if(!runtime?.ready||runtime.cancelled||runtime.published||!current.hasOpenProject||current.project.id!==projectId||!isCurrentNativePreparation(projectId,item,runtime))return false;if(runtime.item.blob&&runtime.originalUri&&runtime.previewUri){bindNativeMediaSources(runtime.item.blob,Promise.resolve(runtime.originalUri),Promise.resolve(runtime.previewUri));runtime.boundPreviewUri=runtime.previewUri;}runtime.published=true;previewProxyCache.store.setState(state=>({revision:state.revision+1}));return true;}
+export function getReadyNativePreviewUri(projectId:string,item:import("@licketysplit/core").MediaItem):string|undefined{const runtime=nativePrepared.get(item);return runtime?.ready&&runtime.published&&!runtime.cancelled&&isCurrentNativePreparation(projectId,item,runtime)?runtime.previewUri:undefined;}
+export function handleNativeOriginalPreviewFailure(projectId:string,item:import("@licketysplit/core").MediaItem,failedUri:string):'fallback-started'|'already-attempted'|'stale'{const current=useProjectStore.getState();const currentItem=current.getMediaItem(item.id);const runtime=nativePrepared.get(item)??(currentItem&&nativePrepared.get(currentItem));if(!currentItem||!runtime?.originalAvailable||runtime.cancelled||!current.hasOpenProject||current.project.id!==projectId||!sameNativeSource(item,currentItem)||!isCurrentNativePreparation(projectId,currentItem,runtime)||runtime.originalUri!==failedUri||runtime.boundPreviewUri!==failedUri)return 'stale';if(nativeOriginalFailureAttempted.has(currentItem))return 'already-attempted';nativeOriginalFailureAttempted.add(currentItem);forcedNativeProxy.add(currentItem);previewProxyCache.request(currentItem,'low');return 'fallback-started';}
 const generateNativeThumbnails=async(projectId:string,item:import("@licketysplit/core").MediaItem,runtime:NativePreparation)=>{
   if(item.thumbnailUrl)return;
   try{
@@ -172,6 +180,7 @@ const sync = () => {
   const native=desktopMediaAvailable();
   previewProxyCache.syncProject(hasOpenProject?(native?{...project,mediaLibrary:{...project.mediaLibrary,items:project.mediaLibrary.items.map(item=>({...item,isPlaceholder:false}))}}:project):null);
   if(!hasOpenProject||!native){if(activeNativePreparation){retireNativePreparation(activeNativePreparation.runtime);activeNativePreparation=null;}for(const request of activeNativeForeground.values())retireNativePreparation(request.runtime);activeNativeForeground.clear();return;}
+  if(useTimelineStore.getState().playbackState!=="playing")for(const item of project.mediaLibrary.items)publishNativePreviewAtBoundary(project.id,item);
   if(activeNativePreparation&&(activeNativePreparation.projectId!==project.id||!project.mediaLibrary.items.some(item=>item.id===activeNativePreparation?.source.id&&sameNativeSource(item,activeNativePreparation.source)))){retireNativePreparation(activeNativePreparation.runtime);activeNativePreparation=null;}
   for(const [id,request] of activeNativeForeground){if(request.projectId!==project.id||!project.mediaLibrary.items.some(item=>item.id===id&&sameNativeSource(item,request.source))){retireNativePreparation(request.runtime);activeNativeForeground.delete(id);}}
   const requested=requestedNativeMedia(project);const foreground=foregroundNativeVideo(project);
@@ -222,7 +231,7 @@ export const retryNativePreviewPreparation=async(mediaId:string):Promise<void>=>
   sync();
 };
 sync();
-const unsubscribeTimeline=useTimelineStore.subscribe((state,previous)=>{if(state.playheadPosition!==previous.playheadPosition)sync();});
+const unsubscribeTimeline=useTimelineStore.subscribe((state,previous)=>{if(state.playheadPosition!==previous.playheadPosition||state.playbackState!==previous.playbackState)sync();});
 const unsubscribeSelection=useUIStore.subscribe((state,previous)=>{if(state.selectedItems!==previous.selectedItems)sync();});
 const unsubscribe = useProjectStore.subscribe((state, previous) => {
   if (state.project !== previous.project || state.hasOpenProject !== previous.hasOpenProject) sync();

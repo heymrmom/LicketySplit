@@ -92,6 +92,8 @@ export interface MediaMetadata {
   readonly height: number; // For video/image
   readonly frameRate: number; // For video
   readonly codec: string;
+  /** Container format reported by source inspection, for exact format eligibility checks. */
+  readonly container?: string;
   readonly sampleRate: number; // For audio
   readonly channels: number; // For audio
   readonly fileSize: number;

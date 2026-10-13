@@ -30,6 +30,8 @@ import {
   probeAudioStreamCountViaNative,
 } from "./native-media-bridge";
 
+const containerFromMimeType = (mimeType: string): string => mimeType.split(";")[0]?.split("/")[1]?.toLowerCase() ?? "";
+
 function parseBitrateKbps(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const m = /^(\d+(?:\.\d+)?)\s*([kKmM]?)/.exec(value.trim());
@@ -112,7 +114,7 @@ export class MediaImportService {
         if(metadata){
           const type=metadata.hasVideo?'video':metadata.hasAudio?'audio':inferMediaType(file.type);
           if(!type)return {success:false,error:'Could not determine the original media type. No conversion was performed.'};
-          return {success:true,media:{id:uuidv4(),name:file.name,type,blob:file,metadata,thumbnails:[],waveformData:null},warnings:metadata.canDecode?undefined:['Original imported unchanged. Preview preparation may be needed for this codec.']};
+          return {success:true,media:{id:uuidv4(),name:file.name,type,blob:file,metadata:{...metadata,container:metadata.container},thumbnails:[],waveformData:null},warnings:metadata.canDecode?undefined:['Original imported unchanged. Preview preparation may be needed for this codec.']};
         }
       }catch(error){return {success:false,error:`Could not inspect the original: ${error instanceof Error?error.message:'Unknown inspection error'}. No conversion was performed.`};}
     }
@@ -461,6 +463,7 @@ export class MediaImportService {
       height: processedMedia.metadata.height,
       frameRate: processedMedia.metadata.frameRate,
       codec: processedMedia.metadata.codec,
+      container: containerFromMimeType(processedMedia.metadata.mimeType),
       sampleRate: processedMedia.metadata.sampleRate,
       channels: processedMedia.metadata.channels,
       fileSize: processedMedia.metadata.fileSize,

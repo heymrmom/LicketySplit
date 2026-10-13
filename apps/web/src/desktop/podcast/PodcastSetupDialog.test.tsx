@@ -9,7 +9,7 @@ import { registerDesktopMedia } from "../../services/lickety/desktop-media";
 import { PodcastSetupDialog } from "./PodcastSetupDialog";
 import { readPodcastWizardCheckpoint } from "./podcast-ui-model";
 
-const { applyPodcastSetupMock } = vi.hoisted(() => ({ applyPodcastSetupMock: vi.fn() }));
+const { applyPodcastSetupMock, registerDesktopMediaMock, resolveDesktopMediaMock, resolveDesktopOriginalPreviewMock, originalDecodeFailureMock } = vi.hoisted(() => ({ applyPodcastSetupMock: vi.fn(), registerDesktopMediaMock: vi.fn(async (item: MediaItem) => ({ identity: { assetId: item.id, mediaId: item.id, sha256: "digest", byteLength: 1 }, originalUri: `licketysplit-media://${item.id}/original`, durationMs: 1000 })), resolveDesktopMediaMock: vi.fn(async (_item: MediaItem, _purpose: "preview" | "export", forceProxy = false): Promise<string> => forceProxy ? "file:///preview-proxy.mp4" : "file:///preview-original.mov"), resolveDesktopOriginalPreviewMock: vi.fn(async () => "licketysplit-media://mic/original"), originalDecodeFailureMock: vi.fn(() => "stale") }));
 
 vi.mock("../../services/lickety/podcast", () => ({
   applyPodcastSetup: applyPodcastSetupMock,
@@ -17,8 +17,14 @@ vi.mock("../../services/lickety/podcast", () => ({
 
 vi.mock("../../services/lickety/desktop-media", () => ({
   desktopMediaAvailable: vi.fn(() => false),
-  resolveDesktopMedia: vi.fn(async () => "file:///preview.mp4"),
-  registerDesktopMedia: vi.fn(async (item: MediaItem) => ({ identity: { assetId: item.id, mediaId: item.id, sha256: "digest", byteLength: 1 }, originalUri: `licketysplit-media://${item.id}/original`, durationMs: 1000 })),
+  resolveDesktopMedia: resolveDesktopMediaMock,
+  resolveDesktopOriginalPreview: resolveDesktopOriginalPreviewMock,
+  registerDesktopMedia: registerDesktopMediaMock,
+}));
+
+vi.mock("../../stores/preview-proxy-store", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../stores/preview-proxy-store")>(),
+  handleNativeOriginalPreviewFailure: originalDecodeFailureMock,
 }));
 
 const projectId = "8cb1934c-52a8-4cce-93c6-60ed14f670c2";
@@ -81,6 +87,7 @@ describe("PodcastSetupDialog", () => {
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined);
     vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(async () => undefined);
     setProject();
+    registerDesktopMediaMock.mockImplementation(async (item: MediaItem) => ({ identity: { assetId: item.id, mediaId: item.id, sha256: "digest", byteLength: 1 }, originalUri: `licketysplit-media://${item.id}/original`, durationMs: 1000 }));
     const setup = makeSetup();
     bridge = {
       inspect: vi.fn(async () => setup),
@@ -156,6 +163,28 @@ describe("PodcastSetupDialog", () => {
     expect(screen.getByRole("status").textContent).toContain("Relink missing recordings or retry from review");
     expect(ensureAudioStream).not.toHaveBeenCalled();
     expect(screen.getByRole("status").textContent).not.toContain("prepared for review");
+  });
+
+  it("does not prewarm AAC for an inspected sole mono PCM WAV assignment", async () => {
+    const setup = makeSetup();
+    const micAsset = { id: "asset-mic", mediaId: "media-mic", sourceId: "source-mic", name: "Host microphone", kind: "audio" as const, durationSeconds: 10, streams: [{ index: 0, kind: "audio" as const, channels: 1 }] };
+    setup.analysis.assets.push(micAsset);
+    setup.groups.push({ id: "mic", name: "Host microphone", kind: "audio", role: "dialogue", confidence: "high", assetIds: [micAsset.id], warnings: [], audioMode: "isolated", audioBindings: [{ assetId: micAsset.id, streamIndex: 0, channel: 0, participantId: "host" }] });
+    setup.participants = [{ id: "host", name: "Host" }];
+    bridge.get = vi.fn(async () => setup);
+    const mic: MediaItem = { id: "media-mic", name: "Host.wav", type: "audio", fileHandle: null, blob: new Blob(["audio"]), thumbnailUrl: null, waveformData: null, metadata: { duration: 10, width: 0, height: 0, frameRate: 0, codec: "pcm_s16le", sampleRate: 48000, channels: 1, fileSize: 5, audioTrackCount: 1, hasAudio: true, hasVideo: false, container: "wav" } };
+    const ensureAudioStream = vi.fn(async () => "file:///host.aac");
+    registerDesktopMediaMock.mockImplementationOnce(() => new Promise(() => undefined));
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream, cancelMedia: vi.fn(async () => undefined) } } });
+    const current = useProjectStore.getState().project;
+    useProjectStore.setState({ project: { ...current, mediaLibrary: { items: [...media, mic] } } });
+    restoreSetupForStep(setup, "lineup");
+
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await vi.waitFor(() => expect(screen.getByRole("status").textContent).toContain("prepared for review"));
+    expect(ensureAudioStream).not.toHaveBeenCalled();
+    expect(resolveDesktopOriginalPreviewMock).toHaveBeenCalledWith(mic);
+    expect(registerDesktopMediaMock).not.toHaveBeenCalled();
   });
 
   it("inspects selected imported originals, then persists reorder as a non-approved project draft", async () => {
@@ -796,6 +825,59 @@ describe("PodcastSetupDialog", () => {
     await vi.waitFor(() => expect(videoPlay).toHaveBeenCalled());
     expect(audioPlay).not.toHaveBeenCalled();
     expect(screen.getByText("No selected sound from this source at this time.")).toBeTruthy();
+  });
+
+  it("falls back to a proxy once when the selected original video cannot decode", async () => {
+    const setup = makeReviewSetup();
+    bridge.get = vi.fn(async () => setup);
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream: vi.fn(async () => "file:///audio.m4a") } } });
+    restoreSetupForStep(setup, "check");
+    resolveDesktopMediaMock.mockClear();
+    resolveDesktopMediaMock.mockResolvedValueOnce("licketysplit-media://media-1/original");
+    originalDecodeFailureMock.mockReturnValue("stale"); // Review may resolve an original before the store has a runtime.
+
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Check picture and sound" });
+    await vi.waitFor(() => expect(screen.getByLabelText("Muted podcast source picture preview").getAttribute("src")).toBe("licketysplit-media://media-1/original"));
+    const video = screen.getByLabelText("Muted podcast source picture preview");
+    fireEvent.error(video);
+    await vi.waitFor(() => expect(screen.getByLabelText("Muted podcast source picture preview").getAttribute("src")).toBe("file:///preview-proxy.mp4"));
+    fireEvent.error(video);
+    await vi.waitFor(() => expect(resolveDesktopMediaMock).toHaveBeenCalledTimes(2));
+    expect(resolveDesktopMediaMock.mock.calls.map((call) => call[2])).toEqual([false, true]);
+    expect(originalDecodeFailureMock).toHaveBeenCalledWith(setup.projectId, expect.objectContaining({ id: "media-1" }), "licketysplit-media://media-1/original");
+  });
+
+  it("keeps selected mono WAV review gated on canplay while registration is held", async () => {
+    const setup = makeReviewSetup();
+    const micAsset = { id: "asset-mic", mediaId: "media-mic", sourceId: "source-mic", name: "Host microphone", kind: "audio" as const, durationSeconds: 10, streams: [{ index: 0, kind: "audio" as const, channels: 1 }] };
+    setup.analysis.assets.push(micAsset);
+    setup.groups.push({ id: "mic", name: "Host microphone", kind: "audio", role: "dialogue", confidence: "high", assetIds: [micAsset.id], warnings: [], audioMode: "reference" });
+    setup.participants = [{ id: "host", name: "Host" }];
+    bridge.get = vi.fn(async () => setup);
+    let resolveOriginal!: (uri: string) => void;
+    resolveDesktopOriginalPreviewMock.mockImplementationOnce(() => new Promise<string>((resolve) => { resolveOriginal = resolve; }));
+    registerDesktopMediaMock.mockImplementationOnce(() => new Promise(() => undefined));
+    const ensureAudioStream = vi.fn(async () => "file:///unneeded.aac");
+    const mic: MediaItem = { id: "media-mic", name: "Host.wav", type: "audio", fileHandle: null, blob: new Blob(["audio"]), thumbnailUrl: null, waveformData: null, metadata: { duration: 10, width: 0, height: 0, frameRate: 0, codec: "pcm_s16le", sampleRate: 48000, channels: 1, fileSize: 5, audioTrackCount: 1, hasAudio: true, hasVideo: false, container: "wav" } };
+    Object.assign(window, { licketysplit: { platform: "desktop", podcast: bridge, lickety: { ensureAudioStream, cancelMedia: vi.fn(async () => undefined) } } });
+    const current = useProjectStore.getState().project;
+    useProjectStore.setState({ project: { ...current, mediaLibrary: { items: [...media, mic] } } });
+    restoreSetupForStep(setup, "check");
+
+    render(<PodcastSetupDialog isOpen onClose={vi.fn()} />);
+    await screen.findByRole("heading", { name: "Check picture and sound" });
+    const preparation = await screen.findByRole("status", { name: "Preparing selected sound" });
+    expect(resolveDesktopOriginalPreviewMock).toHaveBeenCalledWith(mic);
+    expect(registerDesktopMediaMock).not.toHaveBeenCalled();
+    expect(ensureAudioStream).not.toHaveBeenCalled();
+    resolveOriginal("licketysplit-media://mic/original");
+    const audio = screen.getByLabelText("Soloed podcast comparison audio");
+    await vi.waitFor(() => expect(audio.getAttribute("src")).toBe("licketysplit-media://mic/original"));
+    expect(preparation).toBeTruthy();
+    fireEvent.canPlay(audio);
+    await vi.waitFor(() => expect(screen.queryByRole("status", { name: "Preparing selected sound" })).toBeNull());
+    expect(screen.getByText("Selected sound ready")).toBeTruthy();
   });
 
   it("converts global stream indices to audio ordinals and keeps the selected channel", async () => {
