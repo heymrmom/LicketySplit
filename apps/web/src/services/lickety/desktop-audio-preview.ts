@@ -48,3 +48,13 @@ export async function prepareTimelineNativeAudioPreview(
   publish(uri);
   return uri;
 }
+
+/** Keep a slow camera/channel derivative from withholding a ready mono original. */
+export async function prepareTimelineAudioInReadinessOrder<T extends { item: MediaItem; index: number; channel?: number }>(
+  requests: T[],
+  prepare: (request: T) => Promise<unknown>,
+): Promise<void> {
+  const originals = requests.filter(({ item, index, channel }) => isEligibleOriginalMonoWav(item, index, channel));
+  const derivatives = requests.filter(({ item, index, channel }) => !isEligibleOriginalMonoWav(item, index, channel));
+  for (const request of [...originals, ...derivatives]) await prepare(request);
+}

@@ -8,7 +8,7 @@ import {
 } from "@licketysplit/core";
 import {getOriginalFadePhase} from "@licketysplit/core";
 import {getNativeMediaSource,nativeVideoUrl} from "@licketysplit/core";
-import { isEligibleOriginalMonoWav, prepareTimelineNativeAudioPreview } from "../../services/lickety/desktop-audio-preview";
+import { isEligibleOriginalMonoWav, prepareTimelineAudioInReadinessOrder, prepareTimelineNativeAudioPreview } from "../../services/lickety/desktop-audio-preview";
 import React, {
   useRef,
   useEffect,
@@ -2250,13 +2250,27 @@ export const Preview: React.FC = () => {
     const audioGraph = audioGraphRef.current;
     const audioContext = audioGraph.getAudioContext();
 
+    if (getManagedBridge()?.ensureAudioStream) {
+      const requests = audioTracks.flatMap((track) => track.clips.flatMap((clip) => {
+        const item = getOriginalMediaItem(clip.mediaId);
+        return item && mediaClipHasAudio(clip) ? [{ item, index: clip.audioTrackIndex ?? 0, channel: clip.sourceChannelIndex, track, clip }] : [];
+      }));
+      const projectId = project.id;
+      await prepareTimelineAudioInReadinessOrder(requests, ({ item, index, channel, track, clip }) =>
+        prepareNativeAudio(item, index, channel, () => useProjectStore.getState().project.id === projectId
+          && getOriginalMediaItem(clip.mediaId) === item
+          && timelineTracksRef.current.some((currentTrack) => currentTrack.id === track.id
+            && currentTrack.clips.some((currentClip) => currentClip.id === clip.id && currentClip.mediaId === clip.mediaId
+              && currentClip.audioTrackIndex === clip.audioTrackIndex && currentClip.sourceChannelIndex === clip.sourceChannelIndex))));
+      return;
+    }
+
     for (const track of audioTracks) {
       for (const clip of track.clips) {
         if (!mediaClipHasAudio(clip)) {
           continue;
         }
         const cacheKey = getAudioBufferCacheKey(clip.mediaId, clip.audioTrackIndex, clip.sourceChannelIndex);
-        if(getManagedBridge()?.ensureAudioStream){const item=getOriginalMediaItem(clip.mediaId);if(item){const projectId=project.id;const trackId=track.id;const clipId=clip.id;await prepareNativeAudio(item,clip.audioTrackIndex??0,clip.sourceChannelIndex,()=>useProjectStore.getState().project.id===projectId&&getOriginalMediaItem(clip.mediaId)===item&&timelineTracksRef.current.some((currentTrack)=>currentTrack.id===trackId&&currentTrack.clips.some((currentClip)=>currentClip.id===clipId&&currentClip.mediaId===clip.mediaId&&currentClip.audioTrackIndex===clip.audioTrackIndex&&currentClip.sourceChannelIndex===clip.sourceChannelIndex)));}continue;}
         let audioBuffer: AudioBuffer | null | undefined =
           audioBufferCacheRef.current.get(cacheKey);
 

@@ -52,6 +52,24 @@ describe("desktop audio preview", () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
+  it("prepares a later mono microphone before held camera audio work", async () => {
+    const { prepareTimelineAudioInReadinessOrder } = await import("./desktop-audio-preview");
+    const mic = eligibleMic();
+    const camera = { ...mic, id: "camera", type: "video" as const, metadata: { ...mic.metadata, hasVideo: true } };
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const ready: string[] = [];
+    const pending = prepareTimelineAudioInReadinessOrder(
+      [{ item: camera, index: 0 }, { item: mic, index: 0 }],
+      async ({ item }) => { if (item === camera) await held; ready.push(item.id); },
+    );
+    await Promise.resolve();
+    expect(ready).toEqual(["mic"]);
+    release();
+    await pending;
+    expect(ready).toEqual(["mic", "camera"]);
+  });
+
   it("requires selected inspected stream proof before using the whole WAV", async () => {
     const { resolveDesktopAudioPreview } = await import("./desktop-audio-preview");
     const ensureAudioStream = vi.fn(async () => "file:///isolated-stream.aac");
