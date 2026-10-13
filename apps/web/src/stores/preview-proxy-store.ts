@@ -128,7 +128,7 @@ const generateNativeThumbnails=async(projectId:string,item:import("@licketysplit
 const prepareNativeForeground=(projectId:string,item:import("@licketysplit/core").MediaItem)=>{
   const existing=activeNativeForeground.get(item.id);
   const cached=nativePrepared.get(item);
-  if(existing?.source===item||cached?.ready&&!cached.cancelled)return;
+  if(existing?.source===item||cached&&!cached.cancelled&&(cached.ready||previewProxyCache.store.getState().entries[item.id]?.status==='error'))return;
   if(cached?.cancelled)nativePrepared.delete(item);
   if(existing){retireNativePreparation(existing.runtime);activeNativeForeground.delete(item.id);}
   const runtime:NativePreparation={item,ready:false,requestId:crypto.randomUUID()};nativePrepared.set(item,runtime);activeNativeForeground.set(item.id,{projectId,source:item,runtime});

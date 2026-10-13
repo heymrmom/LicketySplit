@@ -417,3 +417,28 @@ it("preserves ready original preparation when thumbnail generation clones its me
   delete window.licketysplit;
   useUIStore.setState({ selectedItems: [] });
 });
+
+it("keeps an available original stable after optimization fails until explicit retry", async () => {
+  const { makeWorkflowFixture } = await import("@licketysplit/core/lickety/test-fixtures");
+  const { useUIStore } = await import("./ui-store");
+  const fixture = makeWorkflowFixture();
+  const source = fixture.mediaLibrary.items.find((item) => item.id === "cam-a")!;
+  const item = { ...source, blob: new Blob(["source"]), thumbnailUrl: "fixture", metadata: { ...source.metadata, canDecodeVideo: true }, nativeSource: { identity: { assetId: "asset", mediaId: source.id, sha256: "sha", byteLength: 6 }, originalUri: "licketysplit-media://asset/original", durationMs: 20_000 } };
+  const ensureProxy = vi.fn().mockRejectedValueOnce(new Error("preparation failed")).mockResolvedValue({ assetId: "asset", sourceSha256: "sha", proxyUri: "licketysplit-media://asset/proxy", version: 1, width: 960, height: 540, sourceStartPTS: 0, proxyStartPTS: 0, durationMs: 20_000 });
+  Object.assign(window, { licketysplit: { platform: "desktop", lickety: { originalPreviewUri: async () => item.nativeSource.originalUri, resourceProfile: async () => ({ lowMemory: true }), resolve: async () => item.nativeSource.originalUri, ensureProxy, cancelMedia: async () => undefined } } });
+  useTimelineStore.setState({ playbackState: "playing" });
+  useUIStore.setState({ selectedItems: [{ type: "clip", id: item.id }] });
+  useProjectStore.setState({ hasOpenProject: true, project: { ...fixture, timeline: { ...fixture.timeline, tracks: [] }, mediaLibrary: { ...fixture.mediaLibrary, items: [item] } } });
+  await vi.waitFor(() => expect(previewProxyCache.store.getState().entries[item.id]?.status).toBe("error"));
+  const revision = previewProxyCache.store.getState().revision;
+  for (const position of [1, 2, 3]) { useTimelineStore.setState({ playheadPosition: position }); await Promise.resolve(); }
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(ensureProxy).toHaveBeenCalledOnce();
+  expect(previewProxyCache.store.getState().revision).toBe(revision);
+  expect(previewProxyCache.resolve(fixture.id, item).blob).toBe(item.blob);
+  await retryNativePreviewPreparation(item.id);
+  await vi.waitFor(() => expect(previewProxyCache.store.getState().entries[item.id]?.status).toBe("ready"));
+  expect(ensureProxy).toHaveBeenCalledTimes(2);
+  delete window.licketysplit;
+  useUIStore.setState({ selectedItems: [] });
+});
